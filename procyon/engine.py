@@ -59,6 +59,12 @@ DEFAULTS = {
 
 LINE_RE = re.compile(r"^\d{4,6}\s+(-?\d+)\s+(-?\d+\.\d)\s+(\d+)\s+~\s+(.+?)\s*$")
 
+# Long/unusual callsigns (3E40CDW, P4/WE9V) are sent as short codes, shown as
+# <...> unless the decoder has heard the full call. jt9 forgets between runs, so
+# each run first decodes a "reminder" recording of the ones heard so far.
+LONG_CALLS_MAX = 40
+PRIMER_TIME = "000007"    # the reminder's time: never a cycle start, so easy to drop
+
 
 class Engine:
     def __init__(self, data_dir: str, force_demo=False):
@@ -88,6 +94,8 @@ class Engine:
         self.clients = set()
         self.history = collections.deque(maxlen=80)   # recent decode batches
         self.tmp = tempfile.mkdtemp(prefix="procyon-")
+        self.long_calls = collections.OrderedDict()   # heard in full, newest last
+        self._primer = ((), "")                         # (calls, reminder .wav)
         # audio ring buffer
         self.ring = np.zeros(RING_SEC * FS, np.int16)
         self.total = 0
@@ -386,6 +394,11 @@ class Engine:
                 args += ["-G", self.s["mygrid"][:4].upper()]
             if self.qso.dxcall:
                 args += ["-x", self.qso.dxcall]
+            self._remember_call(self.s["mycall"])
+            self._remember_call(self.qso.dxcall)
+            primer = await self._primer_wav()
+            if primer:
+                args.append(primer)
             args.append(path)
             proc = await asyncio.create_subprocess_exec(
                 *args, cwd=self.tmp, stdout=asyncio.subprocess.PIPE,
@@ -395,7 +408,7 @@ class Engine:
             decodes, seen = [], set()
             for line in out.decode(errors="replace").splitlines():
                 m = LINE_RE.match(line)
-                if not m:
+                if not m or line.startswith(PRIMER_TIME):
                     continue
                 msg = re.sub(r"\s+(\?|a\d+)$", "", m.group(4)).strip()
                 if msg in seen:
@@ -404,6 +417,7 @@ class Engine:
                 decodes.append(self._annotate(p, hhmmss, int(m.group(1)),
                                               float(m.group(2)), int(m.group(3)), msg))
             decodes.sort(key=lambda d: d["freq"])
+            self._remember_calls(decodes)
             with_grid = {d["p"]["from"] for d in decodes if d["p"]["from"] and d["p"]["grid"]}
             if with_grid:
                 self._backfill_log_grids(with_grid)
@@ -421,6 +435,58 @@ class Engine:
             self.toast(f"Decoder error: {e}", "bad")
         finally:
             self.decoding = False
+
+    def _remember_call(self, tok: str):
+        """Note a callsign written in full if it's one FT8 sends as a code."""
+        c = (tok or "").upper()
+        if (not c or c.startswith("<") or not ft8.is_call(c) or ft8.is_std_call(c)
+                or ft8.GRID_RE.match(c)):
+            return
+        self.long_calls.pop(c, None)
+        self.long_calls[c] = True
+        while len(self.long_calls) > LONG_CALLS_MAX:
+            self.long_calls.popitem(last=False)
+
+    def _remember_calls(self, decodes):
+        for d in decodes:
+            toks, p = d["msg"].split(), d["p"]
+            if p["kind"] == "cq":
+                for t in toks[1:3]:
+                    if ft8.strip_call(t) == p["from"]:
+                        self._remember_call(t)
+            elif p["kind"] == "std":
+                self._remember_call(toks[0])
+                self._remember_call(toks[1])
+
+    async def _primer_wav(self) -> str:
+        """A clean recording of "CQ <call>" for every remembered long callsign,
+        rebuilt only when the list changes. "" when there are none."""
+        calls = tuple(self.long_calls)
+        if not calls:
+            return ""
+        if self._primer[0] != calls or not os.path.exists(self._primer[1]):
+            path = os.path.join(self.tmp, f"000000_{PRIMER_TIME}.wav")
+            await asyncio.to_thread(self._write_primer, calls, path)
+            self._primer = (calls, path)
+        return self._primer[1]
+
+    @staticmethod
+    def _write_primer(calls, path):
+        x = np.zeros(int(ft8.PERIOD * FS))
+        amp = min(1500.0, 24000.0 / len(calls))   # all together never clip
+        start = int(ft8.TX_START * FS)
+        for i, c in enumerate(calls):
+            msg = f"CQ {c}"
+            tones, decoded = ft8.encode(msg)
+            if decoded != msg:
+                continue
+            w = ft8.synth(tones, 300 + 60 * i, FS) * amp
+            x[start:start + len(w)] += w[:len(x) - start]
+        with wave.open(path, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(FS)
+            wf.writeframes(np.clip(x, -32767, 32767).astype(np.int16).tobytes())
 
     # Countries too big for a "middle of the country" distance to mean anything.
     BIG_COUNTRIES = {"United States", "Canada", "Alaska", "Asiatic Russia", "European Russia",
