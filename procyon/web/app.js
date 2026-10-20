@@ -457,15 +457,15 @@ function fmtMsg(d, terms = []) {
   const p = d.p, my = S ? S.settings.mycall : "";
   if (p.kind === "free") return `<span class="t-free">${esc(d.msg)}</span>`;
   return d.msg.split(" ").map((t) => {
-    const bare = t.replace(/[<>]/g, "");
+    const bare = t.replace(/[<>;]/g, "");   // ";" joins the two halves of a DXpedition message
     let c = "";
     if (t === "CQ") c = "t-cq";
     else if (my && bare === my) c = "t-me";
     else if (bare === p.from) c = "t-from";
-    else if (bare === p.to) c = "t-to";
+    else if (bare === p.to || bare === p.other) c = "t-to";
     else if (/^[A-R]{2}\d{2}$/.test(t) && t !== "RR73") c = "t-grid";
     else if (/^R?[+-]\d\d$/.test(t)) c = "t-rpt";
-    else if (["RR73", "RRR", "73"].includes(t)) c = "t-end";
+    else if (["RR73", "RRR", "73"].includes(bare)) c = "t-end";
     if (terms.length && tokenHits(t, terms)) c += " t-hit";
     return `<span class="${c}">${esc(t)}</span>${badge(bare)}`;
   }).join(" ");

@@ -557,7 +557,7 @@ class Engine:
                     self.toast(f"Added grid {self.grids[call]} to your QSO with {call}", "good")
 
     def _annotate(self, p, hhmmss, snr, dt, freq, msg):
-        parsed = ft8.parse(msg)
+        parsed = ft8.parse(msg, self.s["mycall"])
         my = self.s["mycall"].upper()
         d = {"period": p, "parity": p % 2, "time": hhmmss, "snr": snr, "dt": dt,
              "freq": freq, "msg": msg, "p": parsed,
@@ -896,7 +896,7 @@ class Engine:
                         await self._apply_rig_mode()
         elif t == "reply":
             d = m["decode"]
-            d["p"] = ft8.parse(d["msg"])
+            d["p"] = ft8.parse(d["msg"], self.s["mycall"])
             q.reply(d)
             self.s["rx_freq"] = d["freq"]
         elif t == "cq":

@@ -185,6 +185,14 @@ class Qso:
                 self.report_rcvd = p["extra"][1:]
             self.next, self.stage = 3, 3
         elif k == "rr73":
+            if p.get("dxped"):
+                # DXpedition style: QSO complete, and they ask for no 73 -
+                # keeping quiet leaves the frequency clear for the next caller
+                self.stage = 4
+                self._log()
+                self.tx_enabled = False
+                self.auto_disabled = False
+                return False
             self.next, self.stage = 4, 4
             self._log()
         elif k == "73":

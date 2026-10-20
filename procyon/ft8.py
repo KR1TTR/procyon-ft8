@@ -139,8 +139,24 @@ def classify_extra(tok: str | None):
     return "other"
 
 
-def parse(msg: str) -> dict:
-    """Split a decoded FT8 message into its parts."""
+# DXpedition / multi-answer style: one transmission finishes one QSO and starts
+# the next - "N3LSB RR73; KR1TTR <P4/WE9V> -06" (WSJT-X Fox, MSHV multi-stream).
+DXPED_RE = re.compile(r"^(\S+) RR73; (\S+) (<[^>]*>) ([+-]\d{2})$")
+
+
+def parse(msg: str, mycall: str = "") -> dict:
+    """Split a decoded FT8 message into its parts. For a two-in-one DXpedition
+    message, the half addressed to `mycall` is the one described (if neither
+    is, the new caller's half); "other" names the station in the other half."""
+    m = DXPED_RE.match(msg)
+    if m:
+        first, second, dx, rpt = (strip_call(g) if i < 3 else g for i, g in enumerate(m.groups()))
+        p = {"kind": "std", "from": dx, "grid": None, "dxped": True}
+        if mycall and first == mycall.upper():
+            p.update(to=first, other=second, extra="RR73", extra_kind="rr73")
+        else:
+            p.update(to=second, other=first, extra=rpt, extra_kind="report")
+        return p
     toks = msg.split()
     p = {"kind": "free", "to": None, "from": None, "grid": None,
          "extra": None, "extra_kind": "none"}
