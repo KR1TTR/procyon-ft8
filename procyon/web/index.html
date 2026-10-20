@@ -12,7 +12,7 @@
 <header class="top">
   <button type="button" class="brand" id="brandBtn" title="About Procyon">
     <img src="/static/icon.svg" alt="" width="26" height="26">
-    <span>Procyon</span><small>FT8</small>
+    <img class="wordmark" src="/static/wordmark.svg" alt="Procyon FT8" height="26">
   </button>
 
   <div class="band-picker">
@@ -51,8 +51,15 @@
     <span class="chip" id="chipRig"><span class="led"></span><span id="rigLabel">Rig</span></span>
     <span class="chip remote" id="chipRemote" hidden><span class="led"></span><span class="lbl">Remote</span></span>
     <span class="chip demo" id="chipDemo" hidden>Demo<span class="lbl"> band</span></span>
+    <button class="icon-btn" id="fullscreenBtn" title="Full screen (F11)" hidden>
+      <svg viewBox="0 0 24 24" class="fs-enter"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      <svg viewBox="0 0 24 24" class="fs-exit"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
+    </button>
     <button class="icon-btn" id="settingsBtn" title="Settings">
       <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+    </button>
+    <button class="icon-btn quit-btn" id="quitBtn" title="Quit Procyon" hidden>
+      <svg viewBox="0 0 24 24"><path d="M12 3.5v8"/><path d="M6.6 6.8a7.5 7.5 0 1 0 10.8 0"/></svg>
     </button>
   </div>
 </header>
@@ -362,11 +369,22 @@
   </form>
 </dialog>
 
+<dialog id="quitDlg" class="quit-dlg">
+  <form method="dialog">
+    <h3>Quit Procyon?</h3>
+    <p id="quitText">Procyon stops listening and closes, along with its terminal window. Your settings and logbook are saved.</p>
+    <div class="dlg-foot">
+      <button class="btn ghost" value="cancel">Cancel</button>
+      <button class="btn danger" value="quit" id="quitConfirm">Quit</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="about" class="about">
   <form method="dialog">
     <button class="icon-btn about-close" value="close" aria-label="Close">✕</button>
     <img src="/static/icon.svg" alt="Procyon icon: a raccoon whose eyes are two stars" width="112" height="112">
-    <h2>Procyon <small>FT8</small></h2>
+    <h2><img class="wordmark" src="/static/wordmark.svg" alt="Procyon FT8" height="40"></h2>
     <p class="about-version">Version <b id="aboutVersion">—</b> · <span id="aboutDate">—</span></p>
     <p class="about-credit">Created by <b>Justin Stapleton, KR1TTR</b><br>with <b>Claude Code</b> (Claude Opus 5.5)</p>
     <p class="about-name"><i>Procyon lotor</i> is the raccoon, and Procyon is a binary star, the brightest in

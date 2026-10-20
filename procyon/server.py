@@ -225,7 +225,7 @@ def main():
 
     async def on_cleanup(app):
         e = app["engine"]
-        await e.halt()
+        await e.shutdown()     # transmit off and radio on receive, before anything closes
         await e.udp.stop()     # tells GridTracker etc. that Procyon has closed
         await e.rig.close()
         if e.rx_task:
@@ -257,6 +257,11 @@ def main():
         await eng.start()
         listener = Listener(runner, args.port, args.host)
         eng.on_remote_change = listener.apply
+
+        def quit_procyon():
+            print("\n  Quit pressed - Procyon is stopping.", flush=True)
+            loop.call_later(0.3, loop.stop)
+        eng.on_quit = quit_procyon
         await listener.apply(eng.s["remote_enabled"])
         url = f"http://127.0.0.1:{args.port}/"
         print(f"\n  Procyon FT8 {__version__} is running at {url}")

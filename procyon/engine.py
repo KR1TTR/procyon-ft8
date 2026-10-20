@@ -73,6 +73,7 @@ class Engine:
         self.auth = Auth(data_dir)
         self.port = 8073
         self.on_remote_change = None   # set by the server: start/stop listening on the network
+        self.on_quit = None            # set by the server: stop Procyon (the Quit button)
         self.udp = WsjtxUdp(on_reply=self._udp_reply, on_halt=self._udp_halt)
         self.cty = Cty()
         self._migrate_demo_qsos()
@@ -631,6 +632,20 @@ class Engine:
         if self.tune_task:
             self.tune_task.cancel()
 
+    async def shutdown(self):
+        """Before Procyon exits (Quit or Ctrl-C): end any transmission and make
+        sure the radio is back on receive BEFORE the radio connection closes."""
+        await self.halt()
+        busy = [t for t in (self.tune_task, self.tx_task) if t]
+        if busy:
+            await asyncio.wait(busy, timeout=3)   # their own cleanup unkeys the radio
+        if self.rig.enabled and self.s["ptt"] != "vox":
+            try:
+                if not await self.rig.ptt(False):   # once more, to be certain
+                    log.warning("shutdown: the radio didn't confirm receive")
+            except Exception:  # noqa: BLE001
+                log.exception("shutdown: couldn't set the radio to receive")
+
     async def tune(self, on: bool):
         if not on:
             if self.tune_task:
@@ -884,8 +899,15 @@ class Engine:
         elif t == "wsjtx_import":
             found, notes = import_wsjtx()
             return {"type": "wsjtx_import", "settings": found, "notes": notes}
-        elif t in ("detect_radio", "rig_test", "install_wsjtx") and not local:
+        elif t in ("detect_radio", "rig_test", "install_wsjtx", "quit") and not local:
             self.toast("That can only be done on the computer running Procyon", "warn")
+            return None
+        elif t == "quit":
+            # Same careful shutdown as Ctrl-C: transmitting stops, the radio is
+            # released, GridTracker is told. Every open tab is told first.
+            await self.broadcast({"type": "stopped"})
+            if self.on_quit:
+                self.on_quit()
             return None
         elif t == "detect_radio":
             if IS_WINDOWS:   # detection needs Unix serial-port calls

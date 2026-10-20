@@ -20,12 +20,30 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 
 // ------------------------------------------------------------------ socket
 
+let stopped = false;   // Procyon was stopped with Quit (here or on the station computer)
+
+function showStopped() {
+  stopped = true;
+  $("#offline").firstElementChild.outerHTML = `<div class="stopped">
+    <img src="/static/icon.svg" alt=""><b>Procyon has stopped</b>
+    ${isLocal ? "You can close this tab. To start again, open Procyon FT8 from your menu."
+    : "It was stopped on the station computer."}<br>This page reconnects by itself when Procyon is running again.</div>`;
+  $("#offline").hidden = false;
+}
+
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
   ws.binaryType = "arraybuffer";
-  ws.onopen = () => { $("#offline").hidden = true; };
+  ws.onopen = () => {
+    $("#offline").hidden = true;
+    if (stopped) { stopped = false; $("#offline").firstElementChild.outerHTML = "<div>Reconnecting to Procyon…</div>"; }
+  };
   ws.onclose = async () => {
     $("#offline").hidden = false;
+    if (stopped) {   // Quit was pressed: say so, and pick up again if Procyon is restarted
+      setTimeout(connect, 3000);
+      return;
+    }
     if (!isLocal) {
       // Signed out (PIN changed) or remote access switched off?
       try {
@@ -40,7 +58,8 @@ function connect() {
   ws.onmessage = (ev) => {
     if (typeof ev.data !== "string") return wfRow(new Uint8Array(ev.data));
     const m = JSON.parse(ev.data);
-    if (m.type === "hello") isLocal = m.local;
+    if (m.type === "hello") { isLocal = m.local; $("#quitBtn").hidden = !isLocal; }
+    else if (m.type === "stopped") showStopped();
     else if (m.type === "state") onState(m);
     else if (m.type === "decodes") onDecodes(m, true);
     else if (m.type === "history") { batches = []; m.batches.forEach((b) => onDecodes(b, false)); renderDecodes(); }
@@ -1213,6 +1232,33 @@ function fillDevices(m) {
 }
 
 $("#settingsBtn").addEventListener("click", () => openSettings(false));
+
+// Quit: stops Procyon the same careful way as Ctrl-C (only on the station computer)
+$("#quitBtn").addEventListener("click", () => {
+  $("#quitText").textContent = S && S.tx
+    ? "Procyon is transmitting - quitting stops the transmission, then closes Procyon and its terminal window. Your settings and logbook are saved."
+    : "Procyon stops listening and closes, along with its terminal window. Your settings and logbook are saved.";
+  $("#quitDlg").returnValue = "";   // Esc must never count as "Quit"
+  $("#quitDlg").showModal();
+});
+$("#quitDlg").addEventListener("close", () => {
+  if ($("#quitDlg").returnValue === "quit") send({ type: "quit" });
+});
+
+// Full screen, for those who don't know F11. Hidden where the browser can't
+// do it (e.g. iPhone). F11's own full screen isn't visible to the page, so the
+// button may offer full screen then; pressing it is harmless.
+const fsBtn = $("#fullscreenBtn");
+fsBtn.hidden = !document.fullscreenEnabled;
+fsBtn.addEventListener("click", () => {
+  const p = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  p.catch(() => toast("This browser didn't allow full screen - try F11", "warn"));
+});
+document.addEventListener("fullscreenchange", () => {
+  const on = !!document.fullscreenElement;
+  fsBtn.classList.toggle("on", on);
+  fsBtn.title = on ? "Leave full screen (Esc)" : "Full screen (F11)";
+});
 
 function openAbout() {
   const a = (S && S.about) || {};

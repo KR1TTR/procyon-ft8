@@ -2,7 +2,7 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 0.9.6** · 19 October 2026
+**Version 0.9.9** · 19 October 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
 A simpler, friendlier FT8 station. Procyon uses WSJT-X's own decoder (`jt9`)
@@ -16,11 +16,11 @@ the Hamlib copy it includes): https://wsjt.sourceforge.io
 
 | System | Download | How |
 |---|---|---|
-| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.6_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.6_all.deb`. Then start **Procyon FT8** from your menu, or run `procyon`. |
-| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.6-arch.tar.gz` | `tar xf procyon-0.9.6-arch.tar.gz`, `cd procyon-0.9.6-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
-| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.6-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
-| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.6-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
-| Windows 10/11 (64-bit) | `Procyon-0.9.6-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
+| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.9_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.9_all.deb`. Then start **Procyon FT8** from your menu, or run `procyon`. |
+| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.9-arch.tar.gz` | `tar xf procyon-0.9.9-arch.tar.gz`, `cd procyon-0.9.9-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
+| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.9-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
+| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.9-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
+| Windows 10/11 (64-bit) | `Procyon-0.9.9-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
 
 Add `--demo` (or use **Procyon Demo.bat** on Windows) to try it with a
 simulated band: nothing is transmitted. Close WSJT-X while using Procyon;
@@ -207,6 +207,17 @@ across automatically on first start.)
 
 ## Roadmap
 
+0.9.9: a **Quit** button (power icon, top right, station computer only): stops
+Procyon and closes its terminal window; open tabs show "Procyon has stopped"
+and reconnect by themselves when it's started again. Also a safety fix:
+quitting or pressing Ctrl+C during a transmission now always puts the radio
+back on receive before Procyon lets go of it.
+
+0.9.8: a full-screen button in the header, next to Settings (same as F11).
+
+0.9.7: the "Procyon FT8" logo is now a picture rather than text, so it looks
+the same on every computer. Logo files for printing are in `branding/`.
+
 0.9.6: resizable panels - drag the gap between panels to change their widths,
 or (stacked) the bottom edge of Band activity or the Logbook to change its height.
 New Arch Linux package (PKGBUILD).
@@ -239,7 +250,8 @@ Next:
 2. **Remote access over Spectrum Wi-Fi:** devices couldn't reach each other
    (router-side isolation). Try Ethernet for the station computer, or ask
    Spectrum to disable client isolation; then test from the tablet.
-3. **Arch Linux package** (PKGBUILD for the AUR); several club members use Arch.
+3. **Arch Linux package:** the PKGBUILD is in place (0.9.6) but needs a test on
+   a real Arch system; publish it on the AUR once Procyon is on GitHub.
 4. **Time accuracy** for home and field stations (no admin rights needed, and
    adjusts only Procyon's own timing):
    - A clock-health light next to the clock, using an occasional NTP/NIST check.
@@ -254,20 +266,49 @@ Next:
      `jt9`, 7.5 s cycle timing, and a mode switch in the header.
    - **WSPR**: `wsprd` decodes; needs an encoder and its own beacon-style screen
      (2-minute cycles, WSPRnet reporting, band hopping).
-   - **JTTY**: WSJT-X 3.2's new RTTY-like keyboard mode (4-tone, ~125 Hz,
+   - **A keyboard-mode screen** for free-text modes: received text scrolling
+     like a chat, a typing box, macros (call, name, 73), and a "heard" list.
+     Built once, it serves the modes below. The aim is to be the prettier,
+     easier, more fun alternative to programs like fldigi: a few modes done
+     really well, built into Procyon so nothing else needs installing.
+     (fldigi's remote control may help while developing the screen.)
+   - **JS8** (JS8Call), next after FT4: free-text QSOs built on FT8's signalling, with
+     heartbeats, store-and-forward and relays. Closest to what Procyon
+     already does; JS8Call is GPLv3 and maintained again (JS8Call-Improved,
+     2.5.x in 2026). JS8Call includes a decoder program, `js8`, that reads
+     .wav files much as `jt9` does, so Procyon may be able to use it for
+     receiving; it still needs its own JS8 encoder for transmitting.
+   - **FSQ**, later (Fast Simple QSO, ZL2AFP and ZL1BPU, 2015): a small but dedicated
+     user base, and a good mode for curious users to discover. IFK+ with 33
+     tones about 300 Hz wide, several speeds, and a directed protocol (calls
+     addressed to a station, automatic replies, a heard list) that suits
+     Procyon's design. Its modulation, coding and FSQCall protocol are
+     published; fldigi's FSQ modem (GPL) is a reference. FSQCall itself is
+     Windows-only, so Linux and Mac users have little choice today.
+     Lowercase text sends faster in FSQ, so Procyon should encourage it.
+   - **Not planned: FT2.** In practice it's too fast for its error correction:
+     weaker signals need so many repeats that FT4 completes QSOs sooner.
+   - **JTTY** (lowest priority, may be dropped): WSJT-X 3.2's new RTTY-like keyboard mode (4-tone, ~125 Hz,
      ~1.9 s frames, no fixed time slots; announced 23 Sep 2026 in 3.2.0-rc1).
      WSJT-X has no command-line JTTY tool, so Procyon would need its own
      decoder/encoder (port from WSJT-X's GPLv3 source) and a chat/contest-style
      screen. Revisit once WSJT-X 3.2 is generally released and the protocol is
      settled.
-6. Smaller ideas: custom frequencies and per-band memory in the band menu, dim
+6. **Stats page** (Andy's idea): QSOs by band and day, countries and grids
+   worked, best DX, busiest hours, heard vs worked - all from your own log.
+7. **Product direction:** FT8 stays the front-facing product, with FT4 beside
+   it on the same screen. The other modes (JS8, FSQ, ...) live behind a
+   "More modes" entry for curious users to discover - findable, not secret.
+   The name stays **Procyon FT8**; "Procyon Digi" is held in reserve in case
+   the other modes ever become central.
+8. Smaller ideas: custom frequencies and per-band memory in the band menu, dim
    the waterfall during your own transmissions, live S-meter and output power
-   from the radio, a Quit button.
-7. Browser polish: Brave shows its "New Email Alias" suggestion in Settings
+   from the radio.
+9. Browser polish: Brave shows its "New Email Alias" suggestion in Settings
    fields (seen on Linux and Windows). Mark the form and its fields
    `autocomplete="off"` (and give number fields clear types/names) so browsers
    stop offering autofill there; check in Brave.
-8. Radio detection on Windows (currently Linux and macOS only).
+10. Radio detection on Windows (currently Linux and macOS only).
 
 Only transmit with a valid amateur licence, and keep your PC clock synced
 (NTP). FT8 needs it to be within about a second.
