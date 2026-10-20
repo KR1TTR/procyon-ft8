@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Procyon FT8</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E    %3Cdefs%3E    %3CradialGradient id=%22glow%22 cx=%2250%25%22 cy=%2250%25%22 r=%2250%25%22%3E      %3Cstop offset=%220%22 stop-color=%22%23fff6d6%22 stop-opacity=%22.9%22/%3E      %3Cstop offset=%221%22 stop-color=%22%23fff6d6%22 stop-opacity=%220%22/%3E    %3C/radialGradient%3E  %3C/defs%3E    %3Cpath d=%22M4.2 13.2 5.6 3.6 13 8.4Z%22 fill=%22%23aab6cc%22/%3E  %3Cpath d=%22M27.8 13.2 26.4 3.6 19 8.4Z%22 fill=%22%23aab6cc%22/%3E  %3Cpath d=%22M6.2 10.6 7 6.2 10.6 8.6Z%22 fill=%22%23141b2e%22/%3E  %3Cpath d=%22M25.8 10.6 25 6.2 21.4 8.6Z%22 fill=%22%23141b2e%22/%3E    %3Cpath d=%22M16 6.6c6.6 0 11.7 3.7 12.6 8.9.7 4-2.1 6.6-5.6 8.7l-5.4 4.6a2.4 2.4 0 0 1-3.2 0L9 24.2c-3.5-2.1-6.3-4.7-5.6-8.7C4.3 10.3 9.4 6.6 16 6.6Z%22 fill=%22%23c9d3e6%22/%3E    %3Cpath d=%22M16 7.4 14.7 12.6h2.6Z%22 fill=%22%237f8ba3%22/%3E    %3Cpath d=%22M3.6 16.1c2.1-3.7 6.9-4.2 10-1.3L16 17l2.4-2.2c3.1-2.9 7.9-2.4 10 1.3-1.6 3.6-6.2 4.7-9.3 3.1L16 20.7l-3.1-1.5c-3.1 1.6-7.7.5-9.3-3.1Z%22 fill=%22%230b1020%22/%3E    %3Cpath d=%22M11.6 21.2Q16 19.4 20.4 21.2l-2.6 6.5a2.4 2.4 0 0 1-3.6 0Z%22 fill=%22%23eef2f8%22/%3E  %3Cellipse cx=%2216%22 cy=%2226.4%22 rx=%221.6%22 ry=%221.1%22 fill=%22%230b1020%22/%3E    %3Ccircle cx=%229.6%22 cy=%2216.3%22 r=%223.2%22 fill=%22url%28%23glow%29%22/%3E  %3Ccircle cx=%2222.4%22 cy=%2216.3%22 r=%223.2%22 fill=%22url%28%23glow%29%22/%3E  %3Cpath d=%22M9.6 12.9 10.5 15.4 13 16.3 10.5 17.2 9.6 19.7 8.7 17.2 6.2 16.3 8.7 15.4Z%22 fill=%22%23fff4c2%22/%3E  %3Cpath d=%22M22.4 12.9 23.3 15.4 25.8 16.3 23.3 17.2 22.4 19.7 21.5 17.2 19 16.3 21.5 15.4Z%22 fill=%22%23fff4c2%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="top">
+  <button type="button" class="brand" id="brandBtn" title="About Procyon">
+    <img src="/static/icon.svg" alt="" width="26" height="26">
+    <span>Procyon</span><small>FT8</small>
+  </button>
+
+  <div class="band-picker">
+    <button id="bandBtn" class="band-btn" aria-haspopup="true">
+      <span class="freq" id="dialFreq">14.074</span><span class="unit">MHz</span>
+      <span class="band-name" id="bandName">20m</span>
+      <svg class="chev" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3"/></svg>
+    </button>
+    <div class="menu" id="bandMenu" hidden></div>
+  </div>
+
+  <div class="clock">
+    <div class="utc"><span id="utc">--:--:--</span><small>UTC</small></div>
+    <div class="cycle">
+      <div class="cycle-bar"><div id="cycleFill"></div></div>
+      <span id="cycleLabel">RX</span>
+      <span class="on-air" id="onAir" hidden><span class="dot"></span>ON AIR <b id="onAirSecs"></b></span>
+    </div>
+  </div>
+
+  <div class="hdr-progress" id="hdrProgress" title="QSO progress">
+    <span class="hdr-dx" id="hdrDx">No QSO</span>
+    <ol class="stepper" id="stepper">
+      <li title="Call"><span></span>Call</li>
+      <li title="Report"><span></span>Report</li>
+      <li title="Roger"><span></span>Roger</li>
+      <li title="Logged"><span></span>Logged</li>
+    </ol>
+  </div>
+
+  <div class="status">
+    <span class="chip" id="chipAudio" title="Audio input level">
+      <span class="led"></span><span class="lbl">Audio</span>
+      <span class="meter"><span id="meterFill"></span></span>
+    </span>
+    <span class="chip" id="chipRig"><span class="led"></span><span id="rigLabel">Rig</span></span>
+    <span class="chip remote" id="chipRemote" hidden><span class="led"></span><span class="lbl">Remote</span></span>
+    <span class="chip demo" id="chipDemo" hidden>Demo<span class="lbl"> band</span></span>
+    <button class="icon-btn" id="settingsBtn" title="Settings">
+      <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="tool-warn" id="toolWarn" hidden>
+  <b>WSJT-X wasn't found.</b> Procyon uses WSJT-X's decoder and encoder, so it can't decode or
+  transmit without it.
+  <span id="toolHowto">Install WSJT-X from <span class="mono">wsjt.sourceforge.io</span>, then restart Procyon.</span>
+  <span id="toolMissing"></span>
+  <div class="tool-install" id="toolInstall" hidden>
+    <button type="button" class="btn small" id="installWsjtx">Install WSJT-X for me</button>
+    <span id="installStatus"></span>
+  </div>
+</div>
+
+<section class="wf-card">
+  <div class="wf-wrap" id="wfWrap">
+    <canvas id="wf"></canvas>
+    <div class="marker rx" id="rxMarker"><span>RX</span></div>
+    <div class="marker tx" id="txMarker"><span>TX</span></div>
+    <div class="hover-line" id="hoverLine"><span id="hoverFreq"></span></div>
+  </div>
+  <div class="wf-scale" id="wfScale"></div>
+  <div class="wf-hint">Click the waterfall to set your <b class="rx-t">receive</b> frequency · <kbd>Shift</kbd>+click (or press and hold on a touchscreen) to set your <b class="tx-t">transmit</b> frequency</div>
+</section>
+
+<main class="layout">
+  <section class="card activity">
+    <div class="card-head">
+      <h2>Band activity</h2>
+      <button class="link-btn act-clear" id="clearActivity" title="Clear the list (on every connected device)">Clear</button>
+      <div class="seg" id="filter">
+        <button data-f="all" class="on">All</button>
+        <button data-f="cq">CQ</button>
+        <button data-f="new">New</button>
+        <button data-f="mine">My QSO</button>
+      </div>
+    </div>
+    <div class="cf-row" id="cfRow">
+      <button type="button" class="cf-toggle" id="cfToggle" aria-pressed="false" title="Turn the custom filter on or off">
+        <svg viewBox="0 0 16 16"><path d="M2 3h12l-4.5 5.5V13l-3 1.5V8.5z"/></svg>
+      </button>
+      <input id="cfText" type="text" spellcheck="false" autocomplete="off"
+             placeholder="Custom filter: POTA, JA, EN6, Germany, EU…"
+             title="Shows decodes where a word starts with your text (calls, grids, POTA, contest exchanges), or the country or continent matches. Separate several with commas.">
+      <span class="cf-count" id="cfCount"></span>
+      <button type="button" class="cf-clear" id="cfClear" title="Clear the custom filter" hidden>✕</button>
+    </div>
+    <div class="callers" id="callers" hidden></div>
+    <div class="list" id="decodes">
+      <div class="empty" id="emptyState">
+        <div class="pulse-ring"></div>
+        <p><b>Listening…</b><br>Decodes appear here at the end of each 15-second cycle.</p>
+      </div>
+    </div>
+  </section>
+
+  <aside class="side">
+    <section class="card qso" id="qsoCard">
+      <div class="card-head">
+        <h2>QSO</h2>
+        <button class="link-btn" id="clearDx" title="Clear the DX station">Clear</button>
+      </div>
+
+      <div class="dx">
+        <input id="dxCall" class="dx-call" placeholder="CALLSIGN" spellcheck="false" autocomplete="off">
+        <input id="dxGrid" class="dx-grid" placeholder="GRID" spellcheck="false" autocomplete="off">
+      </div>
+      <div class="dx-info" id="dxInfo">Click a station in Band activity to answer it, or call CQ.</div>
+
+      <div class="reports">
+        <div><small>Sent</small><b id="rptSent">—</b></div>
+        <div><small>Received</small><b id="rptRcvd">—</b></div>
+      </div>
+      <div class="note-field">
+        <input id="qsoNote" maxlength="200" spellcheck="true" autocomplete="off"
+               placeholder="Log note (optional): name, rig, conditions…">
+      </div>
+
+      <div class="next" id="nextBox">
+        <small id="nextLabel">Next transmission</small>
+        <div class="next-msg" id="nextMsg">—</div>
+        <div class="tx-progress"><div id="txProgress"></div></div>
+      </div>
+
+      <div class="exchange" id="exchange">
+        <div class="ex-head">
+          <small id="exTitle">Exchange</small>
+          <span class="ex-legend"><i class="you"></i>You<i class="them"></i>Them</span>
+          <button type="button" class="ex-clear" id="exClear" title="Clear this list (the QSO itself carries on)">Clear</button>
+        </div>
+        <div class="ex-list" id="exList"></div>
+        <div class="ex-status" id="exStatus" hidden></div>
+      </div>
+
+      <details class="msgs-wrap">
+        <summary>All messages</summary>
+        <div class="msgs" id="msgs"></div>
+      </details>
+
+      <div class="controls">
+        <button class="btn" id="cqBtn">Call CQ</button>
+        <button class="btn tx-btn" id="txBtn"><span class="dot"></span><span id="txBtnLabel">Enable TX</span></button>
+        <button class="btn halt" id="haltBtn" title="Stop transmitting now (Esc)">Halt</button>
+      </div>
+
+      <div class="tx-settings">
+        <div class="field">
+          <label>Transmit in</label>
+          <div class="seg small" id="paritySeg">
+            <button data-p="0">:00 / :30</button>
+            <button data-p="1">:15 / :45</button>
+          </div>
+        </div>
+        <div class="field row3">
+          <div>
+            <label for="txFreq">TX offset</label>
+            <div class="num"><input id="txFreq" type="number" min="100" max="3950" step="10"><span>Hz</span></div>
+          </div>
+          <div>
+            <label for="txWatts" title="Your radio's output power - recorded in the log">Radio power</label>
+            <div class="num"><input id="txWatts" type="number" min="0" step="1" placeholder="—"><span>W</span></div>
+          </div>
+          <div>
+            <label for="txLevel" title="Audio level sent to the radio - use Tune to set it">Audio drive <output id="txLevelOut"></output></label>
+            <input id="txLevel" type="range" min="0" max="100">
+          </div>
+        </div>
+        <button class="btn ghost small" id="tuneBtn">Tune</button>
+      </div>
+    </section>
+  </aside>
+
+  <section class="card logbook">
+    <div class="card-head">
+      <h2>Logbook <span class="count" id="qsoCount">0</span><span class="demo-pill" id="logDemo" hidden>Demo log</span></h2>
+      <a class="link-btn" href="/log.adi" download>Export ADIF</a>
+    </div>
+    <div class="log-list" id="logList"><div class="muted pad">No QSOs yet.</div></div>
+  </section>
+</main>
+
+<div class="toasts" id="toasts"></div>
+<div class="offline" id="offline" hidden><div>Reconnecting to Procyon…</div></div>
+
+<dialog id="settings">
+  <form method="dialog" id="settingsForm">
+    <div class="dlg-head">
+      <h2>Settings</h2>
+      <button class="icon-btn" value="cancel" formnovalidate aria-label="Close">✕</button>
+    </div>
+    <div class="import-row">
+      <button type="button" class="btn ghost small" id="importWsjtx">Import settings from WSJT-X</button>
+      <div class="hint" id="importNotes"></div>
+    </div>
+    <p class="welcome" id="welcome" hidden>Welcome! Enter your callsign and grid to get started. No radio connected yet? Turn on <b>Demo band</b> to try everything with a simulated band.</p>
+
+    <fieldset>
+      <legend>Station</legend>
+      <div class="grid2">
+        <label>Callsign<input name="mycall" required spellcheck="false" autocomplete="off" placeholder="K1ABC"></label>
+        <label>Grid square<input name="mygrid" spellcheck="false" autocomplete="off" placeholder="FN42" pattern="[A-Ra-r]{2}[0-9]{2}([A-Xa-x]{2})?"></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Audio</legend>
+      <label>Input (from radio)<select name="audio_in"></select></label>
+      <label>Output (to radio)<select name="audio_out"></select></label>
+      <label class="toggle"><input type="checkbox" name="demo"><span></span>Demo band (simulated signals, nothing is transmitted)</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Radio</legend>
+      <label class="toggle"><input type="checkbox" name="rig_enabled"><span></span>Control my radio (frequency and transmit)</label>
+      <div class="radio-tools">
+        <button type="button" class="btn ghost small" id="detectRadio">Detect my radio</button>
+        <button type="button" class="btn ghost small" id="testRadio">Test radio</button>
+        <span class="hint" id="radioMsg"></span>
+      </div>
+      <label>Radio
+        <input name="rig_pick" list="rigList" autocomplete="off" spellcheck="false"
+               placeholder="Type to search, e.g. KX3, IC-7300, FT-991">
+        <datalist id="rigList"></datalist>
+        <input type="hidden" name="rig_model">
+        <span class="field-status" id="rigStatus"></span>
+      </label>
+      <div class="grid2">
+        <label>Serial port
+          <input name="rig_device" list="serialList" autocomplete="off" spellcheck="false" placeholder="/dev/ttyUSB0">
+          <datalist id="serialList"></datalist>
+        </label>
+        <label>Baud
+          <select name="rig_baud">
+            <option value="">Radio default</option>
+            <option>4800</option><option>9600</option><option>19200</option>
+            <option>38400</option><option>57600</option><option>115200</option>
+          </select>
+        </label>
+      </div>
+      <label>Radio mode for FT8
+        <select name="rig_mode">
+          <option value="data">Data (recommended, e.g. DATA A on Elecraft, USB-D on Icom)</option>
+          <option value="usb">USB</option>
+          <option value="none">Don't change the radio's mode</option>
+        </select>
+      </label>
+      <label>Transmit (PTT) by
+        <select name="ptt">
+          <option value="cat">CAT command to the radio</option>
+          <option value="rts">RTS line on the serial port (e.g. Digirig)</option>
+          <option value="dtr">DTR line on the serial port</option>
+          <option value="vox">VOX (the radio keys itself on audio)</option>
+        </select>
+      </label>
+      <details class="advanced">
+        <summary>Advanced: rigctld connection</summary>
+        <label class="toggle"><input type="checkbox" name="rig_spawn"><span></span>Start rigctld for me (recommended)</label>
+        <div class="grid2">
+          <label>Host<input name="rig_host"></label>
+          <label>Port<input name="rig_port" type="number"></label>
+        </div>
+        <p class="hint">Turn this off only if you already run rigctld yourself, then enter its host and port.</p>
+      </details>
+    </fieldset>
+
+    <fieldset>
+      <legend>Companion apps</legend>
+      <label class="toggle"><input type="checkbox" name="udp_enabled"><span></span>Send to GridTracker, JTAlert and loggers (as WSJT-X does)</label>
+      <div class="grid2">
+        <label>Address<input name="udp_host" spellcheck="false"></label>
+        <label>Port<input name="udp_port" type="number"></label>
+      </div>
+      <label class="toggle"><input type="checkbox" name="udp_accept"><span></span>Let them control Procyon (click a station to answer it, halt TX)</label>
+      <p class="hint">Paused while the demo band is on, so simulated stations never show up in GridTracker. Close WSJT-X first: it uses the same radio and sound card.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Alerts</legend>
+      <label class="toggle"><input type="checkbox" id="chimeToggle"><span></span>Chime when a station calls me (this device)</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Display</legend>
+      <label class="toggle"><input type="checkbox" name="team_badges"><span></span>Show a raccoon next to Procyon's developer and testers when they're decoded</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Logbook</legend>
+      <label class="toggle"><input type="checkbox" name="log_reports_in_comment"><span></span>Add signal reports to log comments (e.g. "FT8 Sent: -05 Rcvd: -12")</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Waterfall</legend>
+      <div class="grid2">
+        <label>Start at (Hz)<input name="wf_start" type="number" min="0" max="3500" step="50"></label>
+        <label>End at (Hz)<input name="wf_end" type="number" min="500" max="4000" step="50"></label>
+      </div>
+      <p class="hint">Match your radio's receive filter so nothing is cut off at either edge, e.g. 300 to 3300 Hz. Your TX and RX offsets stay inside this range.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Decoder</legend>
+      <label>Decoding depth
+        <select name="depth">
+          <option value="1">Fast</option>
+          <option value="2">Normal</option>
+          <option value="3">Deep (slower, finds weaker signals)</option>
+        </select>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Remote access</legend>
+      <div class="remote-local" id="remoteLocal">
+        <label class="toggle"><input type="checkbox" name="remote_enabled"><span></span>Allow other devices on my network (tablet, laptop, phone)</label>
+        <label>PIN (4 to 8 digits)
+          <input name="remote_pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8"
+                 autocomplete="new-password" title="4 to 8 digits">
+        </label>
+        <div class="hint" id="remoteUrls"></div>
+      </div>
+      <div class="remote-remote" id="remoteRemote" hidden>
+        <p class="hint">You're connected from another device. Remote access and the PIN can only be changed on the computer running Procyon.</p>
+        <a class="btn ghost small" href="/logout">Sign out of this device</a>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Layout</legend>
+      <label>Panels on this device
+        <select id="layoutMode">
+          <option value="auto">Automatic (side by side on wide windows, stacked on narrow ones)</option>
+          <option value="side">Side by side (needs a window about 1300 pixels wide)</option>
+          <option value="stack">Stacked (phones and portrait monitors)</option>
+        </select>
+      </label>
+      <p class="hint">Side by side: drag a panel by the grip next to its title to move it to another column. Stacked: use the ▲▼ buttons on each panel. To resize, drag the gap between two panels (side by side) or the bottom edge of Band activity or the Logbook (stacked); double-click it to undo. Each device remembers its own layout.</p>
+      <button type="button" class="btn ghost small" id="resetLayout">Reset panel layout</button>
+    </fieldset>
+
+    <div class="dlg-foot">
+      <button type="button" class="link-btn about-link" id="aboutLink">About Procyon</button>
+      <button class="btn ghost" value="cancel" formnovalidate>Cancel</button>
+      <button class="btn primary" value="save" id="saveSettings">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="about" class="about">
+  <form method="dialog">
+    <button class="icon-btn about-close" value="close" aria-label="Close">✕</button>
+    <img src="/static/icon.svg" alt="Procyon icon: a raccoon whose eyes are two stars" width="112" height="112">
+    <h2>Procyon <small>FT8</small></h2>
+    <p class="about-version">Version <b id="aboutVersion">—</b> · <span id="aboutDate">—</span></p>
+    <p class="about-credit">Created by <b>Justin Stapleton, KR1TTR</b><br>with <b>Claude Code</b> (Claude Opus 5.5)</p>
+    <p class="about-name"><i>Procyon lotor</i> is the raccoon, and Procyon is a binary star, the brightest in
+      Canis Minor. Our raccoon's eyes are its two stars, Procyon A and Procyon B.</p>
+    <div class="about-thanks">
+      <h3>Built on</h3>
+      <ul>
+        <li><b>WSJT-X</b> by Joe Taylor K1JT, Steve Franke K9AN and the WSJT Development Group: the FT8 decoder (<code>jt9</code>) and message encoder (<code>ft8code</code>)</li>
+        <li><b>Hamlib</b>: radio control</li>
+        <li><b>cty.dat</b> by Jim Reisert AD1C: country lookups</li>
+      </ul>
+    </div>
+    <p class="about-licence">Free software under the GNU General Public License v3.<br>Only transmit with a valid amateur radio licence.</p>
+  </form>
+</dialog>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+# Maintainer: Justin Stapleton, KR1TTR <cq@kr1ttr.radio>
+# Procyon FT8 - built from the Linux zip, which sits next to this file.
+#   makepkg -si      (builds and installs it)
+pkgname=procyon
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="Friendly FT8 station built on the WSJT-X decoder"
+arch=('any')
+url='https://www.qrz.com/db/KR1TTR'
+license=('GPL-3.0-or-later')
+depends=('python' 'python-numpy' 'python-aiohttp' 'libpulse')
+optdepends=('wsjtx: FT8 decoder and encoder (Procyon needs it to run)'
+            'hamlib: radio control (rigctld)'
+            'gridtracker: map and logging through the WSJT-X UDP link')
+source=("procyon-$pkgver-linux.zip")
+sha256sums=('@SHA256@')
+
+package() {
+  cd "procyon-$pkgver-linux"
+  install -d "$pkgdir/usr/lib/procyon"
+  cp -r procyon "$pkgdir/usr/lib/procyon/"
+  python -m compileall -q -d /usr/lib/procyon/procyon "$pkgdir/usr/lib/procyon/procyon"
+  install -Dm755 /dev/stdin "$pkgdir/usr/bin/procyon" <<END
+#!/bin/sh
+# Procyon FT8 $pkgver
+export PYTHONPATH=/usr/lib/procyon\${PYTHONPATH:+:\$PYTHONPATH}
+exec python3 -m procyon "\$@"
+END
+  install -Dm644 procyon.desktop "$pkgdir/usr/share/applications/procyon.desktop"
+  install -Dm644 procyon/web/icon.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/procyon.svg"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/procyon/README.md"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/procyon/LICENSE"
+}

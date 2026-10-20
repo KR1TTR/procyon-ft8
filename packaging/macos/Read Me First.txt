@@ -1,0 +1,25 @@
+PROCYON FT8 for Mac
+===================
+
+1. Install WSJT-X first (Procyon uses its decoder):  https://wsjt.sourceforge.io
+   Drag wsjtx.app into your Applications folder.
+
+2. Drag Procyon.app onto the Applications folder in this window.
+
+3. First launch: this copy isn't signed with an Apple Developer ID, so macOS
+   will say it can't verify it. Open Procyon once, then go to
+       System Settings > Privacy & Security
+   scroll down and click "Open Anyway" next to Procyon FT8, then confirm.
+   You only need to do this once.
+
+   (Terminal alternative:  xattr -cr /Applications/Procyon.app )
+
+4. When asked, allow Procyon to use the microphone: that is how it hears your
+   radio's USB sound card.
+
+Procyon opens in your web browser. Quit it from the Procyon menu or the Dock.
+"Demo Mode" in the Procyon menu runs a simulated band so you can try it
+without a radio; nothing is transmitted.
+
+Procyon's settings and log are in  ~/Library/Application Support/Procyon
+Its own log (for troubleshooting) is in  ~/Library/Logs/Procyon

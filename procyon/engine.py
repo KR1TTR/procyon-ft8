@@ -1,0 +1,900 @@
+"""Procyon engine: audio capture, T/R timing, waterfall, decoding (WSJT-X jt9),
+transmit, rig control and QSO automation."""
+
+import asyncio
+import collections
+import datetime as dt
+import json
+import logging
+import os
+import re
+import tempfile
+import time
+import wave
+
+import numpy as np
+
+from . import ft8
+from . import AUTHORS, RELEASE_DATE, __version__
+from .audio import choose_backend
+from .auth import PIN_RE, Auth, lan_addresses
+from .demo import DemoBand
+from .geo import BANDS, DEMO_MARK, DEMO_MARKS, Cty, Logbook, band_of, distance_bearing, grid_to_latlon, utc_now
+from .qso import Qso
+from . import wsjtx_install
+from .radio_detect import detect_radios, test_rig
+from .setup_help import hamlib_rigs, import_wsjtx
+from .system import IS_WINDOWS, find_tool, serial_ports, tools
+from .udp import WsjtxUdp
+from .rig import Rig
+
+log = logging.getLogger("procyon")
+
+FS = 12000
+DECODE_AT = 13.4          # seconds into the period when we decode
+# A transmission may start up to this many seconds after its normal start. Like
+# WSJT-X, the part that should already have gone out is skipped, so the signal
+# stays aligned and ends on time; FT8's error correction rebuilds the missing
+# start. Tested: still decodes at -18 dB when started 3.5 s late.
+LATE_START_MAX = 3.0
+RING_SEC = 45
+FFT_N = 4096
+WF_HOP = 1500             # 8 waterfall rows per second
+WF_BINS = int(4000 / (FS / FFT_N))   # 0 - 4000 Hz; the UI shows the range the user picks
+
+DEFAULTS = {
+    "mycall": "", "mygrid": "", "audio_in": "", "audio_out": "",
+    "tx_level": 35, "tx_watts": "", "depth": 2, "demo": False, "ptt": "cat",
+    "rig_enabled": False, "rig_host": "127.0.0.1", "rig_port": 4532,
+    "rig_spawn": False, "rig_model": "", "rig_device": "", "rig_baud": "",
+    "rig_mode": "data",              # what to put the radio in for FT8: data, usb, or none
+    "wf_start": 0, "wf_end": 3000,   # waterfall range in Hz, to match the radio's filter
+    "log_reports_in_comment": False,  # add "FT8 Sent: -05 Rcvd: -12" to log comments
+    "team_badges": True,             # raccoon next to Procyon's developer and testers
+    "dial_hz": 14_074_000, "tx_freq": 1500, "rx_freq": 1500,
+    "remote_enabled": False, "remote_pin_hash": "",
+    # WSJT-X compatible UDP for GridTracker, JTAlert, loggers (WSJT-X defaults)
+    "udp_enabled": True, "udp_host": "127.0.0.1", "udp_port": 2237, "udp_accept": True,
+}
+
+LINE_RE = re.compile(r"^\d{4,6}\s+(-?\d+)\s+(-?\d+\.\d)\s+(\d+)\s+~\s+(.+?)\s*$")
+
+
+class Engine:
+    def __init__(self, data_dir: str, force_demo=False):
+        self.data_dir = data_dir
+        os.makedirs(data_dir, exist_ok=True)
+        self.settings_path = os.path.join(data_dir, "settings.json")
+        self.s = dict(DEFAULTS)
+        if os.path.exists(self.settings_path):
+            self.s.update(json.load(open(self.settings_path)))
+        if force_demo:
+            self.s["demo"] = True
+        self.auth = Auth(data_dir)
+        self.port = 8073
+        self.on_remote_change = None   # set by the server: start/stop listening on the network
+        self.udp = WsjtxUdp(on_reply=self._udp_reply, on_halt=self._udp_halt)
+        self.cty = Cty()
+        self._migrate_demo_qsos()
+        self.logbook = self._open_logbook()
+        self.grids_path = os.path.join(data_dir, "grids.json")
+        self._load_grids()
+        self.rig = Rig()
+        self._installing = False
+        self.qso = Qso(self._log_qso, self.toast)
+        self.qso.set_station(self.s["mycall"], self.s["mygrid"])
+        self.demo = DemoBand()
+        self.clients = set()
+        self.history = collections.deque(maxlen=80)   # recent decode batches
+        self.tmp = tempfile.mkdtemp(prefix="procyon-")
+        # audio ring buffer
+        self.ring = np.zeros(RING_SEC * FS, np.int16)
+        self.total = 0
+        self.t0 = None
+        self.since_wf = 0
+        self.noise_floor = None
+        self.level_db = -99.0
+        self._level_acc = []
+        self.audio = choose_backend()
+        self.rx_task = None
+        self.audio_error = ""
+        # timing
+        self.last_decoded = 0
+        self.decoding = False
+        self.tx_periods = set()
+        self.tx_task = None
+        self.tx_info = None
+        self.tune_task = None
+        self._halt = asyncio.Event()
+        self._warned = ""
+
+    # ------------------------------------------------------------ plumbing
+
+    async def start(self):
+        self._guess_devices()
+        await self.rig.configure(self.s)
+        await self.restart_audio()
+        await self._configure_udp()
+        asyncio.create_task(self._scheduler())
+
+    def _guess_devices(self):
+        """Default to the first USB codec - usually the radio interface."""
+        for key, kind in (("audio_in", "in"), ("audio_out", "out")):
+            if not self.s[key]:
+                try:
+                    self.s[key] = self.audio.guess(kind)
+                except Exception:  # noqa: BLE001 - no sound system: leave it to Settings
+                    pass
+
+    def _open_logbook(self):
+        """Demo mode keeps its own logbook so simulated QSOs never mix with real ones."""
+        name = "procyon_demo_log.adi" if self.s["demo"] else "procyon_log.adi"
+        return Logbook(os.path.join(self.data_dir, name))
+
+    def _migrate_demo_qsos(self):
+        """Move demo QSOs logged by older versions out of the real logbook."""
+        real = Logbook(os.path.join(self.data_dir, "procyon_log.adi"))
+        moved = real.take(lambda q: q.get("comment", "").startswith(DEMO_MARKS))
+        if moved:
+            demo = Logbook(os.path.join(self.data_dir, "procyon_demo_log.adi"))
+            for q in moved:
+                demo.add(q)
+            log.info("moved %d demo QSO(s) to the demo logbook", len(moved))
+
+    def save(self):
+        with open(self.settings_path, "w") as f:
+            json.dump(self.s, f, indent=2)
+
+    async def broadcast(self, obj):
+        msg = json.dumps(obj)
+        for ws in list(self.clients):
+            try:
+                await ws.send_str(msg)
+            except Exception:  # noqa: BLE001
+                self.clients.discard(ws)
+
+    async def broadcast_bin(self, data: bytes):
+        for ws in list(self.clients):
+            try:
+                await ws.send_bytes(data)
+            except Exception:  # noqa: BLE001
+                self.clients.discard(ws)
+
+    def toast(self, text, kind="info"):
+        asyncio.get_event_loop().create_task(
+            self.broadcast({"type": "toast", "text": text, "kind": kind}))
+
+    @property
+    def dial(self):
+        if self.rig.enabled and self.rig.connected and self.rig.freq:
+            return self.rig.freq
+        return int(self.s["dial_hz"])
+
+    def state(self):
+        dx = self.qso.dxcall
+        if dx and not self.qso.dxgrid and self.grids.get(dx):
+            self.qso.dxgrid = self.grids[dx]
+        info = self._station_info(dx, self.qso.dxgrid) if dx else {}
+        return {
+            "type": "state",
+            "settings": {k: v for k, v in self.s.items() if k != "remote_pin_hash"},
+            "remote": {"enabled": self.s["remote_enabled"], "pin_set": bool(self.s["remote_pin_hash"]),
+                       "urls": [f"http://{a}:{self.port}/" for a in lan_addresses()]},
+            "audio": {"running": self.rx_task is not None and not self.audio_error,
+                      "error": self.audio_error, "level": round(self.level_db, 1)},
+            "rig": {"enabled": self.rig.enabled, "connected": self.rig.connected,
+                    "freq": self.rig.freq, "error": self.rig.error},
+            "dial": self.dial, "band": band_of(self.dial),
+            "bands": [{"name": b[0], "hz": b[3]} for b in BANDS],
+            "qso": {**self.qso.snapshot(), "info": info},
+            "tx": self.tx_info, "tuning": self.tune_task is not None,
+            "log": [{**e, **self._station_info(e["call"], e["grid"])}
+                    for e in self.logbook.recent(50)],
+            "qso_count": len(self.logbook.qsos),
+            "tools": {k: bool(v) for k, v in tools().items()},
+            "can_install_wsjtx": wsjtx_install.available(),
+            "about": {"version": __version__, "date": RELEASE_DATE, "authors": AUTHORS},
+        }
+
+    async def push_state(self):
+        await self.broadcast(self.state())
+        self._udp_status()
+
+    # ------------------------------------------- companion apps (WSJT-X UDP)
+
+    async def _configure_udp(self):
+        await self.udp.stop()
+        self.udp.accept = bool(self.s["udp_accept"])
+        # Paused in demo mode, so simulated stations never reach GridTracker etc.
+        if self.s["udp_enabled"] and not self.s["demo"]:
+            try:
+                await self.udp.start(self.s["udp_host"] or "127.0.0.1", int(self.s["udp_port"] or 2237))
+            except (OSError, ValueError) as e:
+                self.toast(f"Couldn't start the GridTracker link: {e}", "warn")
+
+    def _udp_status(self):
+        q = self.qso
+        self.udp.status({
+            "dial": self.dial, "dx_call": q.dxcall,
+            "report": ft8.fmt_report(q.snr) if q.dxcall else "",
+            "tx_enabled": q.tx_enabled, "transmitting": bool(self.tx_info),
+            "decoding": self.decoding, "rx_df": int(self.s["rx_freq"]), "tx_df": int(self.s["tx_freq"]),
+            "de_call": self.s["mycall"].upper(), "de_grid": self.s["mygrid"][:4].upper(),
+            "dx_grid": q.dxgrid, "tx_message": q.msgs[q.next] if q.msgs else "",
+        })
+
+    def _udp_reply(self, r: dict):
+        """A companion app asked to answer a decode (e.g. a click in GridTracker)."""
+        for batch in reversed(self.history):
+            for d in batch["items"]:
+                if d["msg"] == r["msg"] and abs(d["freq"] - r["freq"]) <= 10:
+                    if not self.s["mycall"]:
+                        return
+                    self.qso.reply(d)
+                    self.s["rx_freq"] = d["freq"]
+                    self.toast(f"Answering {d['p']['from'] or d['msg']} (requested by a companion app)", "info")
+                    asyncio.get_event_loop().create_task(self.push_state())
+                    return
+
+    def _udp_halt(self):
+        asyncio.get_event_loop().create_task(self.halt())
+        asyncio.get_event_loop().create_task(self.push_state())
+
+    # ---------------------------------------------------------------- audio
+
+    async def restart_audio(self):
+        if self.rx_task:
+            self.rx_task.cancel()
+            self.rx_task = None
+        self.total, self.t0, self.audio_error = 0, None, ""
+        self.demo.mycall = self.s["mycall"].upper()
+        if self.s["demo"]:
+            self.rx_task = asyncio.create_task(self._demo_reader())
+        else:
+            self.rx_task = asyncio.create_task(self._capture())
+
+    async def _capture(self):
+        try:
+            await self.audio.capture(self.s["audio_in"], self._on_audio)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            self.audio_error = str(e)
+            log.error("audio input: %s", e)
+            await self.push_state()
+
+    async def _demo_reader(self):
+        n = int(time.time() * FS)
+        self.t0 = n / FS
+        self.total = 0
+        while True:
+            await asyncio.sleep(0.1)
+            n1 = int(time.time() * FS)
+            chunk = self.demo.samples(n, n1)
+            n = n1
+            await self._on_audio(chunk, None)
+
+    async def _on_audio(self, x: np.ndarray, t_arrival):
+        n = len(x)
+        if n == 0:
+            return
+        i = self.total % len(self.ring)
+        first = min(n, len(self.ring) - i)
+        self.ring[i:i + first] = x[:first]
+        self.ring[:n - first] = x[first:]
+        self.total += n
+        if t_arrival is not None:
+            cand = t_arrival - self.total / FS
+            if self.t0 is None or abs(cand - self.t0) > 0.5:
+                self.t0 = cand
+            else:
+                self.t0 += 0.02 * (cand - self.t0)
+        self._level_acc.append(float(np.mean(x.astype(np.float64) ** 2)))
+        self.since_wf += n
+        while self.since_wf >= WF_HOP:
+            self.since_wf -= WF_HOP
+            await self._waterfall_row()
+
+    def samples(self, t_start, t_end):
+        n0 = int(round((t_start - self.t0) * FS))
+        n1 = int(round((t_end - self.t0) * FS))
+        out = np.zeros(n1 - n0, np.int16)
+        lo, hi = max(n0, self.total - len(self.ring)), min(n1, self.total)
+        if hi > lo:
+            idx = np.arange(lo, hi) % len(self.ring)
+            out[lo - n0:hi - n0] = self.ring[idx]
+        return out
+
+    async def _waterfall_row(self):
+        if self.total < FFT_N:
+            return
+        idx = np.arange(self.total - FFT_N, self.total) % len(self.ring)
+        x = self.ring[idx].astype(np.float32) * np.hanning(FFT_N).astype(np.float32)
+        spec = np.abs(np.fft.rfft(x)[:WF_BINS]) ** 2
+        db = 10 * np.log10(spec + 1e-3)
+        floor = float(np.median(db[60:]))
+        self.noise_floor = floor if self.noise_floor is None else 0.9 * self.noise_floor + 0.1 * floor
+        row = np.clip((db - self.noise_floor + 4) * (255 / 34), 0, 255).astype(np.uint8)
+        await self.broadcast_bin(row.tobytes())
+        if self._level_acc:
+            p = float(np.mean(self._level_acc))
+            self._level_acc = []
+            self.level_db = 10 * np.log10(p / 32768 ** 2 + 1e-12)
+            await self.broadcast({"type": "level", "db": round(self.level_db, 1)})
+
+    # -------------------------------------------------------------- timing
+
+    async def _scheduler(self):
+        last_poll = last_beat = 0
+        while True:
+            await asyncio.sleep(0.05)
+            now = time.time()
+            p = int(now // ft8.PERIOD)
+            pos = now - p * ft8.PERIOD
+            try:
+                if pos >= DECODE_AT and self.last_decoded < p and self.t0 is not None:
+                    self.last_decoded = p
+                    if p not in self.tx_periods:
+                        asyncio.create_task(self._decode(p))
+                q = self.qso
+                if (q.tx_enabled and p % 2 == q.parity and p not in self.tx_periods
+                        and self.tx_task is None and self.tune_task is None):
+                    if self.decoding and pos < 1.0:
+                        continue  # let the previous period's decode finish first
+                    if pos <= ft8.TX_START + LATE_START_MAX:
+                        self.tx_periods.add(p)
+                        self.tx_task = asyncio.create_task(self._transmit(p))
+                q.watchdog()
+                if now - last_beat > 15:
+                    last_beat = now
+                    self.udp.heartbeat()
+                    self._udp_status()
+                if now - last_poll > 2:
+                    last_poll = now
+                    if self.rig.enabled:
+                        was = (self.rig.connected, self.rig.freq, self.rig.error)
+                        await self.rig.poll()
+                        if self.rig.connected and not was[0]:
+                            await self._apply_rig_mode()   # just connected
+                        if was != (self.rig.connected, self.rig.freq, self.rig.error):
+                            await self.push_state()
+            except Exception:  # noqa: BLE001
+                log.exception("scheduler")
+
+    # --------------------------------------------------------------- decode
+
+    async def _decode(self, p):
+        self.decoding = True
+        try:
+            t_start = p * ft8.PERIOD
+            audio = self.samples(t_start, t_start + ft8.PERIOD)
+            hhmmss = time.strftime("%H%M%S", time.gmtime(t_start))
+            path = os.path.join(self.tmp, f"{time.strftime('%y%m%d', time.gmtime(t_start))}_{hhmmss}.wav")
+            with wave.open(path, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(FS)
+                wf.writeframes(audio.tobytes())
+            jt9 = find_tool("jt9")
+            if not jt9:
+                raise RuntimeError("WSJT-X's decoder (jt9) wasn't found - is WSJT-X installed?")
+            args = [jt9, "-8", "-d", str(self.s["depth"]), "-a", self.tmp, "-t", self.tmp]
+            if self.s["mycall"]:
+                args += ["-c", self.s["mycall"].upper()]
+            if self.s["mygrid"]:
+                args += ["-G", self.s["mygrid"][:4].upper()]
+            if self.qso.dxcall:
+                args += ["-x", self.qso.dxcall]
+            args.append(path)
+            proc = await asyncio.create_subprocess_exec(
+                *args, cwd=self.tmp, stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL)
+            out, _ = await asyncio.wait_for(proc.communicate(), 12)
+            os.unlink(path)
+            decodes, seen = [], set()
+            for line in out.decode(errors="replace").splitlines():
+                m = LINE_RE.match(line)
+                if not m:
+                    continue
+                msg = re.sub(r"\s+(\?|a\d+)$", "", m.group(4)).strip()
+                if msg in seen:
+                    continue
+                seen.add(msg)
+                decodes.append(self._annotate(p, hhmmss, int(m.group(1)),
+                                              float(m.group(2)), int(m.group(3)), msg))
+            decodes.sort(key=lambda d: d["freq"])
+            with_grid = {d["p"]["from"] for d in decodes if d["p"]["from"] and d["p"]["grid"]}
+            if with_grid:
+                self._backfill_log_grids(with_grid)
+            self._save_grids()
+            batch = {"type": "decodes", "period": p, "time": hhmmss, "items": decodes,
+                     "band": band_of(self.dial), "dial": self.dial}
+            self.history.append(batch)
+            await self.broadcast(batch)
+            for d in decodes:
+                self.udp.decode(p * ft8.PERIOD, d["snr"], d["dt"], d["freq"], d["msg"])
+            self.qso.on_decodes(decodes, p)
+            await self.push_state()
+        except Exception as e:  # noqa: BLE001
+            log.exception("decode")
+            self.toast(f"Decoder error: {e}", "bad")
+        finally:
+            self.decoding = False
+
+    # Countries too big for a "middle of the country" distance to mean anything.
+    BIG_COUNTRIES = {"United States", "Canada", "Alaska", "Asiatic Russia", "European Russia",
+                     "Brazil", "Australia", "China", "Argentina", "India", "Kazakhstan",
+                     "Mexico", "Indonesia", "Chile", "Peru", "Greenland"}
+
+    def _station_info(self, call, grid):
+        e = self.cty.lookup(call)
+        info = {"country": e["country"] if e else "", "cont": e["cont"] if e else ""}
+        grid = grid or self.grids.get(call, "")
+        mine = grid_to_latlon(self.s["mygrid"])
+        there = grid_to_latlon(grid)
+        if not there and e:
+            # No grid known: estimate from the country, unless it's ours or huge.
+            my_country = (self.cty.lookup(self.s["mycall"]) or {}).get("country")
+            if e["country"] not in self.BIG_COUNTRIES and e["country"] != my_country:
+                there = (e["lat"], e["lon"])
+        db = distance_bearing(mine, there)
+        if db:
+            info["km"], info["az"] = db
+            info["approx"] = not grid
+        if grid:
+            info["grid"] = grid
+        return info
+
+    # ------------------------------------------------------- grid memory
+
+    def _load_grids(self):
+        """Grids we've seen stations send, so a later message without a grid
+        (or a QSO that never included one) still gets the right location."""
+        self.grids: dict[str, str] = {}
+        try:
+            with open(self.grids_path) as f:
+                self.grids.update(json.load(f))
+        except (OSError, ValueError):
+            pass
+        for q in self.logbook.qsos:   # the logbook knows grids too
+            if q.get("call") and q.get("gridsquare"):
+                self.grids.setdefault(q["call"].upper(), q["gridsquare"][:4].upper())
+        self._grids_dirty = False
+
+    def _learn_grid(self, call: str, grid: str):
+        grid = grid[:4].upper()
+        if call and grid and self.grids.get(call) != grid:
+            self.grids[call] = grid
+            self._grids_dirty = True
+
+    def _save_grids(self):
+        if not self._grids_dirty:
+            return
+        if len(self.grids) > 50000:   # keep the file small
+            self.grids = dict(list(self.grids.items())[-40000:])
+        tmp = self.grids_path + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(self.grids, f)
+        os.replace(tmp, self.grids_path)
+        self._grids_dirty = False
+
+    def _backfill_log_grids(self, calls):
+        """A station just sent its grid: add it to recent QSOs logged without one.
+        Only the last 6 hours - portable stations move, so older QSOs are left alone."""
+        cutoff = (utc_now() - dt.timedelta(hours=6)).strftime("%Y%m%d%H%M%S")
+        for idx, q in enumerate(self.logbook.qsos):
+            call = q.get("call", "").upper()
+            if call in calls and not q.get("gridsquare") and self.grids.get(call):
+                if q.get("qso_date", "") + q.get("time_on", "") >= cutoff:
+                    self.logbook.update(idx, {"gridsquare": self.grids[call]})
+                    self.toast(f"Added grid {self.grids[call]} to your QSO with {call}", "good")
+
+    def _annotate(self, p, hhmmss, snr, dt, freq, msg):
+        parsed = ft8.parse(msg)
+        my = self.s["mycall"].upper()
+        d = {"period": p, "parity": p % 2, "time": hhmmss, "snr": snr, "dt": dt,
+             "freq": freq, "msg": msg, "p": parsed,
+             "to_me": bool(my) and parsed["to"] == my,
+             "from_me": bool(my) and parsed["from"] == my}
+        call = parsed["from"]
+        if call:
+            if parsed["grid"]:
+                self._learn_grid(call, parsed["grid"])
+            d.update(self._station_info(call, parsed["grid"]))
+            band = band_of(self.dial)
+            d["new"] = not self.logbook.worked(call)
+            d["new_band"] = not d["new"] and not self.logbook.worked(call, band)
+        return d
+
+    # ------------------------------------------------------------- transmit
+
+    async def _transmit(self, p):
+        q = self.qso
+        idx = q.next
+        text = ft8.normalize(q.msgs[idx])
+        try:
+            if not text:
+                q.tx_enabled = False
+                return
+            if not self.s["mycall"]:
+                q.tx_enabled = False
+                self.toast("Set your callsign in Settings before transmitting", "warn")
+                return
+            tones, decoded = ft8.encode(text)
+            if decoded != text and decoded != self._warned:
+                self._warned = decoded
+                self.toast(f"Message will be received as “{decoded}”", "warn")
+            q.note_tx(p, decoded)
+            target = p * ft8.PERIOD + ft8.TX_START
+            late = max(0.0, time.time() - target)
+            self.tx_info = {"msg": decoded, "period": p, "idx": idx, "freq": self.s["tx_freq"],
+                            "start": target, "end": target + ft8.SIGNAL_SEC,
+                            "late": round(late, 1) if late >= 0.5 else 0}
+            self._halt.clear()
+            await self.push_state()
+            if self.s["demo"]:
+                self.demo.user_tx(p, decoded)
+                try:
+                    await asyncio.wait_for(self._halt.wait(), self.tx_info["end"] - time.time())
+                except asyncio.TimeoutError:
+                    pass
+            else:
+                f0 = float(self.s["tx_freq"])
+                await self._play(lambda rate: ft8.synth(tones, f0, rate), target)
+            if not self._halt.is_set():
+                q.after_tx(idx)
+        except Exception as e:  # noqa: BLE001
+            log.exception("transmit")
+            self.toast(f"Transmit failed: {e}", "bad")
+            q.tx_enabled = False
+        finally:
+            self.tx_info = None
+            self.tx_task = None
+            await self.push_state()
+
+    async def _play(self, make_wave, target: float):
+        """Key the radio and play make_wave(rate) - a float waveform at the sound
+        card's rate - starting at `target`. PTT is always released afterwards."""
+        if self.s["ptt"] != "vox":
+            # Never play audio into a radio that isn't actually transmitting.
+            if not self.rig.enabled:
+                raise RuntimeError("PTT is set to use radio control, but radio control is off, so "
+                                   "Procyon can't key your radio. Turn on radio control in Settings, "
+                                   "or set PTT to VOX.")
+            if not await self.rig.ptt(True):
+                await self.rig.ptt(False)
+                raise RuntimeError("The radio didn't confirm it was transmitting (PTT). "
+                                   f"{(self.rig.error or 'It refused the command').rstrip('.')}. "
+                                   "Check radio control and PTT in Settings.")
+        try:
+            # Audio drive is read live, so moving the slider mid-transmission (e.g.
+            # while watching ALC during Tune) takes effect straight away.
+            await self.audio.play(self.s["audio_out"], make_wave, target, self._halt,
+                                  lambda: 32767 * (self.s["tx_level"] / 100.0) ** 2)
+        finally:
+            if self.s["ptt"] != "vox":
+                await self.rig.ptt(False)
+
+    async def _radio_job(self, fn, *args):
+        """Run blocking serial-port work. Procyon's own rigctld holds the port,
+        so it is stopped for the duration and restarted after."""
+        await self.halt()
+        await self.rig.close()
+        try:
+            return await asyncio.get_running_loop().run_in_executor(None, fn, *args)
+        finally:
+            await self.rig.configure(self.s)
+            await self.rig.poll()
+            await self.push_state()
+
+    async def _rig_test(self, m: dict):
+        """Try the radio settings on screen (saved or not) without keying it."""
+        if not m.get("spawn"):       # an external rigctld: just ask it
+            await self.rig.poll()
+            ok = self.rig.connected and self.rig.freq
+            return {"type": "rig_test", "ok": bool(ok), "freq": self.rig.freq,
+                    "error": "" if ok else (self.rig.error or "No answer from rigctld")}
+        res = await self._radio_job(test_rig, str(m.get("model") or ""),
+                                    str(m.get("device") or ""), str(m.get("baud") or ""))
+        return {"type": "rig_test", **res}
+
+    def _install_wsjtx(self):
+        """Download and install WSJT-X in the background, reporting progress to the browser."""
+        if self._installing:
+            return
+        self._installing = True
+        loop = asyncio.get_running_loop()
+
+        def progress(text, frac=None):     # called from the installer's thread
+            loop.call_soon_threadsafe(
+                lambda: loop.create_task(self.broadcast({"type": "install", "text": text, "frac": frac})))
+
+        async def run():
+            try:
+                await loop.run_in_executor(None, wsjtx_install.install, progress)
+                hamlib_rigs.cache_clear()      # the radio list needs WSJT-X's Hamlib
+                await self.rig.configure(self.s)
+                await self.broadcast({"type": "install", "done": True,
+                                      "text": "WSJT-X is installed in your Applications folder."})
+                self.toast("WSJT-X installed - Procyon is ready", "good")
+            except wsjtx_install.InstallError as e:
+                await self.broadcast({"type": "install", "error": str(e)})
+            finally:
+                self._installing = False
+                await self.push_state()
+
+        loop.create_task(run())
+
+    async def halt(self):
+        self.qso.tx_enabled = False
+        self._halt.set()
+        if self.tune_task:
+            self.tune_task.cancel()
+
+    async def tune(self, on: bool):
+        if not on:
+            if self.tune_task:
+                self.tune_task.cancel()
+            return
+        if self.tune_task or self.tx_task or self.s["demo"]:
+            if self.s["demo"]:
+                self.toast("Tune is not available in demo mode", "warn")
+            return
+
+        async def run():
+            try:
+                f0 = float(self.s["tx_freq"])
+
+                def tone(rate):
+                    return np.sin(2 * np.pi * f0 * np.arange(int(30 * rate)) / rate)
+                self._halt.clear()
+                self.tx_info = {"msg": "TUNE", "freq": self.s["tx_freq"], "tune": True,
+                                "start": time.time(), "end": time.time() + 30}
+                await self.push_state()
+                await self._play(tone, time.time())
+            except asyncio.CancelledError:
+                pass   # Tune switched off: _play has already stopped the audio and PTT
+            except Exception as e:  # noqa: BLE001
+                log.exception("tune")
+                self.toast(f"Tune failed: {e}", "bad")
+            finally:
+                self.tune_task = None
+                self.tx_info = None
+                await self.push_state()
+
+        self.tune_task = asyncio.create_task(run())
+
+    # ----------------------------------------------------------------- log
+
+    def _log_qso(self, q: Qso):
+        if not q.dxgrid:   # they never sent it in this QSO, but we may have seen it
+            q.dxgrid = self.grids.get(q.dxcall, "")
+        now = utc_now()
+        start = q.started or now
+        dial = self.dial
+        rec = {
+            "call": q.dxcall, "gridsquare": q.dxgrid, "mode": "FT8",
+            "rst_sent": ft8.fmt_report(q.snr), "rst_rcvd": q.report_rcvd,
+            "qso_date": start.strftime("%Y%m%d"), "time_on": start.strftime("%H%M%S"),
+            "qso_date_off": now.strftime("%Y%m%d"), "time_off": now.strftime("%H%M%S"),
+            "band": band_of(dial), "freq": f"{(dial + int(self.s['tx_freq'])) / 1e6:.6f}",
+            "station_callsign": self.s["mycall"].upper(), "my_gridsquare": self.s["mygrid"].upper(),
+        }
+        if str(self.s["tx_watts"]).strip():
+            rec["tx_pwr"] = str(self.s["tx_watts"]).strip()
+        rec["comment"] = self._comment(self._qso_comment(q))
+        self.logbook.add(rec)
+        q.log_idx = len(self.logbook.qsos) - 1
+        if not self.s["demo"]:   # never put simulated QSOs into companion apps' logs
+            adif = (f"<adif_ver:5>3.1.4 <programid:7>Procyon <programversion:{len(__version__)}>"
+                    f"{__version__} <EOH>\n" + Logbook._record(rec))
+            self.udp.qso_logged(rec, start, now, adif)
+        self.toast(f"Logged QSO with {q.dxcall}", "good")
+
+    def _remote_settings(self, new: dict):
+        pin = str(new.get("remote_pin", "")).strip()
+        if pin:
+            if PIN_RE.match(pin):
+                self.s["remote_pin_hash"] = self.auth.hash_pin(pin)
+            else:
+                self.toast("The PIN must be 4 to 8 digits - it was not changed", "warn")
+        want = bool(new.get("remote_enabled", self.s["remote_enabled"]))
+        if want and not self.s["remote_pin_hash"]:
+            self.toast("Set a PIN before allowing other devices", "warn")
+            want = False
+        self.s["remote_enabled"] = want
+        self.save()
+
+    async def _kick_remote_clients(self):
+        """After a PIN change, signed-in network devices must sign in again."""
+        for ws in list(self.clients):
+            if not getattr(ws, "procyon_local", True):
+                await ws.close(code=4001, message=b"PIN changed")
+
+    RIG_MODES = {"data": ("PKTUSB", "DATA"), "usb": ("USB", "USB")}
+
+    async def _apply_rig_mode(self):
+        """Put the radio in the mode chosen for FT8, as WSJT-X does whenever it
+        connects or changes band."""
+        want = self.RIG_MODES.get(self.s.get("rig_mode"))
+        if not want or not self.rig.enabled:
+            return
+        if not await self.rig.set_mode(want[0]) and self.rig.connected:
+            self.toast(f"Couldn't switch the radio to {want[1]} mode - please set it on the radio", "warn")
+
+    def _audio_range(self):
+        """Where an FT8 signal (50 Hz wide) can sit inside the chosen waterfall range."""
+        return max(100, int(self.s["wf_start"])), min(3950, int(self.s["wf_end"]) - 50)
+
+    def _clean_wf_range(self):
+        try:
+            start = int(float(self.s["wf_start"]))
+            end = int(float(self.s["wf_end"]))
+        except (TypeError, ValueError):
+            start, end = 0, 3000
+        start = max(0, min(3500, start))
+        end = max(start + 500, min(4000, end))
+        self.s["wf_start"], self.s["wf_end"] = start, end
+        lo, hi = self._audio_range()
+        for key in ("tx_freq", "rx_freq"):   # keep the markers inside the new range
+            self.s[key] = int(max(lo, min(hi, self.s[key])))
+
+    def _qso_comment(self, q: Qso) -> str:
+        """The user's note, plus the signal reports if they asked for them."""
+        parts = [q.note.strip()]
+        if self.s.get("log_reports_in_comment"):
+            parts.append(f"FT8 Sent: {ft8.fmt_report(q.snr)} Rcvd: {q.report_rcvd or '?'}")
+        return " · ".join(p for p in parts if p)
+
+    def _comment(self, note: str) -> str:
+        """Demo QSOs keep a marker in front of the note, so they're never
+        mistaken for real contacts."""
+        note = note.strip()
+        if self.s["demo"]:
+            return f"{DEMO_MARK} - {note}" if note else DEMO_MARK
+        return note
+
+    def _logged_entry(self, q: Qso):
+        """Index of this QSO's log entry, if it's still in the open logbook."""
+        i = q.log_idx
+        if i is not None and i < len(self.logbook.qsos) and self.logbook.qsos[i].get("call") == q.dxcall:
+            return i
+        return None
+
+    # ------------------------------------------------------------- commands
+
+    async def command(self, m: dict, local: bool = True):
+        t = m.get("type")
+        q = self.qso
+        if t == "settings":
+            old = dict(self.s)
+            for k in DEFAULTS:
+                if k in m["settings"] and not k.startswith("remote_"):
+                    self.s[k] = m["settings"][k]
+            if local:   # only the computer running Procyon may change remote access
+                self._remote_settings(m["settings"])
+            self.s["mycall"] = self.s["mycall"].upper().strip()
+            self.s["mygrid"] = self.s["mygrid"].strip()[:6]
+            self.s["mygrid"] = self.s["mygrid"][:4].upper() + self.s["mygrid"][4:].lower()
+            self._clean_wf_range()
+            self.save()
+            q.set_station(self.s["mycall"], self.s["mygrid"])
+            if self.s["mycall"] and old["mycall"] != self.s["mycall"]:
+                probe = f"K1ABC {self.s['mycall']} -10"
+                if ft8.encode(probe)[1] != probe:
+                    self.toast(f"{self.s['mycall']} is not a standard callsign format - "
+                               "FT8 can only send it as short free text", "warn")
+            if old["remote_enabled"] != self.s["remote_enabled"] and self.on_remote_change:
+                await self.on_remote_change(self.s["remote_enabled"])
+            if (old["remote_pin_hash"] != self.s["remote_pin_hash"]
+                    or (old["remote_enabled"] and not self.s["remote_enabled"])):
+                await self._kick_remote_clients()
+            if any(old[k] != self.s[k] for k in ("audio_in", "demo", "mycall")):
+                if old["demo"] != self.s["demo"]:
+                    self.logbook = self._open_logbook()
+                    await self.halt()
+                await self.restart_audio()
+            if any(old[k] != self.s[k] for k in DEFAULTS if k.startswith("udp_") or k == "demo"):
+                await self._configure_udp()
+            if any(old[k] != self.s[k] for k in DEFAULTS if k.startswith("rig_") or k == "ptt"):
+                if all(old[k] == self.s[k] for k in DEFAULTS
+                       if (k.startswith("rig_") or k == "ptt") and k != "rig_mode"):
+                    await self._apply_rig_mode()          # only the mode changed
+                else:
+                    await self.rig.configure(self.s)      # reconnects; mode is set on connect
+                    await self.rig.poll()
+                    if self.rig.connected:
+                        await self._apply_rig_mode()
+        elif t == "reply":
+            d = m["decode"]
+            d["p"] = ft8.parse(d["msg"])
+            q.reply(d)
+            self.s["rx_freq"] = d["freq"]
+        elif t == "cq":
+            q.call_cq()
+        elif t == "tx_enable":
+            q.tx_enabled = bool(m["on"])
+            q.auto_disabled = False
+            if q.tx_enabled:
+                q.last_progress = time.time()
+        elif t == "halt":
+            await self.halt()
+        elif t == "select_msg":
+            q.next = int(m["n"])
+        elif t == "edit_msg":
+            q.msgs[int(m["n"])] = ft8.normalize(m["text"])
+        elif t == "set_dx":
+            q.set_dx(m.get("call", ""), m.get("grid", ""))
+            q.next = 0 if q.dxcall else 5
+        elif t == "clear_activity":
+            self.history.clear()
+            self.udp.clear()   # companion apps (GridTracker) clear their lists too
+            await self.broadcast({"type": "history", "batches": []})
+        elif t == "clear_exchange":
+            q.thread.clear()
+        elif t == "clear_dx":
+            q.reset()
+            q.regen()
+            q.next = 5
+        elif t == "parity":
+            q.parity = int(m["p"]) % 2
+        elif t == "freq":
+            key = "tx_freq" if m.get("which") == "tx" else "rx_freq"
+            lo, hi = self._audio_range()
+            self.s[key] = int(max(lo, min(hi, m["hz"])))
+            self.save()
+        elif t == "band":
+            self.s["dial_hz"] = int(m["hz"])
+            self.save()
+            if self.rig.enabled:
+                await self.rig.set_freq(int(m["hz"]))
+                await self._apply_rig_mode()
+        elif t == "qso_note":
+            q.note = str(m.get("text", ""))[:200]
+            i = self._logged_entry(q)
+            if i is not None:   # already logged: update the entry too
+                self.logbook.update(i, {"comment": self._comment(self._qso_comment(q))})
+        elif t == "tx_watts":
+            w = str(m.get("w", "")).strip()
+            self.s["tx_watts"] = w if w.replace(".", "", 1).isdigit() else ""
+            self.save()
+        elif t == "log_edit":
+            i = int(m["idx"])
+            if 0 <= i < len(self.logbook.qsos):
+                w = str(m.get("tx_pwr", "")).strip()
+                self.logbook.update(i, {
+                    "comment": self._comment(str(m.get("comment", ""))[:200]),
+                    "tx_pwr": w if w.replace(".", "", 1).isdigit() else "",
+                })
+                self.toast("Log entry updated", "good")
+        elif t == "tx_level":
+            self.s["tx_level"] = max(0, min(100, int(m["v"])))
+            self.save()
+            return None   # no full status update needed while the slider is being dragged
+        elif t == "tune":
+            await self.tune(bool(m["on"]))
+        elif t == "log_now":
+            if q.dxcall:
+                q.logged = False
+                q._log()
+        elif t == "devices":
+            return {"type": "devices", "inputs": self.audio.inputs(),
+                    "outputs": self.audio.outputs(), "serial": serial_ports(),
+                    "rigs": hamlib_rigs()}
+        elif t == "wsjtx_import":
+            found, notes = import_wsjtx()
+            return {"type": "wsjtx_import", "settings": found, "notes": notes}
+        elif t in ("detect_radio", "rig_test", "install_wsjtx") and not local:
+            self.toast("That can only be done on the computer running Procyon", "warn")
+            return None
+        elif t == "detect_radio":
+            if IS_WINDOWS:   # detection needs Unix serial-port calls
+                return {"type": "detect_radio", "found": [], "unsupported": True}
+            return {"type": "detect_radio", "found": await self._radio_job(detect_radios)}
+        elif t == "rig_test":
+            return await self._rig_test(m)
+        elif t == "install_wsjtx":
+            self._install_wsjtx()
+            return None
+        await self.push_state()
+        return None
