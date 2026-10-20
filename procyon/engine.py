@@ -522,6 +522,14 @@ class Engine:
                 self.toast("Set your callsign in Settings before transmitting", "warn")
                 return
             tones, decoded = ft8.encode(text)
+            if len(decoded) < len(text):
+                # FT8 would cut this message short (e.g. a callsign it can't
+                # encode falling back to 13 characters of free text). Never put
+                # a cut-off callsign on the air: don't key up at all.
+                q.tx_enabled = False
+                self.toast(f"Not sent: FT8 can't fit “{text}” - it would go out cut short as "
+                           f"“{decoded}”. Edit the message and enable TX again.", "bad")
+                return
             if decoded != text and decoded != self._warned:
                 self._warned = decoded
                 self.toast(f"Message will be received as “{decoded}”", "warn")
@@ -795,10 +803,10 @@ class Engine:
             self.save()
             q.set_station(self.s["mycall"], self.s["mygrid"])
             if self.s["mycall"] and old["mycall"] != self.s["mycall"]:
-                probe = f"K1ABC {self.s['mycall']} -10"
-                if ft8.encode(probe)[1] != probe:
-                    self.toast(f"{self.s['mycall']} is not a standard callsign format - "
-                               "FT8 can only send it as short free text", "warn")
+                if not ft8.is_std_call(self.s["mycall"]):
+                    self.toast(f"{self.s['mycall']} is longer than FT8's standard callsign format: "
+                               f"it's sent in full when you call CQ (without your grid) and as "
+                               f"<{self.s['mycall']}> during QSOs, as WSJT-X does", "warn")
             if old["remote_enabled"] != self.s["remote_enabled"] and self.on_remote_change:
                 await self.on_remote_change(self.s["remote_enabled"])
             if (old["remote_pin_hash"] != self.s["remote_pin_hash"]

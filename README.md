@@ -2,7 +2,7 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 0.9.9** · 19 October 2026
+**Version 0.9.10** · 20 October 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
 A simpler, friendlier FT8 station. Procyon uses WSJT-X's own decoder (`jt9`)
@@ -16,11 +16,11 @@ the Hamlib copy it includes): https://wsjt.sourceforge.io
 
 | System | Download | How |
 |---|---|---|
-| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.9_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.9_all.deb`. Then start **Procyon FT8** from your menu, or run `procyon`. |
-| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.9-arch.tar.gz` | `tar xf procyon-0.9.9-arch.tar.gz`, `cd procyon-0.9.9-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
-| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.9-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
-| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.9-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
-| Windows 10/11 (64-bit) | `Procyon-0.9.9-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
+| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.10_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.10_all.deb`. Then start **Procyon FT8** from your menu, or run `procyon`. |
+| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.10-arch.tar.gz` | `tar xf procyon-0.9.10-arch.tar.gz`, `cd procyon-0.9.10-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
+| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.10-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
+| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.10-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
+| Windows 10/11 (64-bit) | `Procyon-0.9.10-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
 
 Add `--demo` (or use **Procyon Demo.bat** on Windows) to try it with a
 simulated band: nothing is transmitted. Close WSJT-X while using Procyon;
@@ -206,6 +206,12 @@ and Procyon B. (Earlier versions were called Skywave; settings and logbooks move
 across automatically on first start.)
 
 ## Roadmap
+
+0.9.10: **fix for long or unusual callsigns** (e.g. 3E40CDW, PJ4/K1ABC,
+GB13COL). Procyon used to send "3E40CDW KR1TTR EN80", which FT8 can't encode,
+so it went out cut short as "3E40CDW KR1TT". It now writes such calls as
+`<3E40CDW>`, as WSJT-X does, and will never transmit a message that would be
+cut short - it stops and says why instead.
 
 0.9.9: a **Quit** button (power icon, top right, station computer only): stops
 Procyon and closes its terminal window; open tabs show "Procyon has stopped"

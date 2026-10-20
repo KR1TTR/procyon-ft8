@@ -19,6 +19,25 @@ GRID_RE = re.compile(r"^[A-R]{2}[0-9]{2}$")
 REPORT_RE = re.compile(r"^[+-]\d{2}$")
 RREPORT_RE = re.compile(r"^R[+-]\d{2}$")
 CALL_RE = re.compile(r"^<?[A-Z0-9/]*\d[A-Z0-9/]*>?$")
+# Callsigns FT8 can send in full in a standard message: a 1-2 character prefix,
+# the area digit, a 1-3 letter suffix (6 characters at most), optionally /P or
+# /R. Anything else (3E40CDW, PJ4/K1ABC, GB13COL, VE3ABCD) has to go as a short
+# code written <CALL>, as WSJT-X does - written plainly it falls back to 13
+# characters of free text and the callsign is cut off. Checked against ft8code.
+STD_CALL_RE = re.compile(r"^[A-Z0-9]{1,2}\d[A-Z]{1,3}$")
+
+
+def is_std_call(call: str) -> bool:
+    c = strip_call(call.upper())
+    if c.endswith(("/P", "/R")):
+        c = c[:-2]
+    return len(c) <= 6 and bool(STD_CALL_RE.match(c))
+
+
+def msg_call(call: str) -> str:
+    """How a callsign is written in a standard message: <CALL> if it can't be sent in full."""
+    c = strip_call(call.upper())
+    return c if is_std_call(c) else f"<{c}>"
 
 def _ft8code():
     from .system import find_tool  # noqa: PLC0415

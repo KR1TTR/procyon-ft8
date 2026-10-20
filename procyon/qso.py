@@ -54,8 +54,11 @@ class Qso:
     def regen(self):
         my, dx, g4 = self.mycall, self.dxcall, self.mygrid[:4]
         rpt = ft8.fmt_report(self.snr)
-        cq = f"CQ {my} {g4}".strip() if my else ""
+        # A CQ can carry a non-standard call in full, but then without a grid
+        cq = (f"CQ {my} {g4}".strip() if ft8.is_std_call(my) else f"CQ {my}") if my else ""
         if dx and my:
+            # Long/unusual calls go as <CALL> (e.g. "<3E40CDW> KR1TTR EN80")
+            dx, my = ft8.msg_call(dx), ft8.msg_call(my)
             self.msgs = [f"{dx} {my} {g4}".strip(), f"{dx} {my} {rpt}",
                          f"{dx} {my} R{rpt}", f"{dx} {my} RR73", f"{dx} {my} 73", cq]
         else:
