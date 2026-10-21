@@ -51,6 +51,7 @@
     <span class="chip" id="chipRig"><span class="led"></span><span id="rigLabel">Rig</span></span>
     <span class="chip remote" id="chipRemote" hidden><span class="led"></span><span class="lbl">Remote</span></span>
     <span class="chip demo" id="chipDemo" hidden>Demo<span class="lbl"> band</span></span>
+    <button class="chip pota" id="chipPota" type="button" hidden title="POTA activation - click for details and park logs">POTA <span id="potaChipCount"></span></button>
     <button class="icon-btn" id="fullscreenBtn" title="Full screen (F11)" hidden>
       <svg viewBox="0 0 24 24" class="fs-enter"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
       <svg viewBox="0 0 24 24" class="fs-exit"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
@@ -121,6 +122,7 @@
     <section class="card qso" id="qsoCard">
       <div class="card-head">
         <h2>QSO</h2>
+        <button class="link-btn" id="potaBtn" title="Parks on the Air: start or manage an activation">POTA</button>
         <button class="link-btn" id="clearDx" title="Clear the DX station">Clear</button>
       </div>
 
@@ -215,177 +217,231 @@
       <button type="button" class="btn ghost small" id="importWsjtx">Import settings from WSJT-X</button>
       <div class="hint" id="importNotes"></div>
     </div>
-    <p class="welcome" id="welcome" hidden>Welcome! Enter your callsign and grid to get started. No radio connected yet? Turn on <b>Demo band</b> to try everything with a simulated band.</p>
+    <p class="welcome" id="welcome" hidden>Welcome! Enter your callsign and grid to get started. No radio connected yet? Turn on <b>Demo band</b> (on the Audio tab) to try everything with a simulated band.</p>
 
-    <fieldset>
-      <legend>Station</legend>
-      <div class="grid2">
-        <label>Callsign<input name="mycall" required spellcheck="false" autocomplete="off" placeholder="K1ABC"></label>
-        <label>Grid square<input name="mygrid" spellcheck="false" autocomplete="off" placeholder="FN42" pattern="[A-Ra-r]{2}[0-9]{2}([A-Xa-x]{2})?"></label>
+    <div class="set-body">
+      <nav class="set-tabs" role="tablist" aria-label="Settings sections">
+        <button type="button" role="tab" id="tab-station" aria-controls="pane-station" data-tab="station">Station &amp; radio</button>
+        <button type="button" role="tab" id="tab-audio" aria-controls="pane-audio" data-tab="audio">Audio</button>
+        <button type="button" role="tab" id="tab-logbook" aria-controls="pane-logbook" data-tab="logbook">Logbook</button>
+        <button type="button" role="tab" id="tab-display" aria-controls="pane-display" data-tab="display">Display</button>
+        <button type="button" role="tab" id="tab-network" aria-controls="pane-network" data-tab="network">Network</button>
+      </nav>
+      <div class="set-panes">
+      <div class="set-pane" role="tabpanel" id="pane-station" aria-labelledby="tab-station" data-tab="station" hidden>
+        <fieldset>
+          <legend>Station</legend>
+          <div class="grid2">
+            <label>Callsign<input name="mycall" required spellcheck="false" autocomplete="off" placeholder="K1ABC"></label>
+            <label>Grid square<input name="mygrid" spellcheck="false" autocomplete="off" placeholder="FN42" pattern="[A-Ra-r]{2}[0-9]{2}([A-Xa-x]{2})?"></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Radio</legend>
+          <label class="toggle"><input type="checkbox" name="rig_enabled"><span></span>Control my radio (frequency and transmit)</label>
+          <div class="radio-tools">
+            <button type="button" class="btn ghost small" id="detectRadio">Detect my radio</button>
+            <button type="button" class="btn ghost small" id="testRadio">Test radio</button>
+            <span class="hint" id="radioMsg"></span>
+          </div>
+          <label>Radio
+            <input name="rig_pick" list="rigList" autocomplete="off" spellcheck="false"
+                   placeholder="Type to search, e.g. KX3, IC-7300, FT-991">
+            <datalist id="rigList"></datalist>
+            <input type="hidden" name="rig_model">
+            <span class="field-status" id="rigStatus"></span>
+          </label>
+          <div class="grid2">
+            <label>Serial port
+              <input name="rig_device" list="serialList" autocomplete="off" spellcheck="false" placeholder="/dev/ttyUSB0">
+              <datalist id="serialList"></datalist>
+            </label>
+            <label>Baud
+              <select name="rig_baud">
+                <option value="">Radio default</option>
+                <option>4800</option><option>9600</option><option>19200</option>
+                <option>38400</option><option>57600</option><option>115200</option>
+              </select>
+            </label>
+          </div>
+          <label>Radio mode for FT8
+            <select name="rig_mode">
+              <option value="data">Data (recommended, e.g. DATA A on Elecraft, USB-D on Icom)</option>
+              <option value="usb">USB</option>
+              <option value="none">Don't change the radio's mode</option>
+            </select>
+          </label>
+          <label>Transmit (PTT) by
+            <select name="ptt">
+              <option value="cat">CAT command to the radio</option>
+              <option value="rts">RTS line on the serial port (e.g. Digirig)</option>
+              <option value="dtr">DTR line on the serial port</option>
+              <option value="vox">VOX (the radio keys itself on audio)</option>
+            </select>
+          </label>
+          <details class="advanced">
+            <summary>Advanced: rigctld connection</summary>
+            <label class="toggle"><input type="checkbox" name="rig_spawn"><span></span>Start rigctld for me (recommended)</label>
+            <div class="grid2">
+              <label>Host<input name="rig_host"></label>
+              <label>Port<input name="rig_port" type="number"></label>
+            </div>
+            <p class="hint">Turn this off only if you already run rigctld yourself, then enter its host and port.</p>
+          </details>
+        </fieldset>
+
+        <fieldset>
+          <legend>Decoder</legend>
+          <label>Decoding depth
+            <select name="depth">
+              <option value="1">Fast</option>
+              <option value="2">Normal</option>
+              <option value="3">Deep (slower, finds weaker signals)</option>
+            </select>
+          </label>
+        </fieldset>
       </div>
-    </fieldset>
-
-    <fieldset>
-      <legend>Audio</legend>
-      <label>Input (from radio)<select name="audio_in"></select></label>
-      <label>Output (to radio)<select name="audio_out"></select></label>
-      <label class="toggle"><input type="checkbox" name="demo"><span></span>Demo band (simulated signals, nothing is transmitted)</label>
-    </fieldset>
-
-    <fieldset>
-      <legend>Radio</legend>
-      <label class="toggle"><input type="checkbox" name="rig_enabled"><span></span>Control my radio (frequency and transmit)</label>
-      <div class="radio-tools">
-        <button type="button" class="btn ghost small" id="detectRadio">Detect my radio</button>
-        <button type="button" class="btn ghost small" id="testRadio">Test radio</button>
-        <span class="hint" id="radioMsg"></span>
+      <div class="set-pane" role="tabpanel" id="pane-audio" aria-labelledby="tab-audio" data-tab="audio" hidden>
+        <fieldset>
+          <legend>Audio</legend>
+          <label>Input (from radio)<select name="audio_in"></select></label>
+          <label>Output (to radio)<select name="audio_out"></select></label>
+          <label class="toggle"><input type="checkbox" name="demo"><span></span>Demo band (simulated signals, nothing is transmitted)</label>
+        </fieldset>
       </div>
-      <label>Radio
-        <input name="rig_pick" list="rigList" autocomplete="off" spellcheck="false"
-               placeholder="Type to search, e.g. KX3, IC-7300, FT-991">
-        <datalist id="rigList"></datalist>
-        <input type="hidden" name="rig_model">
-        <span class="field-status" id="rigStatus"></span>
-      </label>
-      <div class="grid2">
-        <label>Serial port
-          <input name="rig_device" list="serialList" autocomplete="off" spellcheck="false" placeholder="/dev/ttyUSB0">
-          <datalist id="serialList"></datalist>
-        </label>
-        <label>Baud
-          <select name="rig_baud">
-            <option value="">Radio default</option>
-            <option>4800</option><option>9600</option><option>19200</option>
-            <option>38400</option><option>57600</option><option>115200</option>
-          </select>
-        </label>
+      <div class="set-pane" role="tabpanel" id="pane-logbook" aria-labelledby="tab-logbook" data-tab="logbook" hidden>
+        <fieldset>
+          <legend>Logbook</legend>
+          <label class="toggle"><input type="checkbox" name="log_reports_in_comment"><span></span>Add signal reports to log comments (e.g. "FT8 Sent: -05 Rcvd: -12")</label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Online logbooks</legend>
+          <div id="onlineLocal">
+            <p class="hint">Each logbook you set up gets an upload button next to Export ADIF. Nothing is sent until you click it, and QSOs logged without internet wait until you do. Already uploading with GridTracker? Then you can leave these empty.</p>
+            <label>QRZ Logbook API key
+              <input name="qrz_key_new" type="password" autocomplete="new-password" spellcheck="false">
+            </label>
+            <div class="radio-tools">
+              <button type="button" class="btn ghost small" id="qrzCheck">Test key</button>
+              <button type="button" class="btn ghost small" id="qrzForget">Remove key</button>
+              <span class="hint" id="qrzMsg"></span>
+            </div>
+            <p class="hint">On QRZ.com, open your logbook and press "Settings": the key is listed under API.</p>
+            <label>LoTW station location (from TQSL)
+              <input name="lotw_location" autocomplete="off" spellcheck="false" placeholder="e.g. Home">
+            </label>
+            <p class="hint" id="tqslHint"></p>
+          </div>
+          <p class="hint" id="onlineRemote" hidden>You're connected from another device. Online logbooks can only be set up on the computer running Procyon, but the upload buttons work from here.</p>
+        </fieldset>
       </div>
-      <label>Radio mode for FT8
-        <select name="rig_mode">
-          <option value="data">Data (recommended, e.g. DATA A on Elecraft, USB-D on Icom)</option>
-          <option value="usb">USB</option>
-          <option value="none">Don't change the radio's mode</option>
-        </select>
-      </label>
-      <label>Transmit (PTT) by
-        <select name="ptt">
-          <option value="cat">CAT command to the radio</option>
-          <option value="rts">RTS line on the serial port (e.g. Digirig)</option>
-          <option value="dtr">DTR line on the serial port</option>
-          <option value="vox">VOX (the radio keys itself on audio)</option>
-        </select>
-      </label>
-      <details class="advanced">
-        <summary>Advanced: rigctld connection</summary>
-        <label class="toggle"><input type="checkbox" name="rig_spawn"><span></span>Start rigctld for me (recommended)</label>
-        <div class="grid2">
-          <label>Host<input name="rig_host"></label>
-          <label>Port<input name="rig_port" type="number"></label>
-        </div>
-        <p class="hint">Turn this off only if you already run rigctld yourself, then enter its host and port.</p>
-      </details>
-    </fieldset>
+      <div class="set-pane" role="tabpanel" id="pane-display" aria-labelledby="tab-display" data-tab="display" hidden>
+        <fieldset>
+          <legend>Display</legend>
+          <label class="toggle"><input type="checkbox" name="team_badges"><span></span>Show Procyon's team badges when decoded</label>
+        </fieldset>
 
-    <fieldset>
-      <legend>Companion apps</legend>
-      <label class="toggle"><input type="checkbox" name="udp_enabled"><span></span>Send to GridTracker, JTAlert and loggers (as WSJT-X does)</label>
-      <div class="grid2">
-        <label>Address<input name="udp_host" spellcheck="false"></label>
-        <label>Port<input name="udp_port" type="number"></label>
+        <fieldset>
+          <legend>Alerts</legend>
+          <label class="toggle"><input type="checkbox" id="chimeToggle"><span></span>Chime when a station calls me (this device)</label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Waterfall</legend>
+          <div class="grid2">
+            <label>Start at (Hz)<input name="wf_start" type="number" min="0" max="3500" step="50"></label>
+            <label>End at (Hz)<input name="wf_end" type="number" min="500" max="4000" step="50"></label>
+          </div>
+          <p class="hint">Match your radio's receive filter so nothing is cut off at either edge, e.g. 300 to 3300 Hz. Your TX and RX offsets stay inside this range.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Layout</legend>
+          <label>Panels on this device
+            <select id="layoutMode">
+              <option value="auto">Automatic (side by side on wide windows, stacked on narrow ones)</option>
+              <option value="side">Side by side (needs a window about 1300 pixels wide)</option>
+              <option value="stack">Stacked (phones and portrait monitors)</option>
+            </select>
+          </label>
+          <p class="hint">Side by side: drag a panel by the grip next to its title to move it to another column. Stacked: use the ▲▼ buttons on each panel. To resize, drag the gap between two panels (side by side) or the bottom edge of Band activity or the Logbook (stacked); double-click it to undo. Each device remembers its own layout.</p>
+          <button type="button" class="btn ghost small" id="resetLayout">Reset panel layout</button>
+        </fieldset>
       </div>
-      <label class="toggle"><input type="checkbox" name="udp_accept"><span></span>Let them control Procyon (click a station to answer it, halt TX)</label>
-      <p class="hint">Paused while the demo band is on, so simulated stations never show up in GridTracker. Close WSJT-X first: it uses the same radio and sound card.</p>
-    </fieldset>
+      <div class="set-pane" role="tabpanel" id="pane-network" aria-labelledby="tab-network" data-tab="network" hidden>
+        <fieldset>
+          <legend>Companion apps</legend>
+          <label class="toggle"><input type="checkbox" name="udp_enabled"><span></span>Send to GridTracker, JTAlert and loggers (as WSJT-X does)</label>
+          <div class="grid2">
+            <label>Address<input name="udp_host" spellcheck="false"></label>
+            <label>Port<input name="udp_port" type="number"></label>
+          </div>
+          <label class="toggle"><input type="checkbox" name="udp_accept"><span></span>Let them control Procyon (click a station to answer it, halt TX)</label>
+          <p class="hint">Paused while the demo band is on, so simulated stations never show up in GridTracker. Close WSJT-X first: it uses the same radio and sound card.</p>
+        </fieldset>
 
-    <fieldset>
-      <legend>Alerts</legend>
-      <label class="toggle"><input type="checkbox" id="chimeToggle"><span></span>Chime when a station calls me (this device)</label>
-    </fieldset>
-
-    <fieldset>
-      <legend>Display</legend>
-      <label class="toggle"><input type="checkbox" name="team_badges"><span></span>Show a raccoon next to Procyon's developer and testers when they're decoded</label>
-    </fieldset>
-
-    <fieldset>
-      <legend>Logbook</legend>
-      <label class="toggle"><input type="checkbox" name="log_reports_in_comment"><span></span>Add signal reports to log comments (e.g. "FT8 Sent: -05 Rcvd: -12")</label>
-    </fieldset>
-
-    <fieldset>
-      <legend>Online logbooks</legend>
-      <div id="onlineLocal">
-        <p class="hint">Each logbook you set up gets an upload button next to Export ADIF. Nothing is sent until you click it, and QSOs logged without internet wait until you do. Already uploading with GridTracker? Then you can leave these empty.</p>
-        <label>QRZ Logbook API key
-          <input name="qrz_key_new" type="password" autocomplete="new-password" spellcheck="false">
-        </label>
-        <div class="radio-tools">
-          <button type="button" class="btn ghost small" id="qrzCheck">Test key</button>
-          <button type="button" class="btn ghost small" id="qrzForget">Remove key</button>
-          <span class="hint" id="qrzMsg"></span>
-        </div>
-        <p class="hint">On QRZ.com, open your logbook and press "Settings": the key is listed under API.</p>
-        <label>LoTW station location (from TQSL)
-          <input name="lotw_location" autocomplete="off" spellcheck="false" placeholder="e.g. Home">
-        </label>
-        <p class="hint" id="tqslHint"></p>
+        <fieldset>
+          <legend>Remote access</legend>
+          <div class="remote-local" id="remoteLocal">
+            <label class="toggle"><input type="checkbox" name="remote_enabled"><span></span>Allow other devices on my network (tablet, laptop, phone)</label>
+            <label>PIN (4 to 8 digits)
+              <input name="remote_pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8"
+                     autocomplete="new-password" title="4 to 8 digits">
+            </label>
+            <div class="hint" id="remoteUrls"></div>
+          </div>
+          <div class="remote-remote" id="remoteRemote" hidden>
+            <p class="hint">You're connected from another device. Remote access and the PIN can only be changed on the computer running Procyon.</p>
+            <a class="btn ghost small" href="/logout">Sign out of this device</a>
+          </div>
+        </fieldset>
       </div>
-      <p class="hint" id="onlineRemote" hidden>You're connected from another device. Online logbooks can only be set up on the computer running Procyon, but the upload buttons work from here.</p>
-    </fieldset>
-
-    <fieldset>
-      <legend>Waterfall</legend>
-      <div class="grid2">
-        <label>Start at (Hz)<input name="wf_start" type="number" min="0" max="3500" step="50"></label>
-        <label>End at (Hz)<input name="wf_end" type="number" min="500" max="4000" step="50"></label>
       </div>
-      <p class="hint">Match your radio's receive filter so nothing is cut off at either edge, e.g. 300 to 3300 Hz. Your TX and RX offsets stay inside this range.</p>
-    </fieldset>
-
-    <fieldset>
-      <legend>Decoder</legend>
-      <label>Decoding depth
-        <select name="depth">
-          <option value="1">Fast</option>
-          <option value="2">Normal</option>
-          <option value="3">Deep (slower, finds weaker signals)</option>
-        </select>
-      </label>
-    </fieldset>
-
-    <fieldset>
-      <legend>Remote access</legend>
-      <div class="remote-local" id="remoteLocal">
-        <label class="toggle"><input type="checkbox" name="remote_enabled"><span></span>Allow other devices on my network (tablet, laptop, phone)</label>
-        <label>PIN (4 to 8 digits)
-          <input name="remote_pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8"
-                 autocomplete="new-password" title="4 to 8 digits">
-        </label>
-        <div class="hint" id="remoteUrls"></div>
-      </div>
-      <div class="remote-remote" id="remoteRemote" hidden>
-        <p class="hint">You're connected from another device. Remote access and the PIN can only be changed on the computer running Procyon.</p>
-        <a class="btn ghost small" href="/logout">Sign out of this device</a>
-      </div>
-    </fieldset>
-
-    <fieldset>
-      <legend>Layout</legend>
-      <label>Panels on this device
-        <select id="layoutMode">
-          <option value="auto">Automatic (side by side on wide windows, stacked on narrow ones)</option>
-          <option value="side">Side by side (needs a window about 1300 pixels wide)</option>
-          <option value="stack">Stacked (phones and portrait monitors)</option>
-        </select>
-      </label>
-      <p class="hint">Side by side: drag a panel by the grip next to its title to move it to another column. Stacked: use the ▲▼ buttons on each panel. To resize, drag the gap between two panels (side by side) or the bottom edge of Band activity or the Logbook (stacked); double-click it to undo. Each device remembers its own layout.</p>
-      <button type="button" class="btn ghost small" id="resetLayout">Reset panel layout</button>
-    </fieldset>
+    </div>
 
     <div class="dlg-foot">
       <button type="button" class="link-btn about-link" id="aboutLink">About Procyon</button>
       <button class="btn ghost" value="cancel" formnovalidate>Cancel</button>
       <button class="btn primary" value="save" id="saveSettings">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="potaDlg" class="pota-dlg">
+  <form method="dialog" id="potaForm">
+    <div class="dlg-head">
+      <h2>POTA activation</h2>
+      <button class="icon-btn" value="cancel" formnovalidate aria-label="Close">✕</button>
+    </div>
+    <p class="hint" id="potaIntro">Operating from a park? Start an activation and every QSO is tagged with the park, your CQ becomes <b>CQ POTA</b>, and Procyon saves a log for each park that you can upload at pota.app.</p>
+    <div class="pota-progress" id="potaProgress" hidden>
+      <div class="pp-top"><span id="potaParksNow"></span><span id="potaToday"></span></div>
+      <div class="pp-bar"><i id="potaBar"></i></div>
+    </div>
+    <label>Park(s)
+      <input name="parks" spellcheck="false" autocomplete="off" placeholder="US-1234 - add more for a 2-fer: US-1234, US-5678">
+    </label>
+    <div class="grid2">
+      <label>Grid at the park (optional)
+        <input name="grid" spellcheck="false" autocomplete="off" maxlength="6">
+      </label>
+      <label>State / province (optional)
+        <input name="state" spellcheck="false" autocomplete="off" maxlength="6" placeholder="e.g. OH">
+      </label>
+    </div>
+    <p class="hint">Leave the grid empty to use your home grid. The state helps pota.app when a park crosses a state line.</p>
+    <p class="hint pota-msg" id="potaMsg"></p>
+    <div class="pota-files" id="potaFiles" hidden>
+      <h3>Park logs - saved here, for you to upload</h3>
+      <div id="potaFileList"></div>
+      <p class="hint">Procyon doesn't send these anywhere: when you're ready, sign in at pota.app and upload each file under My Log Uploads. With several parks, the same QSOs go into each park's file - that's how POTA counts them. These QSOs are in your main logbook too, so QRZ and LoTW uploads include them as usual.</p>
+      <p class="hint">Saved on this computer in <b id="potaFolder"></b></p>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn ghost" id="potaEnd" hidden>End activation</button>
+      <button type="button" class="btn primary" id="potaStart">Start activation</button>
     </div>
   </form>
 </dialog>

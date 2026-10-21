@@ -2,7 +2,7 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 0.9.14** · 21 October 2026
+**Version 0.9.18** · 21 October 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
 A simpler, friendlier FT8 station. Procyon uses WSJT-X's own decoder (`jt9`)
@@ -16,11 +16,11 @@ the Hamlib copy it includes): https://wsjt.sourceforge.io
 
 | System | Download | How |
 |---|---|---|
-| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.14_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.14_all.deb`. Then start **Procyon FT8** from your menu, or run `procyon`. |
-| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.14-arch.tar.gz` | `tar xf procyon-0.9.14-arch.tar.gz`, `cd procyon-0.9.14-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
-| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.14-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
-| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.14-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
-| Windows 10/11 (64-bit) | `Procyon-0.9.14-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
+| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.18_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.18_all.deb`. Then start **Procyon FT8** from your menu, or run `procyon`. |
+| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.18-arch.tar.gz` | `tar xf procyon-0.9.18-arch.tar.gz`, `cd procyon-0.9.18-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
+| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.18-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
+| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.18-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
+| Windows 10/11 (64-bit) | `Procyon-0.9.18-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
 
 Add `--demo` (or use **Procyon Demo.bat** on Windows) to try it with a
 simulated band: nothing is transmitted. Close WSJT-X while using Procyon;
@@ -69,7 +69,7 @@ transmitting.
   (and tells GridTracker to clear too).
 - **Stations calling you:** messages addressed to you always show, whatever
   filter is on. A new station calling you also gets an alert above Band
-  activity with a **Reply** button, a chime (switch it off in *Settings → Alerts*)
+  activity with a **Reply** button, a chime (switch it off in *Settings → Display → Alerts*)
   and the browser tab title changes, so you notice even in another window.
 - **Procyon team badge:** a small raccoon appears next to the callsigns of
   Procyon's developer (KR1TTR) and testers whenever they're decoded. It's added
@@ -105,7 +105,25 @@ transmitting.
   to each QSO's comment ("FT8 Sent: -05 Rcvd: -12"), after any note you typed.
   Off by default; the reports are always saved in the standard report fields.
 - **Edit the log:** click any logbook entry to change its comment or power.
-- **Upload to QRZ and LoTW:** set them up in *Settings → Online logbooks* (your
+- **POTA activations:** press *POTA* in the QSO panel, enter your park (or
+  several - US-1234, US-5678, ... - for a 2-fer or more), and optionally the
+  grid and state you're operating from. Your CQ becomes `CQ POTA KR1TTR EN80`,
+  every QSO is tagged with the park(s) (`MY_SIG=POTA`, `MY_SIG_INFO`), and a
+  counter shows how many of the 10 QSOs a valid activation needs you've made
+  this UTC day. Each park also gets its own log file, saved as you go in
+  `pota/` next to your logbook and named the way pota.app expects
+  (`KR1TTR@US-1234-20261021.adi`); the POTA window has download links. The
+  QSOs are in your main logbook as well, so QRZ/LoTW uploads include them.
+  Procyon doesn't send anything to pota.app - you upload the files there yourself. The
+  activation survives a restart; *End activation* when you're done. Hunters:
+  stations calling `CQ POTA` get a green POTA tag in Band activity.
+- **Portable calls:** QSOs where both calls are portable or unusual
+  (`KR1TTR/P` working `P4/WE9V`) follow the usual convention: full calls when
+  calling and at the end, reports with each side's base call
+  (`<P4/WE9V> KR1TTR -05`). Every message is checked with WSJT-X's encoder,
+  and both full calls are logged. (A call like `KR1TTR/QRP` can't send
+  "CQ POTA" in FT8; its CQ goes out as a plain CQ.)
+- **Upload to QRZ and LoTW:** set them up in *Settings → Logbook → Online logbooks* (your
   QRZ Logbook API key; for LoTW, the station location name from ARRL's TQSL,
   which must be installed). An *Upload to QRZ* / *Upload to LoTW* button then
   appears next to *Export ADIF*, showing how many QSOs haven't been sent yet.
@@ -120,7 +138,7 @@ transmitting.
   with *Export ADIF*. The *NEW* and *NEW BAND* badges are based on this log.
   Demo mode keeps a separate log (`procyon_demo_log.adi`), so simulated QSOs
   never mix with real ones.
-- **Arrange the panels:** *Settings → Layout* chooses how the panels sit on
+- **Arrange the panels:** *Settings → Display → Layout* chooses how the panels sit on
   this device: *Automatic* (side by side on wide windows, stacked on narrow
   ones), *Side by side*, or *Stacked* - one panel per row, good for a phone or a
   portrait monitor. Side by side, drag Band activity, QSO or Logbook by the grip
@@ -133,21 +151,21 @@ transmitting.
 Settings and the log live in `~/.local/share/procyon/` (change with `--data DIR`).
 ## Setting up your radio
 
-- **Easiest (Linux and macOS):** in *Settings → Radio*, press **Detect my radio**. Procyon asks each
+- **Easiest (Linux and macOS):** in *Settings → Station & radio*, press **Detect my radio**. Procyon asks each
   USB serial port who it is (Yaesu, Kenwood, Elecraft and Icom radios answer), and fills
   in the model, port and baud. Then press **Test radio** (it reads the frequency, never
   transmits) and **Save**. If the radio can't be reached, the status line says why.
 - **Coming from WSJT-X?** Click *Import settings from WSJT-X* at the top of
   Settings. It fills in your call, grid, radio, serial port, baud, PTT, sound
   card, power and GridTracker address. Check it over, then press Save.
-- **Otherwise,** in *Settings → Radio*, start typing your radio's name (e.g. `KX3`,
+- **Otherwise,** in *Settings → Station & radio*, start typing your radio's name (e.g. `KX3`,
   `7300`) and pick it from the list, then choose the serial port, baud and how
   to key the transmitter (CAT, the RTS/DTR line as used by Digirig-style
   interfaces, or VOX).
 - **Radio mode for FT8** (default *Data*) is applied whenever Procyon connects to
   the radio or changes band, as WSJT-X does. Choose *USB* if your interface needs
   it, or *Don't change* to leave the mode to you.
-- **Waterfall range** (*Settings → Waterfall*): set where it starts and ends to
+- **Waterfall range** (*Settings → Display → Waterfall*): set where it starts and ends to
   match your radio's receive filter (e.g. 300 to 3300 Hz). Your TX and RX offsets
   are kept inside it.
 - Close WSJT-X before starting Procyon: they can't share the radio and sound card.
@@ -158,12 +176,12 @@ Procyon sends the same network messages as WSJT-X (to 127.0.0.1 port 2237 by
 default), so programs that work alongside WSJT-X work with Procyon too:
 decodes, QSO status and logged QSOs. Clicking a station in GridTracker answers it
 in Procyon, and GridTracker's halt button stops transmitting. Change it under
-*Settings → Companion apps*. The link is paused in demo mode, so simulated
+*Settings → Network → Companion apps*. The link is paused in demo mode, so simulated
 stations never reach those programs.
 
 ## Using it from a tablet or another computer
 
-1. On the computer running Procyon, open **Settings → Remote access**, choose a
+1. On the computer running Procyon, open **Settings → Network → Remote access**, choose a
    PIN (4 to 8 digits), and turn on **Allow other devices on my network**. No
    restart is needed.
 2. Settings shows the address to open on the other device, e.g.
@@ -216,6 +234,26 @@ and Procyon B. (Earlier versions were called Skywave; settings and logbooks move
 across automatically on first start.)
 
 ## Roadmap
+
+0.9.18: each park's POTA log is saved as its own file while you operate
+(`pota/` next to your logbook), kept up to date after every QSO or edit, and
+a second activation of the same park on the same day adds to it. Ending an
+activation with no QSOs now says so instead of pointing at an empty list.
+
+0.9.17: **POTA activations.** A POTA button in the QSO panel: enter one park
+or many, call `CQ POTA`, watch the 10-QSO counter, and download a log per park
+for pota.app. QSOs between two portable stations (`/P`, `/QRP`, `P4/` ...)
+now work, using base calls for the reports as is customary. Stations calling
+CQ POTA are tagged in Band activity. The header now switches to its compact
+look whenever its chips don't fit, so no button is pushed off screen.
+
+0.9.16: the waterfall's timestamps are bold and bright with a dark outline,
+so they stay readable over strong signals. The badge switch in *Settings →
+Display* now reads "Show Procyon's team badges when decoded".
+
+0.9.15: Settings has tabs - *Station & radio*, *Audio*, *Logbook*, *Display*
+and *Network* - instead of one long scroll. One *Save* covers every tab, and
+each device remembers the tab you used last.
 
 0.9.14: *Test key* now shows QRZ's answer inside Settings (it was hidden
 behind the Settings window).

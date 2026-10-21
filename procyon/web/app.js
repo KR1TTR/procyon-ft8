@@ -70,6 +70,7 @@ function connect() {
     else if (m.type === "detect_radio") onDetected(m);
     else if (m.type === "rig_test") onRigTest(m);
     else if (m.type === "qrz_check") onQrzCheck(m);
+    else if (m.type === "pota") onPota(m);
     else if (m.type === "install") onInstall(m);
   };
 }
@@ -147,9 +148,15 @@ function wfRow(bins) {
     lastPeriodMark = p;
   } else if (rowsSinceMark >= 0 && ++rowsSinceMark === LABEL_ROWS) {
     const tx = S && S.tx && !S.tx.tune ? "  TX" : "";
-    wctx.font = `${10 * dpr}px ui-monospace, monospace`;
-    wctx.fillStyle = tx ? "#ff8b99d0" : "#ffffff80";
-    wctx.fillText(utcStr(new Date(p * PERIOD * 1000)) + tx, 6 * dpr, LABEL_ROWS * rh - 4 * dpr);
+    // Bold and bright with a dark outline, so it stays readable over strong signals.
+    const text = utcStr(new Date(p * PERIOD * 1000)) + tx, x = 6 * dpr, y = LABEL_ROWS * rh - 4 * dpr;
+    wctx.font = `700 ${11 * dpr}px ui-monospace, monospace`;
+    wctx.lineJoin = "round";
+    wctx.lineWidth = 3 * dpr;
+    wctx.strokeStyle = "#050812e0";
+    wctx.strokeText(text, x, y);
+    wctx.fillStyle = tx ? "#ffa3ae" : "#f2f5fb";
+    wctx.fillText(text, x, y);
     rowsSinceMark = -1;
   }
 }
@@ -290,6 +297,8 @@ function onState(m) {
   $("#rigLabel").textContent = m.rig.connected ? "Rig" : "Rig offline";
   rig.title = m.rig.error || "Connected to rigctld";
   $("#chipDemo").hidden = !st.demo;
+  renderPota();
+  requestAnimationFrame(() => fitHeader());   // after the other chips are updated too
   $("#chipRemote").hidden = !m.remote.enabled;
   $("#chipRemote").title = isLocal
     ? `Other devices can connect with the PIN:\n${m.remote.urls.join("\n")}`
@@ -370,7 +379,7 @@ function noteCallers(b) {
   let fresh = false;
   for (const d of b.items) {
     const call = d.p.from;
-    if (!d.to_me || !call || call === dx) continue;
+    if (!d.to_me || !call || sameStation(call, dx)) continue;
     if (dismissed.has(call) && b.period - dismissed.get(call) < CALLER_TIMEOUT) continue;
     const c = callers.get(call);
     if (c) { c.d = d; c.last = b.period; c.count++; }
@@ -496,7 +505,7 @@ function basePasses(d) {
   if (filter === "new") return d.new;
   if (filter === "mine") {
     const dx = S && S.qso.dxcall;
-    return d.to_me || d.from_me || (dx && (d.p.from === dx || d.p.to === dx));
+    return d.to_me || d.from_me || (dx && (sameStation(d.p.from, dx) || sameStation(d.p.to, dx)));
   }
   return true;
 }
@@ -567,10 +576,11 @@ function renderDecodes(freshPeriod) {
     for (const d of items) {
       total++;
       const cls = ["row", d.p.kind === "cq" && "cq", d.to_me && "to-me", d.from_me && "from-me",
-        dx && (d.p.from === dx) && !d.to_me && "is-dx", Math.abs(d.freq - rx) < 60 && "near-rx",
+        dx && sameStation(d.p.from, dx) && !d.to_me && "is-dx", Math.abs(d.freq - rx) < 60 && "near-rx",
         b.period === freshPeriod && "fresh", otherBand && "other-band"].filter(Boolean).join(" ");
       const canAnswer = d.p.from && !d.from_me;
-      const meta = [d.new ? `<span class="badge new">NEW</span>` : d.new_band ? `<span class="badge newband">NEW BAND</span>` : "",
+      const meta = [d.p.cq_tag === "POTA" ? `<span class="badge pota" title="Activating a park (Parks on the Air)">POTA</span>` : "",
+        d.new ? `<span class="badge new">NEW</span>` : d.new_band ? `<span class="badge newband">NEW BAND</span>` : "",
         d.country ? `<span class="country" title="${esc(d.country)}">${esc(d.country)}</span>` : "",
         d.km != null ? `<span class="km">${d.approx ? "≈" : ""}${d.km.toLocaleString()} km</span>` : ""].join("");
       html += `<div class="${cls}" data-i="${i}" data-msg="${esc(d.msg)}">
@@ -753,7 +763,7 @@ for (const id of ["#dxCall", "#dxGrid"]) {
   $(id).addEventListener("change", () => send({ type: "set_dx", call: $("#dxCall").value.trim(), grid: $("#dxGrid").value.trim() }));
 }
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !$("#settings").open && !$("#about").open) send({ type: "halt" });
+  if (e.key === "Escape" && !document.querySelector("dialog[open]")) send({ type: "halt" });
 });
 
 // --------------------------------------------------------------- logbook
@@ -778,6 +788,96 @@ $("#uploadBtns").addEventListener("click", (e) => {
   if (b) { b.disabled = true; send({ type: "upload", service: b.dataset.upload }); }
 });
 
+// Same operator? Portable QSOs send reports with base calls (P4/WE9V -> WE9V).
+const STD_CALL = /^[A-Z0-9]{1,2}\d[A-Z]{1,3}$/;
+function baseCall(c) {
+  c = (c || "").replace(/[<>]/g, "").toUpperCase();
+  if (!c.includes("/")) return c;
+  const parts = c.split("/").filter(Boolean), std = parts.filter((x) => STD_CALL.test(x));
+  return (std.length ? std : parts).reduce((a, b) => (b.length > a.length ? b : a), "");
+}
+function sameStation(a, b) {
+  a = (a || "").replace(/[<>]/g, "").toUpperCase();
+  b = (b || "").replace(/[<>]/g, "").toUpperCase();
+  if (!a || !b || a.startsWith("...") || b.startsWith("...")) return false;
+  return a === b || ((a.includes("/") || b.includes("/")) && baseCall(a) === baseCall(b));
+}
+
+// ------------------------------------------------------------------ POTA
+
+const potaForm = $("#potaForm");
+let potaEndArmed = false;
+function renderPota() {
+  const p = S.pota;
+  const chip = $("#chipPota");
+  chip.hidden = !p.active;
+  $("#potaChipCount").textContent = p.active ? `${p.today}/${p.needed}` : "";
+  chip.classList.toggle("done", p.active && p.today >= p.needed);
+  $("#potaBtn").textContent = p.active ? "POTA ●" : "POTA";
+  if (!$("#potaDlg").open) return;
+  $("#potaProgress").hidden = !p.active;
+  $("#potaParksNow").textContent = p.parks.join(" · ");
+  $("#potaToday").textContent = p.today >= p.needed
+    ? `${p.today} QSOs today - valid activation ✓` : `${p.today} of ${p.needed} QSOs today`;
+  $("#potaBar").style.width = `${Math.min(100, 100 * p.today / p.needed)}%`;
+  $("#potaIntro").hidden = p.active;
+  $("#potaStart").textContent = p.active ? "Update" : "Start activation";
+  $("#potaEnd").hidden = !p.active;
+  const files = p.files.map((f) => `<a href="/pota/${encodeURIComponent(f.park)}.adi" download="${esc(f.name)}">${esc(f.name)}<span>${f.count} QSO${f.count === 1 ? "" : "s"}</span></a>`).join("");
+  $("#potaFiles").hidden = !p.files.some((f) => f.count);
+  $("#potaFolder").textContent = p.folder || "";
+  const list = $("#potaFileList");
+  if (list.dataset.html !== files) { list.innerHTML = files; list.dataset.html = files; }   // keep clicks landing
+}
+function potaMsg(text, ok) {
+  const el = $("#potaMsg");
+  el.textContent = text;
+  el.className = `hint pota-msg${text ? (ok ? " ok" : " bad") : ""}`;
+}
+function openPota() {
+  if (!S.settings.mycall) return openSettings(true);
+  const p = S.pota;
+  potaForm.elements.parks.value = p.parks.join(", ");
+  potaForm.elements.grid.value = p.grid;
+  potaForm.elements.grid.placeholder = S.settings.mygrid ? `Home: ${S.settings.mygrid}` : "e.g. EN80ma";
+  potaForm.elements.state.value = p.state;
+  potaMsg(p.active ? "" : p.files.some((f) => f.count) ? "Your last activation's park logs are below." : "");
+  disarmPotaEnd();
+  $("#potaDlg").showModal();
+  renderPota();
+}
+function disarmPotaEnd() { potaEndArmed = false; $("#potaEnd").textContent = "End activation"; }
+$("#potaBtn").addEventListener("click", openPota);
+$("#chipPota").addEventListener("click", openPota);
+$("#potaStart").addEventListener("click", () => {
+  potaMsg("…", true);
+  send({ type: "pota_start", parks: potaForm.elements.parks.value,
+    grid: potaForm.elements.grid.value.trim(), state: potaForm.elements.state.value.trim() });
+});
+potaForm.addEventListener("keydown", (e) => {   // Enter in a field starts/updates, never closes
+  if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); $("#potaStart").click(); }
+});
+$("#potaEnd").addEventListener("click", () => {
+  if (!potaEndArmed) {          // two clicks, so it can't end by accident
+    potaEndArmed = true;
+    $("#potaEnd").textContent = "Click again to end";
+    setTimeout(disarmPotaEnd, 4000);
+    return;
+  }
+  disarmPotaEnd();
+  send({ type: "pota_end" });
+  potaMsg(S.pota.total ? "Activation ended. Your park logs are below, ready for pota.app."
+    : "Activation ended. No QSOs were logged, so there's no park log to upload.", true);
+});
+function onPota(m) {
+  potaMsg(m.text, m.ok);
+  if (m.ok) {    // show the parks and grid as Procyon understood them
+    potaForm.elements.parks.value = S.pota.parks.join(", ");
+    potaForm.elements.grid.value = S.pota.grid;
+    potaForm.elements.state.value = S.pota.state;
+  }
+}
+
 function renderLog() {
   renderUploads();
   $("#qsoCount").textContent = S.qso_count;
@@ -800,7 +900,7 @@ function renderLog() {
         ${q.band ? `<span class="b">${esc(q.band)}</span>` : ""}
         ${q.tx_pwr ? `<span class="pw">${esc(q.tx_pwr)} W</span>` : ""}
         <span class="r" title="Report sent / received">${esc(q.sent || "—")} / ${esc(q.rcvd || "—")}</span></div>
-      <div class="l2"><span class="where">${where}</span><span class="w">${when} · ${utc} UTC${q.qrz ? `<span class="up" title="Uploaded to QRZ">QRZ</span>` : ""}${q.lotw ? `<span class="up" title="Uploaded to LoTW">LoTW</span>` : ""}</span></div>
+      <div class="l2"><span class="where">${where}</span><span class="w">${when} · ${utc} UTC${q.qrz ? `<span class="up" title="Uploaded to QRZ">QRZ</span>` : ""}${q.lotw ? `<span class="up" title="Uploaded to LoTW">LoTW</span>` : ""}${q.park ? `<span class="park" title="POTA activation">${esc(q.park)}</span>` : ""}</span></div>
       ${q.comment ? `<div class="l3">${esc(q.comment)}</div>` : `<div class="add">+ Add comment or power</div>`}
     </div>`;
   }).join("");
@@ -1072,7 +1172,42 @@ applyLayout();
 const dlg = $("#settings");
 const form = $("#settingsForm");
 
+// Settings tabs. Each device remembers the last one; a first start opens on Station.
+const setTabs = [...document.querySelectorAll(".set-tabs [role=tab]")];
+function showSetTab(name) {
+  if (!setTabs.some((t) => t.dataset.tab === name)) name = "station";
+  for (const t of setTabs) {
+    const on = t.dataset.tab === name;
+    t.setAttribute("aria-selected", on);
+    t.tabIndex = on ? 0 : -1;
+  }
+  for (const p of document.querySelectorAll(".set-pane")) p.hidden = p.dataset.tab !== name;
+  try { localStorage.setItem("procyon.settingsTab", name); } catch { /* not persisted */ }
+}
+$(".set-tabs").addEventListener("click", (e) => {
+  const t = e.target.closest("[role=tab]");
+  if (t) showSetTab(t.dataset.tab);
+});
+$(".set-tabs").addEventListener("keydown", (e) => {   // arrow keys move between tabs
+  const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+  if (!step) return;
+  e.preventDefault();
+  const i = setTabs.findIndex((t) => t.getAttribute("aria-selected") === "true");
+  const next = setTabs[(i + step + setTabs.length) % setTabs.length];
+  showSetTab(next.dataset.tab);
+  next.focus();
+});
+// A field that needs fixing (e.g. the callsign) may be on another tab: show
+// that tab so the browser can point at it.
+form.addEventListener("invalid", (e) => {
+  const pane = e.target.closest(".set-pane");
+  if (pane && pane.hidden) showSetTab(pane.dataset.tab);
+}, true);
+
 function openSettings(welcome) {
+  let tab = "station";
+  try { tab = localStorage.getItem("procyon.settingsTab") || tab; } catch { /* default */ }
+  showSetTab(welcome ? "station" : tab);
   $("#welcome").hidden = !welcome;
   const st = S.settings;
   for (const el of form.elements) {
@@ -1354,6 +1489,19 @@ function toast(text, kind = "info") {
 
 // ------------------------------------------------------------------- boot
 
+// Header: compact, then wrapped, only when its contents don't fit (which
+// depends on how many status chips are showing).
+let headerKey = "";
+function fitHeader(force) {
+  const h = $(".top");
+  const key = [...document.querySelectorAll(".status > *")].map((c) => (c.hidden ? 0 : 1)).join("") + innerWidth;
+  if (!force && key === headerKey) return;
+  headerKey = key;
+  h.classList.remove("tight", "wrap");
+  if (h.scrollWidth > h.clientWidth + 1) h.classList.add("tight");
+  if (h.scrollWidth > h.clientWidth + 1) h.classList.add("wrap");
+}
+window.addEventListener("resize", () => fitHeader(true));
 window.addEventListener("resize", sizeWaterfall);
 sizeWaterfall();
 renderScale();

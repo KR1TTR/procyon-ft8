@@ -112,6 +112,8 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--border2)
 .chip.remote { color: var(--info); border-color: #7ea6ff55; background: #7ea6ff14; }
 .chip.remote .led { background: var(--info); box-shadow: 0 0 8px var(--info); }
 .chip.demo { color: var(--me); border-color: #ffb54755; background: #ffb54714; }
+.chip.pota { color: #a6e37f; border-color: #a6e37f55; background: #a6e37f14; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; }
+.chip.pota.done { color: var(--bg); background: #a6e37f; }
 .meter { width: 46px; height: 5px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
 #meterFill { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--rx), var(--cq) 60%, var(--me) 85%, var(--tx)); transition: width .15s; }
 .icon-btn {
@@ -276,6 +278,7 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--border2)
 .row .meta .km { font-family: var(--mono); color: var(--faint); font-size: 11px; }
 .badge { font: 700 9.5px var(--sans); letter-spacing: .06em; padding: 2px 6px; border-radius: 5px; }
 .badge.new { background: #5fe08f22; color: var(--cq); border: 1px solid #5fe08f55; }
+.badge.pota { background: #a6e37f1a; color: #a6e37f; border: 1px solid #a6e37f55; }
 .badge.newband { background: #7ea6ff1c; color: var(--info); border: 1px solid #7ea6ff44; }
 .row .answer {
   display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
@@ -544,6 +547,24 @@ label.toggle input:checked + span { background: var(--rx); }
 label.toggle input:checked + span::after { left: 17px; }
 label.toggle input:focus-visible + span { box-shadow: 0 0 0 3px #3dd6c455; }
 .dlg-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+/* Settings tabs: a list down the side, a row across the top on phones */
+dialog#settings { width: min(760px, calc(100vw - 32px)); }
+.set-body { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 22px; margin-top: 16px; }
+.set-tabs { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; align-self: start; }
+.set-tabs button { text-align: left; background: none; border: 0; border-radius: 9px; padding: 8px 12px;
+  color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+.set-tabs button:hover { color: var(--text); background: var(--surface2); }
+.set-tabs button[aria-selected=true] { color: var(--text); background: var(--surface2); box-shadow: inset 3px 0 0 var(--rx); }
+.set-tabs button:focus-visible { outline: 2px solid var(--rx); outline-offset: -2px; }
+.set-panes { min-height: 440px; }
+.set-pane > fieldset:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+@media (max-width: 640px) {
+  .set-body { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .set-tabs { flex-direction: row; flex-wrap: wrap; gap: 4px; position: static; }
+  .set-tabs button { white-space: nowrap; padding: 7px 11px; }
+  .set-tabs button[aria-selected=true] { box-shadow: inset 0 -2px 0 var(--rx); }
+  .set-panes { min-height: 0; }
+}
 
 /* ------------------------------------------------------------ responsive */
 /* Compact header below 1400px: the full one needs about 1380px. Keep the
@@ -557,6 +578,15 @@ label.toggle input:focus-visible + span { box-shadow: 0 0 0 3px #3dd6c455; }
   .brand .wordmark, .utc small, .chip .lbl { display: none; }
   .cycle-bar { width: 50px; }
 }
+/* The same, on wider windows when extra chips (Rig, Demo, POTA) don't fit
+   (set by fitHeader in app.js); still too wide, it wraps to a second line. */
+.top.tight .hdr-progress { gap: 8px; padding: 6px 10px; }
+.top.tight .hdr-progress .stepper { width: 96px; }
+.top.tight .hdr-progress .stepper li { font-size: 0; padding-top: 12px; }
+.top.tight .hdr-dx { font-size: 12.5px; }
+.top.tight .brand .wordmark, .top.tight .utc small, .top.tight .chip .lbl { display: none; }
+.top.tight .cycle-bar { width: 50px; }
+.top.wrap { flex-wrap: wrap; row-gap: 10px; }
 /* Medium screens: logbook drops back under the QSO card. */
 @media (max-width: 1340px) {
   .layout { grid-template-columns: minmax(0, 1fr) 380px; grid-template-areas: "act qso" "act log"; }
@@ -573,7 +603,7 @@ label.toggle input:focus-visible + span { box-shadow: 0 0 0 3px #3dd6c455; }
   .wf-wrap { height: 150px; }
   .row { grid-template-columns: 40px 44px minmax(0, 1fr); }
   .row .dt, .row .meta { display: none; }
-  .status .chip:not(.demo) { display: none; }
+  .status .chip:not(.demo):not(.pota) { display: none; }
   .wf-hint { display: none; }
 }
 
@@ -610,3 +640,22 @@ dialog.quit-dlg p { margin: 0; color: var(--muted); font-size: 13.5px; line-heig
 .offline .stopped img { width: 64px; height: 64px; display: block; margin: 0 auto 10px; opacity: .85; }
 .offline .stopped b { display: block; color: var(--text); font-size: 18px; font-weight: 650; }
 #onlineLocal > .hint { margin: 4px 0 14px; }
+
+/* POTA activation window */
+dialog.pota-dlg { width: min(520px, calc(100vw - 32px)); }
+.pota-dlg form { display: flex; flex-direction: column; gap: 12px; }
+.pota-dlg .dlg-foot { margin-top: 6px; }
+.pota-msg { min-height: 16px; }
+.pota-msg.ok { color: var(--rx); }
+.pota-msg.bad { color: var(--me); }
+.pota-progress { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.pp-top { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; margin-bottom: 8px; }
+.pp-top span:first-child { font: 600 13px var(--mono); color: #a6e37f; }
+.pp-bar { height: 6px; border-radius: 3px; background: var(--surface2); overflow: hidden; }
+.pp-bar i { display: block; height: 100%; width: 0; background: #a6e37f; transition: width .3s; }
+.pota-files h3 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.pota-files a { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 9px;
+  color: var(--text); text-decoration: none; font: 12.5px var(--mono); }
+.pota-files a:hover { border-color: #a6e37f; }
+.pota-files a span { color: var(--muted); font-family: var(--sans); white-space: nowrap; }
+.lrow .park { margin-left: 8px; font-size: 10px; color: #a6e37f; }

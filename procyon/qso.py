@@ -23,6 +23,7 @@ class Qso:
         self.on_toast = on_toast
         self.mycall = ""
         self.mygrid = ""
+        self.cq_tag = ""         # "POTA" during a park activation: "CQ POTA KR1TTR EN80"
         self.reset()
         self.next = 5
         self.tx_enabled = False
@@ -54,15 +55,40 @@ class Qso:
     def regen(self):
         my, dx, g4 = self.mycall, self.dxcall, self.mygrid[:4]
         rpt = ft8.fmt_report(self.snr)
-        # A CQ can carry a non-standard call in full, but then without a grid
-        cq = (f"CQ {my} {g4}".strip() if ft8.is_std_call(my) else f"CQ {my}") if my else ""
-        if dx and my:
-            # Long/unusual calls go as <CALL> (e.g. "<3E40CDW> KR1TTR EN80")
-            dx, my = ft8.msg_call(dx), ft8.msg_call(my)
-            self.msgs = [f"{dx} {my} {g4}".strip(), f"{dx} {my} {rpt}",
-                         f"{dx} {my} R{rpt}", f"{dx} {my} RR73", f"{dx} {my} 73", cq]
-        else:
-            self.msgs = ["", "", "", "", "", cq]
+        self.msgs = ["", "", "", "", "", self._cq(my, g4)]
+        if not (dx and my):
+            return
+        # Long/unusual calls go as <CALL> (e.g. "<3E40CDW> KR1TTR EN80")
+        D, M = ft8.msg_call(dx), ft8.msg_call(my)
+        plain = [f"{D} {M} {g4}".strip(), f"{D} {M} {rpt}", f"{D} {M} R{rpt}",
+                 f"{D} {M} RR73", f"{D} {M} 73"]
+        if "/" not in my + dx and (ft8.is_std_call(my) or ft8.is_std_call(dx)):
+            self.msgs[:5] = plain          # the everyday case: always fits
+            return
+        # Portable calls on both sides (P4/WE9V working KR1TTR/P or CT2JWF/QRP):
+        # FT8 can't carry both in full with a grid or report. The usual way:
+        # full calls when calling and at the end (no grid), reports with the
+        # sender's base call - "<P4/WE9V> CT2JWF R-02". Each candidate is
+        # checked with ft8code; the first that goes out intact is used.
+        MB, H = ft8.msg_call(ft8.base_call(my)), f"<{dx}>"
+        full = lambda tail: [f"{H} {my} {tail}".strip(), f"{dx} <{my}> {tail}".strip()]  # noqa: E731
+        self.msgs[:5] = [
+            ft8.first_fit([plain[0], *full(""), f"{D} {MB} {g4}".strip()]),
+            ft8.first_fit([plain[1], f"{D} {MB} {rpt}", f"{H} {MB} {rpt}"]),
+            ft8.first_fit([plain[2], f"{D} {MB} R{rpt}", f"{H} {MB} R{rpt}"]),
+            ft8.first_fit([plain[3], *full("RR73"), f"{D} {MB} RR73"]),
+            ft8.first_fit([plain[4], *full("73"), f"{D} {MB} 73"]),
+        ]
+
+    def _cq(self, my, g4):
+        """CQ, or CQ POTA during an activation. A non-standard call is sent in
+        full but then without a grid - and can't carry "POTA" at all."""
+        if not my:
+            return ""
+        plain = f"CQ {my} {g4}".strip() if ft8.is_std_call(my) else f"CQ {my}"
+        if not self.cq_tag:
+            return plain
+        return ft8.first_fit([f"CQ {self.cq_tag} {my} {g4}".strip(), plain])
 
     def snapshot(self):
         return {
@@ -92,10 +118,11 @@ class Qso:
     def _note_heard(self, decodes, period):
         """Log what the DX station sent this cycle - or that we heard nothing
         right after transmitting to them."""
-        from_dx = [d for d in decodes if d["p"]["from"] == self.dxcall]
+        from_dx = [d for d in decodes if ft8.same_station(d["p"]["from"], self.dxcall)]
         for d in from_dx:
             to = d["p"]["to"]
-            self._note("rx", period, d["msg"], d["snr"], busy=bool(to) and to != self.mycall)
+            self._note("rx", period, d["msg"], d["snr"],
+                       busy=bool(to) and not ft8.same_station(to, self.mycall))
         if not from_dx and self.last_tx_period == period - 1 and self.stage < 4:
             self.thread.append({"dir": "rx", "period": period, "silent": True})
 
@@ -116,15 +143,16 @@ class Qso:
         """Answer a decoded message (the equivalent of double-clicking it in WSJT-X)."""
         p = d["p"]
         call = p["from"]
-        if not call or call == self.mycall:
+        if not call or ft8.same_station(call, self.mycall):
             return
         self.set_dx(call, p.get("grid") or "", d["snr"])
         if d.get("period") is not None and not self.thread:
-            self._note("rx", d["period"], d["msg"], d["snr"], busy=bool(p["to"]) and p["to"] != self.mycall)
+            self._note("rx", d["period"], d["msg"], d["snr"],
+                       busy=bool(p["to"]) and not ft8.same_station(p["to"], self.mycall))
         self.started = utc_now()
         self.parity = 1 - d["parity"]
         self.next = 0
-        need_tx = self._advance(p) if p["to"] == self.mycall else True
+        need_tx = self._advance(p) if ft8.same_station(p["to"], self.mycall) else True
         if self.stage == 0:
             self.stage = 1
         self.tx_enabled = need_tx
@@ -145,10 +173,10 @@ class Qso:
             return
         if self.dxcall:
             self._note_heard(decodes, period)
-        mine = [d for d in decodes if d["p"]["kind"] == "std" and d["p"]["to"] == self.mycall]
+        mine = [d for d in decodes if d["p"]["kind"] == "std" and ft8.same_station(d["p"]["to"], self.mycall)]
         if not mine:
             return
-        hits = [d for d in mine if d["p"]["from"] == self.dxcall] if self.dxcall else []
+        hits = [d for d in mine if ft8.same_station(d["p"]["from"], self.dxcall)] if self.dxcall else []
         if not hits and self.next == 5 and self.tx_enabled:
             # Someone answered our CQ - pick the strongest caller.
             hits = sorted(mine, key=lambda d: -d["snr"])
@@ -162,6 +190,9 @@ class Qso:
         if not hits:
             return
         d = hits[0]
+        frm = d["p"]["from"]
+        if "/" in frm and "/" not in self.dxcall and not frm.startswith("..."):
+            self.dxcall = frm      # first heard by base call: log the full call
         self.snr = d["snr"]
         if d["p"].get("grid"):
             self.dxgrid = d["p"]["grid"]

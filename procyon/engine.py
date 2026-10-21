@@ -21,7 +21,7 @@ from .auth import PIN_RE, Auth, lan_addresses
 from .demo import DemoBand
 from .geo import BANDS, DEMO_MARK, DEMO_MARKS, Cty, Logbook, band_of, distance_bearing, grid_to_latlon, utc_now
 from .qso import Qso
-from . import uploads, wsjtx_install
+from . import pota, uploads, wsjtx_install
 from .radio_detect import detect_radios, test_rig
 from .setup_help import hamlib_rigs, import_wsjtx
 from .system import IS_WINDOWS, find_tool, serial_ports, tools
@@ -55,11 +55,15 @@ DEFAULTS = {
     "remote_enabled": False, "remote_pin_hash": "",
     # WSJT-X compatible UDP for GridTracker, JTAlert, loggers (WSJT-X defaults)
     "udp_enabled": True, "udp_host": "127.0.0.1", "udp_port": 2237, "udp_accept": True,
-    # online logbooks, uploaded on a click (Settings → Online logbooks)
+    # online logbooks, uploaded on a click (Settings → Logbook)
     "qrz_key": "", "lotw_location": "",
+    # POTA activation (QSO panel → POTA): parks, where from, when
+    "pota_active": False, "pota_parks": [], "pota_grid": "", "pota_state": "",
+    "pota_start": "", "pota_end": "",
 }
 SECRETS = ("remote_pin_hash", "qrz_key")   # never sent to the browser
 LOCAL_ONLY = ("remote_", "qrz_key", "lotw_")  # only the computer running Procyon changes these
+OWN_COMMANDS = ("pota_",)   # changed by their own commands, not the Settings form
 
 LINE_RE = re.compile(r"^\d{4,6}\s+(-?\d+)\s+(-?\d+\.\d)\s+(\d+)\s+~\s+(.+?)\s*$")
 
@@ -95,7 +99,7 @@ class Engine:
         self.uploading = set()          # services with an upload in progress
         self.tqsl = uploads.find_tqsl()
         self.qso = Qso(self._log_qso, self.toast)
-        self.qso.set_station(self.s["mycall"], self.s["mygrid"])
+        self._set_station()
         self.demo = DemoBand()
         self.clients = set()
         self.history = collections.deque(maxlen=80)   # recent decode batches
@@ -195,6 +199,7 @@ class Engine:
             "settings": {k: v for k, v in self.s.items() if k not in SECRETS},
             "qrz_key_set": bool(self.s["qrz_key"]), "tqsl_found": bool(self.tqsl),
             "uploads": self._upload_status(),
+            "pota": self._pota_status(),
             "remote": {"enabled": self.s["remote_enabled"], "pin_set": bool(self.s["remote_pin_hash"]),
                        "urls": [f"http://{a}:{self.port}/" for a in lan_addresses()]},
             "audio": {"running": self.rx_task is not None and not self.audio_error,
@@ -399,11 +404,11 @@ class Engine:
             if self.s["mycall"]:
                 args += ["-c", self.s["mycall"].upper()]
             if self.s["mygrid"]:
-                args += ["-G", self.s["mygrid"][:4].upper()]
+                args += ["-G", self._grid()[:4].upper()]
             if self.qso.dxcall:
                 args += ["-x", self.qso.dxcall]
-            self._remember_call(self.s["mycall"])
-            self._remember_call(self.qso.dxcall)
+            self._remember_call(self.s["mycall"], ours=True)
+            self._remember_call(self.qso.dxcall, ours=True)
             primer = await self._primer_wav()
             if primer:
                 args.append(primer)
@@ -444,11 +449,13 @@ class Engine:
         finally:
             self.decoding = False
 
-    def _remember_call(self, tok: str):
-        """Note a callsign written in full if it's one FT8 sends as a code."""
+    def _remember_call(self, tok: str, ours=False):
+        """Note a callsign written in full if it's one FT8 sends as a code. Our
+        own QSO's /P or /R calls too (`ours`): a portable station may send them
+        as a code when both sides are portable."""
         c = (tok or "").upper()
-        if (not c or c.startswith("<") or not ft8.is_call(c) or ft8.is_std_call(c)
-                or ft8.GRID_RE.match(c)):
+        if (not c or c.startswith("<") or not ft8.is_call(c) or ft8.GRID_RE.match(c)
+                or (ft8.is_std_call(c) and not (ours and "/" in c))):
             return
         self.long_calls.pop(c, None)
         self.long_calls[c] = True
@@ -569,8 +576,8 @@ class Engine:
         my = self.s["mycall"].upper()
         d = {"period": p, "parity": p % 2, "time": hhmmss, "snr": snr, "dt": dt,
              "freq": freq, "msg": msg, "p": parsed,
-             "to_me": bool(my) and parsed["to"] == my,
-             "from_me": bool(my) and parsed["from"] == my}
+             "to_me": bool(my) and ft8.same_station(parsed["to"], my),
+             "from_me": bool(my) and ft8.same_station(parsed["from"], my)}
         call = parsed["from"]
         if call:
             if parsed["grid"]:
@@ -775,13 +782,20 @@ class Engine:
             "qso_date": start.strftime("%Y%m%d"), "time_on": start.strftime("%H%M%S"),
             "qso_date_off": now.strftime("%Y%m%d"), "time_off": now.strftime("%H%M%S"),
             "band": band_of(dial), "freq": f"{(dial + int(self.s['tx_freq'])) / 1e6:.6f}",
-            "station_callsign": self.s["mycall"].upper(), "my_gridsquare": self.s["mygrid"].upper(),
+            "station_callsign": self.s["mycall"].upper(), "my_gridsquare": self._grid().upper(),
         }
+        if self.s["pota_active"] and self.s["pota_parks"]:
+            parks = ",".join(self.s["pota_parks"])
+            rec.update(my_sig="POTA", my_sig_info=parks, my_pota_ref=parks)
+            if self.s["pota_state"]:
+                rec["my_state"] = self.s["pota_state"]
         if str(self.s["tx_watts"]).strip():
             rec["tx_pwr"] = str(self.s["tx_watts"]).strip()
         rec["comment"] = self._comment(self._qso_comment(q))
         self.logbook.add(rec)
         q.log_idx = len(self.logbook.qsos) - 1
+        if self.s["pota_active"]:
+            self._pota_save()
         if not self.s["demo"]:   # never put simulated QSOs into companion apps' logs
             adif = (f"<adif_ver:5>3.1.4 <programid:7>Procyon <programversion:{len(__version__)}>"
                     f"{__version__} <EOH>\n" + Logbook._record(rec))
@@ -858,6 +872,115 @@ class Engine:
             return i
         return None
 
+    # ------------------------------------------------------ POTA activation
+
+    def _grid(self) -> str:
+        """Where we're operating from: the park's grid during an activation."""
+        if self.s["pota_active"] and self.s["pota_grid"]:
+            return self.s["pota_grid"]
+        return self.s["mygrid"]
+
+    def _set_station(self):
+        self.qso.cq_tag = "POTA" if self.s["pota_active"] else ""
+        self.qso.set_station(self.s["mycall"], self._grid())
+
+    async def _pota_start(self, m: dict) -> dict:
+        """Start an activation, or change the parks/grid of the one that's on.
+        Answered inside the POTA window (notices would be hidden behind it)."""
+        parks, bad = pota.parse_parks(str(m.get("parks", "")))
+        grid = str(m.get("grid", "")).strip()
+        state = re.sub(r"[^A-Z0-9]", "", str(m.get("state", "")).upper())[:6]
+        if bad:
+            return {"type": "pota", "ok": False,
+                    "text": f"{', '.join(bad)} doesn't look like a park reference (e.g. US-1234)."}
+        if not parks:
+            return {"type": "pota", "ok": False, "text": "Enter at least one park, e.g. US-1234."}
+        if grid and not re.match(r"^[A-Ra-r]{2}\d{2}([A-Xa-x]{2})?$", grid):
+            return {"type": "pota", "ok": False, "text": f"{grid} isn't a grid square (e.g. EN80 or EN80ma)."}
+        if not self.s["mycall"]:
+            return {"type": "pota", "ok": False, "text": "Enter your callsign in Settings first."}
+        was_on = self.s["pota_active"]
+        self.s.update(pota_parks=parks, pota_state=state,
+                      pota_grid=grid[:4].upper() + grid[4:].lower() if grid else "")
+        if not was_on:
+            self.s.update(pota_active=True, pota_end="", pota_start=utc_now().strftime("%Y%m%d%H%M%S"))
+        self.save()
+        self._set_station()
+        await self.push_state()
+        where = ", ".join(parks)
+        if not was_on and not self.qso.msgs[5].startswith("CQ POTA"):
+            return {"type": "pota", "ok": True, "text": f"Activation started at {where}. Note: FT8 can't "
+                    f"send \"CQ POTA\" with {self.s['mycall']}, so your CQ goes out as a plain CQ."}
+        return {"type": "pota", "ok": True,
+                "text": f"Activation {'updated' if was_on else 'started'}: {where}. Good luck!"}
+
+    def _pota_end(self):
+        if not self.s["pota_active"]:
+            return
+        self.s.update(pota_active=False, pota_end=utc_now().strftime("%Y%m%d%H%M%S"))
+        self.save()
+        self._set_station()
+        self._pota_save()
+        n = self._pota_status()["total"]
+        self.toast(f"Activation ended with {n} QSO{'s' if n != 1 else ''}"
+                   + (" - the park logs are in the POTA window" if n else ""), "good")
+
+    def _pota_qsos(self, park: str) -> list[dict]:
+        return pota.activation_qsos(self.logbook.qsos, park, self.s["pota_start"], self.s["pota_end"])
+
+    def _pota_status(self) -> dict:
+        parks, start = self.s["pota_parks"], self.s["pota_start"]
+        out = {"active": self.s["pota_active"], "parks": parks, "grid": self.s["pota_grid"],
+               "state": self.s["pota_state"], "start": start, "needed": pota.NEEDED,
+               "today": 0, "total": 0, "files": []}
+        if not (parks and start):
+            return out
+        qsos = self._pota_qsos(parks[0])     # the same QSOs count for every park
+        out["today"] = pota.count_on(qsos, utc_now().strftime("%Y%m%d"))
+        out["total"] = len(qsos)
+        out["folder"] = self._pota_dir()
+        out["files"] = [{"park": p, "name": os.path.basename(self._pota_path(p)),
+                         "count": len(Logbook(self._pota_path(p)).qsos)
+                         if os.path.exists(self._pota_path(p)) else 0} for p in parks]
+        return out
+
+    def _pota_dir(self) -> str:
+        """Park logs live next to the main log; demo QSOs get their own folder."""
+        return os.path.join(self.data_dir, "pota-demo" if self.s["demo"] else "pota")
+
+    def _pota_path(self, park: str) -> str:
+        return os.path.join(self._pota_dir(), pota.filename(self.s["mycall"], park, self.s["pota_start"][:8]))
+
+    def _pota_save(self):
+        """Keep each park's own log file up to date (after every QSO or edit).
+        The QSOs stay in the main log too - that's what QRZ/LoTW uploads use."""
+        parks, start = self.s["pota_parks"], self.s["pota_start"]
+        if not (parks and start and self.s["mycall"]):
+            return
+        for park in parks:
+            current = [uploads.for_upload(q) for q in self._pota_qsos(park)]
+            path = self._pota_path(park)
+            saved = Logbook(path).qsos if os.path.exists(path) else []
+            if not current and not saved:
+                continue
+            qsos = pota.merge(saved, current)
+            os.makedirs(self._pota_dir(), exist_ok=True)
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(pota.export(qsos, park, Logbook._record, Logbook.HEADER))
+            os.replace(tmp, path)
+
+    def pota_export(self, park: str):
+        """(file name, ADIF text) of one park's saved log, or None."""
+        park = park.upper()
+        if park not in self.s["pota_parks"] or not self.s["pota_start"]:
+            return None
+        self._pota_save()
+        path = self._pota_path(park)
+        if not os.path.exists(path):
+            return None
+        return os.path.basename(path), open(path, encoding="utf-8").read()
+
     # ---------------------------------------------------- online logbooks
 
     def _logbook_settings(self, new: dict):
@@ -891,7 +1014,7 @@ class Engine:
         if service not in uploads.SERVICES or service in self.uploading:
             return
         if not self._upload_ready(service):
-            self.toast(f"Set up {uploads.SERVICES[service][0]} in Settings → Online logbooks first", "warn")
+            self.toast(f"Set up {uploads.SERVICES[service][0]} in Settings → Logbook first", "warn")
             return
         self.uploading.add(service)
         asyncio.get_event_loop().create_task(self._upload(service))
@@ -957,7 +1080,7 @@ class Engine:
         if t == "settings":
             old = dict(self.s)
             for k in DEFAULTS:
-                if k in m["settings"] and not k.startswith(LOCAL_ONLY):
+                if k in m["settings"] and not k.startswith(LOCAL_ONLY + OWN_COMMANDS):
                     self.s[k] = m["settings"][k]
             if local:   # only the computer running Procyon may change remote access and logbook keys
                 self._remote_settings(m["settings"])
@@ -967,7 +1090,7 @@ class Engine:
             self.s["mygrid"] = self.s["mygrid"][:4].upper() + self.s["mygrid"][4:].lower()
             self._clean_wf_range()
             self.save()
-            q.set_station(self.s["mycall"], self.s["mygrid"])
+            self._set_station()
             if self.s["mycall"] and old["mycall"] != self.s["mycall"]:
                 if not ft8.is_std_call(self.s["mycall"]):
                     self.toast(f"{self.s['mycall']} is longer than FT8's standard callsign format: "
@@ -1043,6 +1166,7 @@ class Engine:
             i = self._logged_entry(q)
             if i is not None:   # already logged: update the entry too
                 self.logbook.update(i, {"comment": self._comment(self._qso_comment(q))})
+                self._pota_save()
         elif t == "tx_watts":
             w = str(m.get("w", "")).strip()
             self.s["tx_watts"] = w if w.replace(".", "", 1).isdigit() else ""
@@ -1055,7 +1179,12 @@ class Engine:
                     "comment": self._comment(str(m.get("comment", ""))[:200]),
                     "tx_pwr": w if w.replace(".", "", 1).isdigit() else "",
                 })
+                self._pota_save()
                 self.toast("Log entry updated", "good")
+        elif t == "pota_start":
+            return await self._pota_start(m)
+        elif t == "pota_end":
+            self._pota_end()
         elif t == "upload":
             self._start_upload(str(m.get("service", "")))
         elif t == "qrz_check":

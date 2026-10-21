@@ -213,6 +213,7 @@ class Logbook:
                 "date": q.get("qso_date", ""), "time": q.get("time_on", ""),
                 "qrz": q.get("qrzcom_qso_upload_status", "").upper() == "Y",
                 "lotw": q.get("lotw_qsl_sent", "").upper() == "Y",
+                "park": q.get("my_sig_info", "") if q.get("my_sig", "").upper() == "POTA" else "",
             })
         return out
 

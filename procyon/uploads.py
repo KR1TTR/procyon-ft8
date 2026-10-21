@@ -61,7 +61,7 @@ async def _qrz(session, key: str, **fields) -> dict:
 
 def _qrz_auth_problem(rep: dict) -> str:
     why = rep.get("REASON", "").strip()
-    return ("QRZ didn't accept the API key - check it in Settings → Online logbooks"
+    return ("QRZ didn't accept the API key - check it in Settings → Logbook"
             + (f" (QRZ says: {why})" if why else ""))
 
 
@@ -159,7 +159,7 @@ async def lotw_upload(tqsl: str, location: str, adif_text: str) -> str:
             return {0: "", 8: "LoTW already had all of them", 9: "LoTW already had some of them"}[proc.returncode]
         if "location" in text.lower() and ("not found" in text.lower() or "invalid" in text.lower()):
             raise UploadError(f'TQSL has no station location called "{location}" - check the name '
-                              f"in Settings → Online logbooks (it must match TQSL exactly)")
+                              f"in Settings → Logbook (it must match TQSL exactly)")
         why = TQSL_EXIT.get(proc.returncode, f"TQSL stopped with error {proc.returncode}")
         last = text.strip().splitlines()[-1:] if text.strip() else []
         raise UploadError(f"LoTW upload failed: {why}" + (f" ({last[0][:160]})" if last else ""))

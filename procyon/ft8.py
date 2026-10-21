@@ -39,6 +39,47 @@ def msg_call(call: str) -> str:
     c = strip_call(call.upper())
     return c if is_std_call(c) else f"<{c}>"
 
+def base_call(call: str) -> str:
+    """The home call inside a portable one: P4/WE9V -> WE9V, CT2JWF/QRP -> CT2JWF,
+    KR1TTR/P -> KR1TTR. Calls without a slash come back unchanged."""
+    c = strip_call((call or "").upper())
+    if "/" not in c:
+        return c
+    parts = [x for x in c.split("/") if x]
+    std = [x for x in parts if STD_CALL_RE.match(x)]
+    return max(std or parts, key=len) if parts else c
+
+
+def same_station(a: str, b: str) -> bool:
+    """True if two callsigns are the same operator. When both calls in a QSO are
+    portable, reports go out with base calls (P4/WE9V becomes WE9V) - so
+    "WE9V" in a report still means the P4/WE9V we're working."""
+    a, b = strip_call((a or "").upper()), strip_call((b or "").upper())
+    if not a or not b or a.startswith("...") or b.startswith("..."):
+        return False
+    return a == b or (("/" in a or "/" in b) and base_call(a) == base_call(b))
+
+
+def fits(msg: str):
+    """True if ft8code sends `msg` exactly as written, False if it would be
+    cut or rejected, None if that can't be checked (no WSJT-X tools)."""
+    try:
+        return encode(msg)[1] == normalize(msg)
+    except ValueError:
+        return False
+    except Exception:  # noqa: BLE001 - ft8code missing: can't check here
+        return None
+
+
+def first_fit(candidates: list[str]) -> str:
+    """The first message that goes out intact; the first one if none can be checked."""
+    for c in candidates:
+        ok = fits(c)
+        if ok or ok is None:
+            return c
+    return candidates[0]
+
+
 def _ft8code():
     from .system import find_tool  # noqa: PLC0415
     exe = find_tool("ft8code")

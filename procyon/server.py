@@ -64,6 +64,16 @@ async def download_log(request):
         "Content-Disposition": f"attachment; filename={os.path.basename(eng.logbook.path)}"})
 
 
+async def download_pota(request):
+    eng: Engine = request.app["engine"]
+    got = eng.pota_export(request.match_info["park"])
+    if not got:
+        raise web.HTTPNotFound()
+    name, text = got
+    return web.Response(text=text, content_type="application/octet-stream", headers={
+        "Content-Disposition": f'attachment; filename="{name}"'})
+
+
 # ------------------------------------------------------------ sign-in
 
 async def login_page(request):
@@ -241,6 +251,7 @@ def main():
     app.router.add_get("/", index)
     app.router.add_get("/ws", ws_handler)
     app.router.add_get("/log.adi", download_log)
+    app.router.add_get("/pota/{park}.adi", download_pota)
     app.router.add_get("/login", login_page)
     app.router.add_post("/login", login)
     app.router.add_get("/logout", logout)
