@@ -69,6 +69,7 @@ function connect() {
     else if (m.type === "wsjtx_import") applyImport(m);
     else if (m.type === "detect_radio") onDetected(m);
     else if (m.type === "rig_test") onRigTest(m);
+    else if (m.type === "qrz_check") onQrzCheck(m);
     else if (m.type === "install") onInstall(m);
   };
 }
@@ -761,7 +762,24 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 let editingIdx = null;   // logbook entry being edited, if any
 
+// One button per online logbook that's set up, next to Export ADIF.
+function renderUploads() {
+  const el = $("#uploadBtns");
+  const html = Object.entries(S.uploads || {}).filter(([, u]) => u.ready).map(([svc, u]) => {
+    if (u.busy) return `<button class="link-btn" type="button" disabled>Uploading to ${esc(u.name)}…</button>`;
+    if (!u.pending) return `<button class="link-btn" type="button" disabled title="Every QSO is on ${esc(u.name)}">${esc(u.name)} ✓</button>`;
+    return `<button class="link-btn" type="button" data-upload="${svc}"
+      title="Upload ${u.pending} new QSO${u.pending === 1 ? "" : "s"} to ${esc(u.name)}">Upload to ${esc(u.name)}<span class="n">${u.pending}</span></button>`;
+  }).join("");
+  if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }   // keep clicks landing
+}
+$("#uploadBtns").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-upload]");
+  if (b) { b.disabled = true; send({ type: "upload", service: b.dataset.upload }); }
+});
+
 function renderLog() {
+  renderUploads();
   $("#qsoCount").textContent = S.qso_count;
   $("#logDemo").hidden = !S.settings.demo;
   if (editingIdx !== null) return;   // don't redraw under the user while they edit
@@ -782,7 +800,7 @@ function renderLog() {
         ${q.band ? `<span class="b">${esc(q.band)}</span>` : ""}
         ${q.tx_pwr ? `<span class="pw">${esc(q.tx_pwr)} W</span>` : ""}
         <span class="r" title="Report sent / received">${esc(q.sent || "—")} / ${esc(q.rcvd || "—")}</span></div>
-      <div class="l2"><span class="where">${where}</span><span class="w">${when} · ${utc} UTC</span></div>
+      <div class="l2"><span class="where">${where}</span><span class="w">${when} · ${utc} UTC${q.qrz ? `<span class="up" title="Uploaded to QRZ">QRZ</span>` : ""}${q.lotw ? `<span class="up" title="Uploaded to LoTW">LoTW</span>` : ""}</span></div>
       ${q.comment ? `<div class="l3">${esc(q.comment)}</div>` : `<div class="add">+ Add comment or power</div>`}
     </div>`;
   }).join("");
@@ -1067,6 +1085,10 @@ function openSettings(welcome) {
   $("#remoteLocal").hidden = !isLocal;
   $("#remoteRemote").hidden = isLocal;
   form.elements.remote_pin.value = "";
+  // Online logbooks: set up on the computer running Procyon only (the key stays there).
+  $("#onlineLocal").hidden = !isLocal;
+  $("#onlineRemote").hidden = isLocal;
+  showOnlineLogbooks();
   form.elements.remote_pin.placeholder = S.remote.pin_set ? "PIN is set - type a new one to change it" : "Choose a PIN";
   $("#remoteUrls").innerHTML = S.remote.urls.length
     ? `When allowed, open this on the other device: ${S.remote.urls.map((u) => `<b>${esc(u)}</b>`).join(" or ")}`
@@ -1277,6 +1299,35 @@ $("#resetLayout").addEventListener("click", () => {
   saveMode("auto");
   $("#layoutMode").value = "auto";
   toast("Panel layout reset", "good");
+});
+function showOnlineLogbooks() {
+  form.elements.qrz_key_new.value = "";
+  form.elements.qrz_key_new.placeholder = S.qrz_key_set ? "Key is saved - type a new one to change it" : "Paste your key here";
+  $("#qrzForget").hidden = !S.qrz_key_set;
+  qrzMsg("");
+  $("#tqslHint").innerHTML = S.tqsl_found
+    ? "Type the name exactly as it appears in TQSL's \"Station Locations\" tab. Procyon hands your QSOs to TQSL, which signs and uploads them."
+    : "TQSL, ARRL's LoTW program, isn't installed on this computer. Install it from lotw.arrl.org and set up your callsign certificate and a station location, then come back here.";
+}
+// Results show inside Settings: notices (toasts) would be hidden behind it.
+function qrzMsg(text, ok) {
+  $("#qrzMsg").textContent = text;
+  $("#qrzMsg").classList.toggle("ok", !!ok);
+}
+$("#qrzCheck").addEventListener("click", () => {
+  qrzMsg("Asking QRZ…");
+  $("#qrzCheck").disabled = true;
+  send({ type: "qrz_check", key: form.elements.qrz_key_new.value.trim() });
+});
+function onQrzCheck(m) {
+  $("#qrzCheck").disabled = false;
+  qrzMsg((m.ok ? "✓ " : "✗ ") + m.text, m.ok);
+}
+$("#qrzForget").addEventListener("click", () => {
+  send({ type: "settings", settings: { qrz_key_forget: true } });
+  S.qrz_key_set = false;
+  showOnlineLogbooks();
+  qrzMsg("✓ QRZ key removed.", true);
 });
 form.addEventListener("submit", (e) => {
   if (e.submitter && e.submitter.value !== "save") return;

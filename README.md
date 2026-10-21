@@ -2,7 +2,7 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 0.9.12** · 20 October 2026
+**Version 0.9.14** · 21 October 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
 A simpler, friendlier FT8 station. Procyon uses WSJT-X's own decoder (`jt9`)
@@ -16,11 +16,11 @@ the Hamlib copy it includes): https://wsjt.sourceforge.io
 
 | System | Download | How |
 |---|---|---|
-| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.12_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.12_all.deb`. Then start **Procyon FT8** from your menu, or run `procyon`. |
-| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.12-arch.tar.gz` | `tar xf procyon-0.9.12-arch.tar.gz`, `cd procyon-0.9.12-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
-| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.12-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
-| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.12-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
-| Windows 10/11 (64-bit) | `Procyon-0.9.12-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
+| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.14_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.14_all.deb`. Then start **Procyon FT8** from your menu, or run `procyon`. |
+| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.14-arch.tar.gz` | `tar xf procyon-0.9.14-arch.tar.gz`, `cd procyon-0.9.14-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
+| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.14-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
+| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.14-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
+| Windows 10/11 (64-bit) | `Procyon-0.9.14-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
 
 Add `--demo` (or use **Procyon Demo.bat** on Windows) to try it with a
 simulated band: nothing is transmitted. Close WSJT-X while using Procyon;
@@ -105,6 +105,15 @@ transmitting.
   to each QSO's comment ("FT8 Sent: -05 Rcvd: -12"), after any note you typed.
   Off by default; the reports are always saved in the standard report fields.
 - **Edit the log:** click any logbook entry to change its comment or power.
+- **Upload to QRZ and LoTW:** set them up in *Settings → Online logbooks* (your
+  QRZ Logbook API key; for LoTW, the station location name from ARRL's TQSL,
+  which must be installed). An *Upload to QRZ* / *Upload to LoTW* button then
+  appears next to *Export ADIF*, showing how many QSOs haven't been sent yet.
+  Nothing is sent until you click, so it never clashes with GridTracker, and a
+  portable station can log offline and send everything once it's back online.
+  Each QSO remembers where it has been uploaded (standard ADIF fields), so a
+  failed upload just stays queued; QSOs the service already has count as done.
+  The demo log is never uploaded.
 - **All messages:** expand to see or edit the six standard messages, or force a
   particular one to go next.
 - **Logbook:** standard ADIF (`~/.local/share/procyon/procyon_log.adi`), exported
@@ -186,6 +195,7 @@ Good to know:
 | rigctld client (frequency, PTT) | `procyon/rig.py` |
 | Simulated band for `--demo` | `procyon/demo.py` |
 | PIN sign-in for remote devices | `procyon/auth.py` |
+| Upload to QRZ / LoTW (via TQSL) | `procyon/uploads.py` |
 | WSJT-X-compatible UDP (GridTracker, JTAlert, loggers) | `procyon/udp.py` |
 | WSJT-X import, Hamlib rig list | `procyon/setup_help.py` |
 | Web server | `procyon/server.py` |
@@ -206,6 +216,15 @@ and Procyon B. (Earlier versions were called Skywave; settings and logbooks move
 across automatically on first start.)
 
 ## Roadmap
+
+0.9.14: *Test key* now shows QRZ's answer inside Settings (it was hidden
+behind the Settings window).
+
+0.9.13: one-click upload to QRZ.com and LoTW. Set them up in *Settings →
+Online logbooks* and an upload button appears beside *Export ADIF*, with a
+count of QSOs not yet sent. Uploads only happen when you click, so portable
+stations can log offline and upload later, and GridTracker users aren't
+affected. Each logbook entry shows where it has been uploaded.
 
 0.9.12: Procyon understands DXpedition-style "two-in-one" messages, such as
 `N3LSB RR73; KR1TTR <P4/WE9V> -06` (one transmission finishing one QSO and

@@ -21,7 +21,7 @@ from .auth import PIN_RE, Auth, lan_addresses
 from .demo import DemoBand
 from .geo import BANDS, DEMO_MARK, DEMO_MARKS, Cty, Logbook, band_of, distance_bearing, grid_to_latlon, utc_now
 from .qso import Qso
-from . import wsjtx_install
+from . import uploads, wsjtx_install
 from .radio_detect import detect_radios, test_rig
 from .setup_help import hamlib_rigs, import_wsjtx
 from .system import IS_WINDOWS, find_tool, serial_ports, tools
@@ -55,7 +55,11 @@ DEFAULTS = {
     "remote_enabled": False, "remote_pin_hash": "",
     # WSJT-X compatible UDP for GridTracker, JTAlert, loggers (WSJT-X defaults)
     "udp_enabled": True, "udp_host": "127.0.0.1", "udp_port": 2237, "udp_accept": True,
+    # online logbooks, uploaded on a click (Settings → Online logbooks)
+    "qrz_key": "", "lotw_location": "",
 }
+SECRETS = ("remote_pin_hash", "qrz_key")   # never sent to the browser
+LOCAL_ONLY = ("remote_", "qrz_key", "lotw_")  # only the computer running Procyon changes these
 
 LINE_RE = re.compile(r"^\d{4,6}\s+(-?\d+)\s+(-?\d+\.\d)\s+(\d+)\s+~\s+(.+?)\s*$")
 
@@ -88,6 +92,8 @@ class Engine:
         self._load_grids()
         self.rig = Rig()
         self._installing = False
+        self.uploading = set()          # services with an upload in progress
+        self.tqsl = uploads.find_tqsl()
         self.qso = Qso(self._log_qso, self.toast)
         self.qso.set_station(self.s["mycall"], self.s["mygrid"])
         self.demo = DemoBand()
@@ -186,7 +192,9 @@ class Engine:
         info = self._station_info(dx, self.qso.dxgrid) if dx else {}
         return {
             "type": "state",
-            "settings": {k: v for k, v in self.s.items() if k != "remote_pin_hash"},
+            "settings": {k: v for k, v in self.s.items() if k not in SECRETS},
+            "qrz_key_set": bool(self.s["qrz_key"]), "tqsl_found": bool(self.tqsl),
+            "uploads": self._upload_status(),
             "remote": {"enabled": self.s["remote_enabled"], "pin_set": bool(self.s["remote_pin_hash"]),
                        "urls": [f"http://{a}:{self.port}/" for a in lan_addresses()]},
             "audio": {"running": self.rx_task is not None and not self.audio_error,
@@ -850,6 +858,97 @@ class Engine:
             return i
         return None
 
+    # ---------------------------------------------------- online logbooks
+
+    def _logbook_settings(self, new: dict):
+        key = str(new.get("qrz_key_new", "")).strip()
+        if key:
+            self.s["qrz_key"] = key
+        if new.get("qrz_key_forget"):
+            self.s["qrz_key"] = ""
+        if "lotw_location" in new:
+            self.s["lotw_location"] = str(new["lotw_location"]).strip()
+        self.tqsl = uploads.find_tqsl()   # they may have just installed it
+        self.save()
+
+    def _upload_ready(self, service: str) -> bool:
+        """Set up, and not the demo log (simulated QSOs never leave Procyon)."""
+        if self.s["demo"]:
+            return False
+        if service == "qrz":
+            return bool(self.s["qrz_key"])
+        return bool(self.s["lotw_location"] and self.tqsl)
+
+    def _upload_status(self) -> dict:
+        out = {}
+        for svc, (name, _, _) in uploads.SERVICES.items():
+            ready = self._upload_ready(svc)
+            out[svc] = {"name": name, "ready": ready, "busy": svc in self.uploading,
+                        "pending": sum(not uploads.is_sent(q, svc) for q in self.logbook.qsos) if ready else 0}
+        return out
+
+    def _start_upload(self, service: str):
+        if service not in uploads.SERVICES or service in self.uploading:
+            return
+        if not self._upload_ready(service):
+            self.toast(f"Set up {uploads.SERVICES[service][0]} in Settings → Online logbooks first", "warn")
+            return
+        self.uploading.add(service)
+        asyncio.get_event_loop().create_task(self._upload(service))
+
+    async def _upload(self, service: str):
+        name, sent_field, date_field = uploads.SERVICES[service]
+        book = self.logbook    # stays the same even if demo mode is switched mid-upload
+        idxs = [i for i, q in enumerate(book.qsos) if not uploads.is_sent(q, service)]
+        qsos = [book.qsos[i] for i in idxs]
+        done, problem, note = [], "", ""
+        try:
+            if not qsos:
+                self.toast(f"Everything is already on {name}", "good")
+                return
+            await self.push_state()   # show the button as busy
+            if service == "qrz":
+                pos, problem, dups = await uploads.qrz_upload(self.s["qrz_key"], qsos, Logbook._record)
+                done = [idxs[p] for p in pos]
+                if dups:
+                    note = "QRZ already had all of them" if dups == len(done) else f"QRZ already had {dups}"
+            else:
+                text = Logbook.HEADER + "".join(Logbook._record(uploads.for_upload(q)) for q in qsos)
+                try:
+                    note = await uploads.lotw_upload(self.tqsl, self.s["lotw_location"], text)
+                    done = idxs
+                except uploads.UploadError as e:
+                    problem = str(e)
+            book.mark(done, {sent_field: "Y", date_field: utc_now().strftime("%Y%m%d")})
+            n = len(done)
+            sent = f"{n} QSO{'s' if n != 1 else ''}" if n else ""
+            if problem:
+                left = len(qsos) - n
+                self.toast((f"Sent {sent} to {name}. " if sent else "")
+                           + f"{problem}. {left} QSO{'s' if left != 1 else ''} still waiting - "
+                           f"press the button again to retry.", "bad")
+            else:
+                if note.endswith("all of them"):
+                    self.toast(f"{name} already had all {sent} - they're marked as uploaded now", "good")
+                else:
+                    self.toast(f"Uploaded {sent} to {name}" + (f" ({note})" if note else ""), "good")
+        except Exception:  # noqa: BLE001 - never leave the button stuck
+            log.exception("upload to %s", name)
+            self.toast(f"Upload to {name} failed unexpectedly - your QSOs are still waiting", "bad")
+        finally:
+            self.uploading.discard(service)
+            await self.push_state()
+
+    async def _qrz_check(self, key: str) -> dict:
+        """Answered inside Settings (notices would be hidden behind it)."""
+        key = key or self.s["qrz_key"]
+        if not key:
+            return {"type": "qrz_check", "ok": False, "text": "Paste your QRZ Logbook API key first."}
+        try:
+            return {"type": "qrz_check", "ok": True, "text": await uploads.qrz_check(key)}
+        except uploads.UploadError as e:
+            return {"type": "qrz_check", "ok": False, "text": str(e)}
+
     # ------------------------------------------------------------- commands
 
     async def command(self, m: dict, local: bool = True):
@@ -858,10 +957,11 @@ class Engine:
         if t == "settings":
             old = dict(self.s)
             for k in DEFAULTS:
-                if k in m["settings"] and not k.startswith("remote_"):
+                if k in m["settings"] and not k.startswith(LOCAL_ONLY):
                     self.s[k] = m["settings"][k]
-            if local:   # only the computer running Procyon may change remote access
+            if local:   # only the computer running Procyon may change remote access and logbook keys
                 self._remote_settings(m["settings"])
+                self._logbook_settings(m["settings"])
             self.s["mycall"] = self.s["mycall"].upper().strip()
             self.s["mygrid"] = self.s["mygrid"].strip()[:6]
             self.s["mygrid"] = self.s["mygrid"][:4].upper() + self.s["mygrid"][4:].lower()
@@ -956,6 +1056,13 @@ class Engine:
                     "tx_pwr": w if w.replace(".", "", 1).isdigit() else "",
                 })
                 self.toast("Log entry updated", "good")
+        elif t == "upload":
+            self._start_upload(str(m.get("service", "")))
+        elif t == "qrz_check":
+            if not local:
+                self.toast("That can only be done on the computer running Procyon", "warn")
+                return None
+            return await self._qrz_check(str(m.get("key", "")).strip())
         elif t == "tx_level":
             self.s["tx_level"] = max(0, min(100, int(m["v"])))
             self.save()

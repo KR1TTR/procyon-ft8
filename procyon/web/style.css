@@ -184,6 +184,15 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--border2)
 .card-head .seg { margin-left: auto; }
 .link-btn { margin-left: auto; background: none; border: 0; color: var(--muted); font-size: 12px; text-decoration: none; }
 .link-btn:hover { color: var(--text); }
+.log-actions { margin-left: auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: flex-end; }
+.log-actions .link-btn, #uploadBtns .link-btn { margin-left: 0; }
+#uploadBtns { display: contents; }
+#uploadBtns .link-btn { cursor: pointer; padding: 0; }
+#uploadBtns .link-btn:disabled { cursor: default; }
+#uploadBtns .link-btn:disabled:hover { color: var(--muted); }
+#uploadBtns .n { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px;
+  background: var(--info); color: var(--bg); font-weight: 650; font-size: 11px; text-align: center; }
+.lrow .up { margin-left: 8px; font-size: 10px; letter-spacing: .03em; color: var(--muted); opacity: .8; }
 .count { font: 600 11px var(--mono); background: var(--surface2); color: var(--muted); padding: 1px 7px; border-radius: 99px; }
 
 .seg { display: inline-flex; background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 2px; }
@@ -600,3 +609,4 @@ dialog.quit-dlg p { margin: 0; color: var(--muted); font-size: 13.5px; line-heig
 .offline .stopped { text-align: center; font-weight: 500; color: var(--muted); line-height: 1.6; }
 .offline .stopped img { width: 64px; height: 64px; display: block; margin: 0 auto 10px; opacity: .85; }
 .offline .stopped b { display: block; color: var(--text); font-size: 18px; font-weight: 650; }
+#onlineLocal > .hint { margin: 4px 0 14px; }

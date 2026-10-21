@@ -196,7 +196,7 @@
   <section class="card logbook">
     <div class="card-head">
       <h2>Logbook <span class="count" id="qsoCount">0</span><span class="demo-pill" id="logDemo" hidden>Demo log</span></h2>
-      <a class="link-btn" href="/log.adi" download>Export ADIF</a>
+      <div class="log-actions"><span id="uploadBtns"></span><a class="link-btn" href="/log.adi" download>Export ADIF</a></div>
     </div>
     <div class="log-list" id="logList"><div class="muted pad">No QSOs yet.</div></div>
   </section>
@@ -310,6 +310,27 @@
     <fieldset>
       <legend>Logbook</legend>
       <label class="toggle"><input type="checkbox" name="log_reports_in_comment"><span></span>Add signal reports to log comments (e.g. "FT8 Sent: -05 Rcvd: -12")</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Online logbooks</legend>
+      <div id="onlineLocal">
+        <p class="hint">Each logbook you set up gets an upload button next to Export ADIF. Nothing is sent until you click it, and QSOs logged without internet wait until you do. Already uploading with GridTracker? Then you can leave these empty.</p>
+        <label>QRZ Logbook API key
+          <input name="qrz_key_new" type="password" autocomplete="new-password" spellcheck="false">
+        </label>
+        <div class="radio-tools">
+          <button type="button" class="btn ghost small" id="qrzCheck">Test key</button>
+          <button type="button" class="btn ghost small" id="qrzForget">Remove key</button>
+          <span class="hint" id="qrzMsg"></span>
+        </div>
+        <p class="hint">On QRZ.com, open your logbook and press "Settings": the key is listed under API.</p>
+        <label>LoTW station location (from TQSL)
+          <input name="lotw_location" autocomplete="off" spellcheck="false" placeholder="e.g. Home">
+        </label>
+        <p class="hint" id="tqslHint"></p>
+      </div>
+      <p class="hint" id="onlineRemote" hidden>You're connected from another device. Online logbooks can only be set up on the computer running Procyon, but the upload buttons work from here.</p>
     </fieldset>
 
     <fieldset>

@@ -184,6 +184,13 @@ class Logbook:
                 q.pop(k, None)
         self._rewrite()
 
+    def mark(self, idxs, fields: dict):
+        """Set the same fields on several QSOs, with a single rewrite."""
+        for i in idxs:
+            self.qsos[i].update(fields)
+        if idxs:
+            self._rewrite()
+
     def take(self, pred) -> list:
         """Remove the QSOs matching `pred` (backing up the file first) and return them."""
         hits = [q for q in self.qsos if pred(q)]
@@ -204,6 +211,8 @@ class Logbook:
                 "band": q.get("band", ""), "sent": q.get("rst_sent", ""),
                 "rcvd": q.get("rst_rcvd", ""), "freq": q.get("freq", ""),
                 "date": q.get("qso_date", ""), "time": q.get("time_on", ""),
+                "qrz": q.get("qrzcom_qso_upload_status", "").upper() == "Y",
+                "lotw": q.get("lotw_qsl_sent", "").upper() == "Y",
             })
         return out
 
