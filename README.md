@@ -2,7 +2,7 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 0.9.18** · 21 October 2026
+**Version 0.9.20** · 22 October 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
 A simpler, friendlier FT8 station. Procyon uses WSJT-X's own decoder (`jt9`)
@@ -16,14 +16,14 @@ the Hamlib copy it includes): https://wsjt.sourceforge.io
 
 | System | Download | How |
 |---|---|---|
-| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.18_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.18_all.deb`. Then start **Procyon FT8** from your menu, or run `procyon`. |
-| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.18-arch.tar.gz` | `tar xf procyon-0.9.18-arch.tar.gz`, `cd procyon-0.9.18-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
-| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.18-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
-| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.18-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
-| Windows 10/11 (64-bit) | `Procyon-0.9.18-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
+| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.20_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.20_all.deb`. Then start **Procyon FT8** from your menu, or run `procyon`. |
+| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.20-arch.tar.gz` | `tar xf procyon-0.9.20-arch.tar.gz`, `cd procyon-0.9.20-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
+| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.20-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
+| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.20-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
+| Windows 10/11 (64-bit) | `Procyon-0.9.20-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
 
-Add `--demo` (or use **Procyon Demo.bat** on Windows) to try it with a
-simulated band: nothing is transmitted. Close WSJT-X while using Procyon;
+Add `--demo` (or use **Procyon Demo.bat** on Windows, or *Settings → Advanced →
+Demo band*) to try it with a simulated band: nothing is transmitted. Close WSJT-X while using Procyon;
 they can't share the radio and sound card.
 
 Running from this source folder works too: `./run.sh` (Linux).
@@ -35,6 +35,11 @@ packaging/build.sh            # all three, into dist/
 packaging/build.sh deb        # or just one: deb, linux, windows
 packaging/macos/build.sh      # macOS: Procyon.app, .dmg and .pkg (run on a Mac)
 ```
+
+The macOS packages are built on GitHub's Macs by
+`.github/workflows/macos.yml`: publishing a release attaches the `.dmg`, `.pkg`
+and `SHA256SUMS-macos` to it, and *Actions → macOS build → Run workflow* builds
+the current code on demand. It runs the same `packaging/macos/build.sh`.
 
 The macOS build bundles python.org's universal Python and the Python packages
 (merged into universal binaries), so it needs no Python on the user's Mac. It
@@ -48,10 +53,10 @@ PyPI (cached in `packaging/cache/`).
 ## Using it
 
 1. **Settings** (gear icon): enter your callsign and grid, then pick the radio's
-   audio input and output. To control the radio, turn on *Control my radio*.
-   Either point it at a running `rigctld`, or tick *Start rigctld for me* and
-   enter the Hamlib model number (`rigctl -l` lists them), the serial port and
-   the baud rate.
+   audio input and output. To control the radio, turn on *Control my radio*
+   and enter the Hamlib model number (`rigctl -l` lists them), the serial port
+   and the baud rate; Procyon starts `rigctld` for you. (Already running your
+   own `rigctld`? Point Procyon at it in *Settings → Advanced*.)
 2. **Pick a band** from the frequency button in the header.
 3. **Answer someone:** click any row in *Band activity*. Rows calling CQ have a
    green bar, and messages to you are highlighted in amber and pinned to the top.
@@ -234,6 +239,18 @@ and Procyon B. (Earlier versions were called Skywave; settings and logbooks move
 across automatically on first start.)
 
 ## Roadmap
+
+0.9.20: distances in **miles** if you prefer (*Settings → Display*), and a
+new **Advanced** tab in Settings for things most stations never touch: the
+demo band, decoding depth, and connecting to a `rigctld` you run yourself.
+
+0.9.19: no more "ghost" callers. When a signal is too weak to read outright,
+WSJT-X's decoder may fill part of it in by guessing (for example "your call +
+???"), and now and then that turns noise into a station calling you that
+doesn't exist. Those decodes are now marked with a **?** and shown faintly;
+they no longer set off the "calling you" alert or chime, and a CQ is never
+answered automatically from one. Companion apps get them flagged as
+low-confidence, as WSJT-X does.
 
 0.9.18: each park's POTA log is saved as its own file while you operate
 (`pota/` next to your logbook), kept up to date after every QSO or edit, and

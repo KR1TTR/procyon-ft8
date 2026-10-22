@@ -131,12 +131,13 @@ class WsjtxUdp(asyncio.DatagramProtocol):
          .u32(NULL).u32(15).utf8("Default").utf8(s["tx_message"]))
         self._send(w)
 
-    def decode(self, period_start: float, snr: int, dt_: float, df: int, msg: str):
+    def decode(self, period_start: float, snr: int, dt_: float, df: int, msg: str,
+               low_confidence=False):
         t = dt.datetime.fromtimestamp(period_start, dt.timezone.utc)
         ms = ((t.hour * 60 + t.minute) * 60 + t.second) * 1000
         w = Writer(DECODE, self.ident)
         (w.boolean(True).qtime(ms).i32(snr).f64(dt_).u32(df).utf8("~").utf8(msg)
-         .boolean(False).boolean(False))
+         .boolean(low_confidence).boolean(False))
         self._send(w)
 
     def qso_logged(self, rec: dict, time_on: dt.datetime, time_off: dt.datetime, adif: str):

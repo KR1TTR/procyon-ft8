@@ -51,6 +51,7 @@ DEFAULTS = {
     "wf_start": 0, "wf_end": 3000,   # waterfall range in Hz, to match the radio's filter
     "log_reports_in_comment": False,  # add "FT8 Sent: -05 Rcvd: -12" to log comments
     "team_badges": True,             # raccoon next to Procyon's developer and testers
+    "miles": False,                  # show distances in miles instead of km
     "dial_hz": 14_074_000, "tx_freq": 1500, "rx_freq": 1500,
     "remote_enabled": False, "remote_pin_hash": "",
     # WSJT-X compatible UDP for GridTracker, JTAlert, loggers (WSJT-X defaults)
@@ -423,12 +424,19 @@ class Engine:
                 m = LINE_RE.match(line)
                 if not m or line.startswith(PRIMER_TIME):
                     continue
-                msg = re.sub(r"\s+(\?|a\d+)$", "", m.group(4)).strip()
+                # jt9 ends a line with "a1".."a7" when it filled part of the message
+                # in by guessing (a priori decoding: "CQ ???", "MYCALL ???"...), or
+                # "?" when unsure. Such guesses now and then turn noise into a
+                # station calling you that doesn't exist, so keep them marked.
+                tag = re.search(r"\s+(\?|a\d+)$", m.group(4))
+                msg = m.group(4)[:tag.start()].strip() if tag else m.group(4).strip()
                 if msg in seen:
                     continue
                 seen.add(msg)
-                decodes.append(self._annotate(p, hhmmss, int(m.group(1)),
-                                              float(m.group(2)), int(m.group(3)), msg))
+                d = self._annotate(p, hhmmss, int(m.group(1)), float(m.group(2)), int(m.group(3)), msg)
+                if tag:
+                    d["uncertain"] = tag.group(1)
+                decodes.append(d)
             decodes.sort(key=lambda d: d["freq"])
             self._remember_calls(decodes)
             with_grid = {d["p"]["from"] for d in decodes if d["p"]["from"] and d["p"]["grid"]}
@@ -440,7 +448,8 @@ class Engine:
             self.history.append(batch)
             await self.broadcast(batch)
             for d in decodes:
-                self.udp.decode(p * ft8.PERIOD, d["snr"], d["dt"], d["freq"], d["msg"])
+                self.udp.decode(p * ft8.PERIOD, d["snr"], d["dt"], d["freq"], d["msg"],
+                                low_confidence=bool(d.get("uncertain")))
             self.qso.on_decodes(decodes, p)
             await self.push_state()
         except Exception as e:  # noqa: BLE001

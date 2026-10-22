@@ -217,7 +217,7 @@
       <button type="button" class="btn ghost small" id="importWsjtx">Import settings from WSJT-X</button>
       <div class="hint" id="importNotes"></div>
     </div>
-    <p class="welcome" id="welcome" hidden>Welcome! Enter your callsign and grid to get started. No radio connected yet? Turn on <b>Demo band</b> (on the Audio tab) to try everything with a simulated band.</p>
+    <p class="welcome" id="welcome" hidden>Welcome! Enter your callsign and grid to get started. No radio connected yet? Turn on <b>Demo band</b> (on the Advanced tab) to try everything with a simulated band.</p>
 
     <div class="set-body">
       <nav class="set-tabs" role="tablist" aria-label="Settings sections">
@@ -226,6 +226,7 @@
         <button type="button" role="tab" id="tab-logbook" aria-controls="pane-logbook" data-tab="logbook">Logbook</button>
         <button type="button" role="tab" id="tab-display" aria-controls="pane-display" data-tab="display">Display</button>
         <button type="button" role="tab" id="tab-network" aria-controls="pane-network" data-tab="network">Network</button>
+        <button type="button" role="tab" id="tab-advanced" aria-controls="pane-advanced" data-tab="advanced">Advanced</button>
       </nav>
       <div class="set-panes">
       <div class="set-pane" role="tabpanel" id="pane-station" aria-labelledby="tab-station" data-tab="station" hidden>
@@ -280,26 +281,6 @@
               <option value="vox">VOX (the radio keys itself on audio)</option>
             </select>
           </label>
-          <details class="advanced">
-            <summary>Advanced: rigctld connection</summary>
-            <label class="toggle"><input type="checkbox" name="rig_spawn"><span></span>Start rigctld for me (recommended)</label>
-            <div class="grid2">
-              <label>Host<input name="rig_host"></label>
-              <label>Port<input name="rig_port" type="number"></label>
-            </div>
-            <p class="hint">Turn this off only if you already run rigctld yourself, then enter its host and port.</p>
-          </details>
-        </fieldset>
-
-        <fieldset>
-          <legend>Decoder</legend>
-          <label>Decoding depth
-            <select name="depth">
-              <option value="1">Fast</option>
-              <option value="2">Normal</option>
-              <option value="3">Deep (slower, finds weaker signals)</option>
-            </select>
-          </label>
         </fieldset>
       </div>
       <div class="set-pane" role="tabpanel" id="pane-audio" aria-labelledby="tab-audio" data-tab="audio" hidden>
@@ -307,7 +288,6 @@
           <legend>Audio</legend>
           <label>Input (from radio)<select name="audio_in"></select></label>
           <label>Output (to radio)<select name="audio_out"></select></label>
-          <label class="toggle"><input type="checkbox" name="demo"><span></span>Demo band (simulated signals, nothing is transmitted)</label>
         </fieldset>
       </div>
       <div class="set-pane" role="tabpanel" id="pane-logbook" aria-labelledby="tab-logbook" data-tab="logbook" hidden>
@@ -341,6 +321,7 @@
         <fieldset>
           <legend>Display</legend>
           <label class="toggle"><input type="checkbox" name="team_badges"><span></span>Show Procyon's team badges when decoded</label>
+          <label class="toggle"><input type="checkbox" name="miles"><span></span>Show distances in miles (instead of kilometres)</label>
         </fieldset>
 
         <fieldset>
@@ -396,6 +377,34 @@
             <p class="hint">You're connected from another device. Remote access and the PIN can only be changed on the computer running Procyon.</p>
             <a class="btn ghost small" href="/logout">Sign out of this device</a>
           </div>
+        </fieldset>
+      </div>
+      <div class="set-pane" role="tabpanel" id="pane-advanced" aria-labelledby="tab-advanced" data-tab="advanced" hidden>
+        <p class="hint">Settings most stations never need to change.</p>
+        <fieldset>
+          <legend>Practice</legend>
+          <label class="toggle"><input type="checkbox" name="demo"><span></span>Demo band (simulated signals, nothing is transmitted)</label>
+          <p class="hint">Try Procyon without a radio: simulated stations call CQ and answer you. Nothing goes on the air, and demo QSOs go into a separate practice log.</p>
+        </fieldset>
+        <fieldset>
+          <legend>Decoder</legend>
+          <label>Decoding depth
+            <select name="depth">
+              <option value="1">Fast</option>
+              <option value="2">Normal</option>
+              <option value="3">Deep (slower, finds weaker signals)</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Radio control connection (rigctld)</legend>
+          <label class="toggle"><input type="checkbox" name="rig_spawn"><span></span>Start rigctld for me (recommended)</label>
+          <div class="grid2">
+            <label>Host<input name="rig_host"></label>
+            <label>Port<input name="rig_port" type="number"></label>
+          </div>
+          <p class="hint">Turn this off only if you already run rigctld yourself, then enter its host and port.</p>
         </fieldset>
       </div>
       </div>

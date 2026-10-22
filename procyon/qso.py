@@ -177,9 +177,11 @@ class Qso:
         if not mine:
             return
         hits = [d for d in mine if ft8.same_station(d["p"]["from"], self.dxcall)] if self.dxcall else []
-        if not hits and self.next == 5 and self.tx_enabled:
-            # Someone answered our CQ - pick the strongest caller.
-            hits = sorted(mine, key=lambda d: -d["snr"])
+        sure = [d for d in mine if not d.get("uncertain")]
+        if not hits and sure and self.next == 5 and self.tx_enabled:
+            # Someone answered our CQ - pick the strongest caller. Never a
+            # guessed decode: that may be noise, and we'd be calling a ghost.
+            hits = sorted(sure, key=lambda d: -d["snr"])
             d = hits[0]
             self.set_dx(d["p"]["from"], d["p"].get("grid") or "", d["snr"])
             if self.last_tx_period == period - 1:

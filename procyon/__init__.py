@@ -3,6 +3,6 @@
 Created by Justin Stapleton, KR1TTR, with Claude Code (Claude Opus 5.5).
 """
 
-__version__ = "0.9.18"
-RELEASE_DATE = "2026-10-21"
+__version__ = "0.9.20"
+RELEASE_DATE = "2026-10-22"
 AUTHORS = "Justin Stapleton, KR1TTR, with Claude Code (Claude Opus 5.5)"

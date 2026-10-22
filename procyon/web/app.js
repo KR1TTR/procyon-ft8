@@ -171,9 +171,10 @@ function wfLabels(items) {
     const label = d.p.from || d.msg.split(" ")[0];
     const x = xFrac(d.freq + 25) * wf.width;
     const w = wctx.measureText(label).width + 8 * dpr;
-    wctx.fillStyle = d.to_me ? "#ffb547e6" : d.p.kind === "cq" ? "#0b2a1ad9" : "#060a16c8";
+    const me = d.to_me && !d.uncertain;
+    wctx.fillStyle = me ? "#ffb547e6" : d.p.kind === "cq" ? "#0b2a1ad9" : "#060a16c8";
     roundRect(x - w / 2, y - 8 * dpr, w, 15 * dpr, 4 * dpr);
-    wctx.fillStyle = d.to_me ? "#1a1200" : d.p.kind === "cq" ? "#5fe08f" : "#e7ecf6";
+    wctx.fillStyle = me ? "#1a1200" : d.p.kind === "cq" ? "#5fe08f" : "#e7ecf6";
     wctx.fillText(label, x - w / 2 + 4 * dpr, y + 3.5 * dpr);
   }
 }
@@ -267,7 +268,7 @@ function tick() {
 
 let shownRange = "";
 
-let shownBadges = null;
+let shownBadges = null, shownMiles = null;
 
 function onState(m) {
   const first = !S;
@@ -327,8 +328,9 @@ function onState(m) {
   $("#toolMissing").textContent = missing.length ? `(Missing: ${missing.join(", ")})` : "";
 
   if (first && !st.mycall) openSettings(true);
-  if (first || st.team_badges !== shownBadges) renderDecodes();
+  if (first || st.team_badges !== shownBadges || st.miles !== shownMiles) renderDecodes();
   shownBadges = st.team_badges;
+  shownMiles = st.miles;
 }
 
 function renderBandMenu() {
@@ -380,6 +382,9 @@ function noteCallers(b) {
   for (const d of b.items) {
     const call = d.p.from;
     if (!d.to_me || !call || sameStation(call, dx)) continue;
+    // A guessed decode (see "uncertain" in the engine) never raises a new alert:
+    // it's often noise. A real caller's next message usually decodes cleanly.
+    if (d.uncertain && !callers.has(call)) continue;
     if (dismissed.has(call) && b.period - dismissed.get(call) < CALLER_TIMEOUT) continue;
     const c = callers.get(call);
     if (c) { c.d = d; c.last = b.period; c.count++; }
@@ -567,7 +572,8 @@ function renderDecodes(freshPeriod) {
     if (!items.length) continue;
     const otherBand = b.band && nowBand && b.band !== nowBand;
     // Messages to me first, then the rest by frequency.
-    items.sort((a, c) => (c.to_me - a.to_me) || a.freq - c.freq);
+    const meFirst = (d) => d.to_me && !d.uncertain;
+    items.sort((a, c) => (meFirst(c) - meFirst(a)) || a.freq - c.freq);
     const t = b.time;
     html += `<div class="period-head${otherBand ? " other-band" : ""}"><span>${t.slice(0, 2)}:${t.slice(2, 4)}:${t.slice(4)}</span>
       <span class="slot">${b.period % 2 ? ":15/:45" : ":00/:30"}</span>
@@ -575,14 +581,16 @@ function renderDecodes(freshPeriod) {
       <span>${items.length} decode${items.length > 1 ? "s" : ""}</span></div>`;
     for (const d of items) {
       total++;
-      const cls = ["row", d.p.kind === "cq" && "cq", d.to_me && "to-me", d.from_me && "from-me",
+      const cls = ["row", d.p.kind === "cq" && "cq", d.to_me && !d.uncertain && "to-me",
+        d.uncertain && "uncertain", d.from_me && "from-me",
         dx && sameStation(d.p.from, dx) && !d.to_me && "is-dx", Math.abs(d.freq - rx) < 60 && "near-rx",
         b.period === freshPeriod && "fresh", otherBand && "other-band"].filter(Boolean).join(" ");
       const canAnswer = d.p.from && !d.from_me;
-      const meta = [d.p.cq_tag === "POTA" ? `<span class="badge pota" title="Activating a park (Parks on the Air)">POTA</span>` : "",
+      const meta = [d.uncertain ? `<span class="badge unsure" title="Uncertain: the decoder filled in part of this message by guessing (WSJT-X tags it ${esc(d.uncertain)}). Now and then that turns noise into a call that was never sent. Wait for a clean decode before replying.">?</span>` : "",
+        d.p.cq_tag === "POTA" ? `<span class="badge pota" title="Activating a park (Parks on the Air)">POTA</span>` : "",
         d.new ? `<span class="badge new">NEW</span>` : d.new_band ? `<span class="badge newband">NEW BAND</span>` : "",
         d.country ? `<span class="country" title="${esc(d.country)}">${esc(d.country)}</span>` : "",
-        d.km != null ? `<span class="km">${d.approx ? "≈" : ""}${d.km.toLocaleString()} km</span>` : ""].join("");
+        d.km != null ? `<span class="km">${dist(d.km, d.approx)}</span>` : ""].join("");
       html += `<div class="${cls}" data-i="${i}" data-msg="${esc(d.msg)}">
         <span class="snr" style="--c:${snrColor(d.snr)}">${d.snr > 0 ? "+" : ""}${d.snr}</span>
         <span class="dt">${d.dt.toFixed(1)}</span>
@@ -627,6 +635,13 @@ $("#filter").addEventListener("click", (e) => {
 
 const TX_NAMES = ["Tx1 · Grid", "Tx2 · Report", "Tx3 · Roger + report", "Tx4 · RR73", "Tx5 · 73", "Tx6 · CQ"];
 
+// Distances arrive in km; Settings → Display can show them in miles.
+function dist(km, approx, gap = "") {
+  const miles = S && S.settings.miles;
+  const n = Math.round(miles ? km / 1.609344 : km);
+  return `${approx ? "≈" + gap : ""}${n.toLocaleString()} ${miles ? "mi" : "km"}`;
+}
+
 function renderQso() {
   const q = S.qso;
   if (document.activeElement !== $("#dxCall")) $("#dxCall").value = q.dxcall;
@@ -636,7 +651,7 @@ function renderQso() {
   const bits = [];
   if (teamOf(q.dxcall)) bits.push(`${badge(q.dxcall)} ${esc(teamOf(q.dxcall))}`);
   if (info.country) bits.push(`<b>${esc(info.country)}</b>`);
-  if (info.km != null) bits.push(`${info.approx ? "≈ " : ""}${info.km.toLocaleString()} km`, `${info.az}°`);
+  if (info.km != null) bits.push(dist(info.km, info.approx, " "), `${info.az}°`);
   $("#dxInfo").innerHTML = q.dxcall ? (bits.join(" · ") || "&nbsp;")
     : (q.next === 5 && q.tx_enabled ? "Calling CQ — the first station to answer will be worked automatically."
       : "Click a station in Band activity to answer it, or call CQ.");
@@ -894,7 +909,7 @@ function renderLog() {
     const when = d.length === 8 ? `${MONTHS[+d.slice(4, 6) - 1]} ${+d.slice(6)}, ${d.slice(0, 4)}` : "";
     const utc = t.length >= 4 ? `${t.slice(0, 2)}:${t.slice(2, 4)}` : "";
     const where = [q.country && esc(q.country),
-      q.km != null && `${q.approx ? "≈" : ""}${q.km.toLocaleString()} km`].filter(Boolean).join(" · ");
+      q.km != null && dist(q.km, q.approx)].filter(Boolean).join(" · ");
     return `<div class="lrow" data-idx="${q.idx}" title="Click to edit the comment or power">
       <div class="l1"><span class="c">${esc(q.call)}</span><span class="g">${esc(q.grid)}</span>
         ${q.band ? `<span class="b">${esc(q.band)}</span>` : ""}

@@ -280,6 +280,7 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--border2)
 .badge.new { background: #5fe08f22; color: var(--cq); border: 1px solid #5fe08f55; }
 .badge.pota { background: #a6e37f1a; color: #a6e37f; border: 1px solid #a6e37f55; }
 .badge.newband { background: #7ea6ff1c; color: var(--info); border: 1px solid #7ea6ff44; }
+.badge.unsure { background: #ffffff10; color: var(--muted); border: 1px dashed #ffffff40; cursor: help; }
 .row .answer {
   display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
   background: var(--rx); color: #04121a; border: 0; border-radius: 7px;
@@ -292,6 +293,7 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--border2)
 .row.to-me::before { content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 3px; border-radius: 3px; background: var(--me); }
 .row.is-dx { border-color: #3dd6c455; background: #3dd6c40d; }
 .row.from-me { opacity: .6; }
+.row.uncertain .msg { opacity: .7; font-style: italic; }
 .row.near-rx .hz { color: var(--rx); }
 
 .empty { display: grid; place-items: center; text-align: center; padding: 70px 20px; color: var(--muted); }
