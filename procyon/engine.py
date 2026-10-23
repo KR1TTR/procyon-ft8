@@ -51,7 +51,7 @@ DEFAULTS = {
     "wf_start": 0, "wf_end": 3000,   # waterfall range in Hz, to match the radio's filter
     "log_reports_in_comment": False,  # add "FT8 Sent: -05 Rcvd: -12" to log comments
     "team_badges": True,             # raccoon next to Procyon's developer and testers
-    "miles": False,                  # show distances in miles instead of km
+    "units": "auto",                 # distances: "auto" (from your callsign), "km" or "mi"
     "dial_hz": 14_074_000, "tx_freq": 1500, "rx_freq": 1500,
     "remote_enabled": False, "remote_pin_hash": "",
     # WSJT-X compatible UDP for GridTracker, JTAlert, loggers (WSJT-X defaults)
@@ -82,7 +82,12 @@ class Engine:
         self.settings_path = os.path.join(data_dir, "settings.json")
         self.s = dict(DEFAULTS)
         if os.path.exists(self.settings_path):
-            self.s.update(json.load(open(self.settings_path)))
+            saved = json.load(open(self.settings_path))
+            self.s.update(saved)
+            if "miles" in saved:   # 0.9.20 had an on/off switch; "on" was a deliberate choice
+                if "units" not in saved:
+                    self.s["units"] = "mi" if saved["miles"] else "auto"
+                self.s.pop("miles")
         if force_demo:
             self.s["demo"] = True
         self.auth = Auth(data_dir)
@@ -198,6 +203,7 @@ class Engine:
         return {
             "type": "state",
             "settings": {k: v for k, v in self.s.items() if k not in SECRETS},
+            "home": self._home(),
             "qrz_key_set": bool(self.s["qrz_key"]), "tqsl_found": bool(self.tqsl),
             "uploads": self._upload_status(),
             "pota": self._pota_status(),
@@ -516,6 +522,23 @@ class Engine:
     BIG_COUNTRIES = {"United States", "Canada", "Alaska", "Asiatic Russia", "European Russia",
                      "Brazil", "Australia", "China", "Argentina", "India", "Kazakhstan",
                      "Mexico", "Indonesia", "Chile", "Peru", "Greenland"}
+
+    # Countries (cty.dat names) whose operators get American spelling, and those
+    # that measure distance in miles - picked from your own callsign.
+    US_ENTITIES = {"United States", "Alaska", "Hawaii", "Puerto Rico", "US Virgin Islands",
+                   "Guam", "Mariana Islands", "American Samoa", "Swains Island", "Navassa Island",
+                   "Desecheo Island", "Baker & Howland Islands", "Johnston Island",
+                   "Midway Island", "Palmyra & Jarvis Islands", "Wake Island"}
+    MILES_ENTITIES = US_ENTITIES | {"England", "Scotland", "Wales", "Northern Ireland",
+                                    "Isle of Man", "Jersey", "Guernsey"}
+
+    def _home(self):
+        """Where your callsign is from, and what that means for the display.
+        Without a callsign (or one cty.dat doesn't know): American, km."""
+        e = self.cty.lookup(self.s["mycall"]) if self.s["mycall"] else None
+        country = e["country"] if e else ""
+        return {"country": country, "us_spelling": not country or country in self.US_ENTITIES,
+                "miles": country in self.MILES_ENTITIES}
 
     def _station_info(self, call, grid):
         e = self.cty.lookup(call)
@@ -1097,6 +1120,8 @@ class Engine:
             self.s["mycall"] = self.s["mycall"].upper().strip()
             self.s["mygrid"] = self.s["mygrid"].strip()[:6]
             self.s["mygrid"] = self.s["mygrid"][:4].upper() + self.s["mygrid"][4:].lower()
+            if self.s["units"] not in ("auto", "km", "mi"):
+                self.s["units"] = "auto"
             self._clean_wf_range()
             self.save()
             self._set_station()

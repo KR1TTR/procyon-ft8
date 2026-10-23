@@ -44,8 +44,8 @@
   </div>
 
   <div class="status">
-    <span class="chip" id="chipAudio" title="Audio input level">
-      <span class="led"></span><span class="lbl">Audio</span>
+    <span class="chip" id="chipAudio" title="Receive audio from your radio - set it with the radio's AF/volume knob, aiming for about -30 dB">
+      <span class="led"></span><span class="lbl">RX audio</span>
       <span class="meter"><span id="meterFill"></span></span>
     </span>
     <span class="chip" id="chipRig"><span class="led"></span><span id="rigLabel">Rig</span></span>
@@ -186,7 +186,7 @@
             <div class="num"><input id="txWatts" type="number" min="0" step="1" placeholder="—"><span>W</span></div>
           </div>
           <div>
-            <label for="txLevel" title="Audio level sent to the radio - use Tune to set it">Audio drive <output id="txLevelOut"></output></label>
+            <label for="txLevel" title="Transmit audio sent to your radio - press Tune and watch the radio's ALC">TX audio drive <output id="txLevelOut"></output></label>
             <input id="txLevel" type="range" min="0" max="100">
           </div>
         </div>
@@ -227,6 +227,7 @@
         <button type="button" role="tab" id="tab-display" aria-controls="pane-display" data-tab="display">Display</button>
         <button type="button" role="tab" id="tab-network" aria-controls="pane-network" data-tab="network">Network</button>
         <button type="button" role="tab" id="tab-advanced" aria-controls="pane-advanced" data-tab="advanced">Advanced</button>
+        <button type="button" role="tab" id="tab-experimental" aria-controls="pane-experimental" data-tab="experimental">Experimental</button>
       </nav>
       <div class="set-panes">
       <div class="set-pane" role="tabpanel" id="pane-station" aria-labelledby="tab-station" data-tab="station" hidden>
@@ -321,7 +322,14 @@
         <fieldset>
           <legend>Display</legend>
           <label class="toggle"><input type="checkbox" name="team_badges"><span></span>Show Procyon's team badges when decoded</label>
-          <label class="toggle"><input type="checkbox" name="miles"><span></span>Show distances in miles (instead of kilometres)</label>
+          <label>Distances
+            <select name="units">
+              <option value="auto">Automatic (from your callsign)</option>
+              <option value="km" data-uk="Kilometres">Kilometers</option>
+              <option value="mi">Miles</option>
+            </select>
+          </label>
+          <p class="hint">Automatic: miles for US and UK callsigns, <span data-uk="kilometres">kilometers</span> elsewhere. Your callsign also picks American or British spelling.</p>
         </fieldset>
 
         <fieldset>
@@ -407,6 +415,21 @@
           <p class="hint">Turn this off only if you already run rigctld yourself, then enter its host and port.</p>
         </fieldset>
       </div>
+      <div class="set-pane" role="tabpanel" id="pane-experimental" aria-labelledby="tab-experimental" data-tab="experimental" hidden>
+        <p class="hint">Things being tried out. They may change or disappear in a later version.</p>
+        <fieldset>
+          <legend>Waterfall <span data-uk="colours">colors</span></legend>
+          <label><span data-uk="Colour">Color</span> scheme on this device
+            <select id="wfScheme">
+              <option value="lightning">Lightning (standard): blue to white-hot</option>
+              <option value="classic">Classic: yellow on dark navy</option>
+              <option value="tubeglow">Tube glow: a dim incandescent bulb</option>
+              <option value="ember">Ember: glowing coals</option>
+            </select>
+          </label>
+          <p class="hint">Changes straight away, no need to press Save; the waterfall starts afresh in the new <span data-uk="colours">colors</span>. Each device remembers its own choice.</p>
+        </fieldset>
+      </div>
       </div>
     </div>
 
@@ -483,7 +506,7 @@
         <li><b>cty.dat</b> by Jim Reisert AD1C: country lookups</li>
       </ul>
     </div>
-    <p class="about-licence">Free software under the GNU General Public License v3.<br>Only transmit with a valid amateur radio licence.</p>
+    <p class="about-licence">Free software under the GNU General Public License v3.<br>Only transmit with a valid amateur radio <span data-uk="licence">license</span>.</p>
   </form>
 </dialog>
 

@@ -86,9 +86,24 @@ let lastPeriodMark = -1;
 let rowsSinceMark = -1;      // waterfall rows since the current cycle started
 const LABEL_ROWS = 16;       // 2 s at 8 rows/s: room to write the label above the line
 
-const LUT = (() => {
-  const stops = [[0, 5, 8, 22], [.22, 14, 30, 82], [.42, 26, 88, 170], [.6, 40, 175, 205],
-                 [.76, 150, 232, 170], [.9, 255, 226, 122], [1, 255, 255, 255]];
+// Waterfall colour schemes (Settings → Experimental; chosen per device). Each is
+// a ramp of [position 0-1, R, G, B] stops from the noise floor up to the
+// strongest signals.
+const WF_SCHEMES = {
+  lightning: [[0, 5, 8, 22], [.22, 14, 30, 82], [.42, 26, 88, 170], [.6, 40, 175, 205],
+              [.76, 150, 232, 170], [.9, 255, 226, 122], [1, 255, 255, 255]],
+  classic:   [[0, 3, 6, 24], [.25, 6, 14, 48], [.45, 14, 32, 92], [.62, 60, 80, 110],
+              [.75, 220, 195, 40], [.9, 255, 236, 90], [1, 255, 252, 215]],
+  tubeglow:  [[0, 9, 7, 4], [.25, 26, 18, 7], [.42, 62, 42, 12], [.58, 132, 90, 22],
+              [.72, 206, 148, 46], [.86, 250, 204, 104], [1, 255, 242, 204]],
+  ember:     [[0, 8, 4, 3], [.25, 26, 9, 4], [.42, 62, 18, 5], [.58, 128, 40, 6],
+              [.72, 205, 82, 14], [.86, 255, 150, 48], [1, 255, 226, 170]],
+};
+let wfScheme = "lightning";
+try { wfScheme = localStorage.getItem("procyon.wfScheme") || wfScheme; } catch { /* default */ }
+if (!WF_SCHEMES[wfScheme]) wfScheme = "lightning";
+
+function makeLut(stops) {
   const lut = new Uint8ClampedArray(256 * 3);
   for (let i = 0; i < 256; i++) {
     const v = i / 255;
@@ -99,7 +114,21 @@ const LUT = (() => {
     for (let c = 0; c < 3; c++) lut[i * 3 + c] = a[c + 1] + (b[c + 1] - a[c + 1]) * t;
   }
   return lut;
-})();
+}
+let LUT = makeLut(WF_SCHEMES[wfScheme]);
+const wfBg = () => `rgb(${LUT[0]}, ${LUT[1]}, ${LUT[2]})`;   // the scheme's noise-floor colour
+
+function setWfScheme(name) {
+  if (!WF_SCHEMES[name]) return;
+  wfScheme = name;
+  LUT = makeLut(WF_SCHEMES[name]);
+  try { localStorage.setItem("procyon.wfScheme", name); } catch { /* not persisted */ }
+  document.documentElement.dataset.wf = name;
+  // Start the picture afresh, so old and new colours don't mix
+  wctx.fillStyle = wfBg();
+  wctx.fillRect(0, 0, wf.width, wf.height);
+}
+document.documentElement.dataset.wf = wfScheme;
 
 function sizeWaterfall() {
   const r = wf.getBoundingClientRect();
@@ -110,7 +139,7 @@ function sizeWaterfall() {
   old.width = wf.width; old.height = wf.height;
   if (wf.width) old.getContext("2d").drawImage(wf, 0, 0);
   wf.width = w; wf.height = h;
-  wctx.fillStyle = "#050816";
+  wctx.fillStyle = wfBg();
   wctx.fillRect(0, 0, w, h);
   if (old.width) wctx.drawImage(old, 0, 0, old.width, old.height, 0, 0, w, old.height * (w / old.width));
   renderScale();
@@ -277,7 +306,7 @@ function onState(m) {
   const range = `${wfLo()}-${wfHi()}`;
   if (range !== shownRange) {
     shownRange = range;
-    if (!first) { wctx.fillStyle = "#050816"; wctx.fillRect(0, 0, wf.width, wf.height); }
+    if (!first) { wctx.fillStyle = wfBg(); wctx.fillRect(0, 0, wf.width, wf.height); }
     renderScale();
     $("#txFreq").min = Math.max(100, wfLo());
     $("#txFreq").max = Math.min(3950, wfHi() - 50);
@@ -291,7 +320,7 @@ function onState(m) {
 
   const audio = $("#chipAudio");
   audio.className = `chip ${m.audio.error ? "bad" : m.audio.running ? "ok" : ""}`;
-  audio.title = m.audio.error ? `Audio error: ${m.audio.error}` : "Audio input level";
+  audio.title = m.audio.error ? `Audio error: ${m.audio.error}` : "Receive audio from your radio - set it with the radio's AF/volume knob, aiming for about -30 dB";
   const rig = $("#chipRig");
   rig.hidden = !m.rig.enabled;
   rig.className = `chip ${m.rig.connected ? "ok" : "bad"}`;
@@ -328,9 +357,10 @@ function onState(m) {
   $("#toolMissing").textContent = missing.length ? `(Missing: ${missing.join(", ")})` : "";
 
   if (first && !st.mycall) openSettings(true);
-  if (first || st.team_badges !== shownBadges || st.miles !== shownMiles) renderDecodes();
+  applySpelling(m.home.us_spelling);
+  if (first || st.team_badges !== shownBadges || useMiles() !== shownMiles) renderDecodes();
   shownBadges = st.team_badges;
-  shownMiles = st.miles;
+  shownMiles = useMiles();
 }
 
 function renderBandMenu() {
@@ -350,7 +380,7 @@ function onLevel(db) {
   // -60 dBFS .. 0 dBFS; ideal FT8 input sits around -30 dBFS.
   const pct = Math.max(0, Math.min(100, (db + 60) / 60 * 100));
   $("#meterFill").style.width = `${pct}%`;
-  $("#chipAudio").title = `Input level ${db.toFixed(0)} dBFS (aim for around -30)`;
+  $("#chipAudio").title = `Receive audio ${db.toFixed(0)} dB - set it with your radio's AF/volume knob, aiming for about -30`;
 }
 
 // --------------------------------------------------------------- decodes
@@ -635,9 +665,24 @@ $("#filter").addEventListener("click", (e) => {
 
 const TX_NAMES = ["Tx1 · Grid", "Tx2 · Report", "Tx3 · Roger + report", "Tx4 · RR73", "Tx5 · 73", "Tx6 · CQ"];
 
-// Distances arrive in km; Settings → Display can show them in miles.
+// Distances arrive in km. Settings → Display: miles, km, or "auto" - which
+// follows your callsign (miles in the US and UK).
+const useMiles = () => !!S && (S.settings.units === "mi" || (S.settings.units === "auto" && S.home.miles));
+
+// Spelling follows your callsign too: the page is written in American English,
+// and the few words that differ carry their British form in data-uk.
+let shownSpelling = null;
+function applySpelling(us) {
+  if (us === shownSpelling) return;
+  shownSpelling = us;
+  for (const el of document.querySelectorAll("[data-uk]")) {
+    if (el.dataset.us === undefined) el.dataset.us = el.textContent;
+    el.textContent = us ? el.dataset.us : el.dataset.uk;
+  }
+}
+
 function dist(km, approx, gap = "") {
-  const miles = S && S.settings.miles;
+  const miles = useMiles();
   const n = Math.round(miles ? km / 1.609344 : km);
   return `${approx ? "≈" + gap : ""}${n.toLocaleString()} ${miles ? "mi" : "km"}`;
 }
@@ -1228,7 +1273,7 @@ function openSettings(welcome) {
   for (const el of form.elements) {
     if (!el.name || !(el.name in st)) continue;
     if (el.type === "checkbox") el.checked = !!st[el.name];
-    else if (el.tagName !== "SELECT" || ["ptt", "depth", "rig_mode"].includes(el.name)) el.value = st[el.name];
+    else if (el.tagName !== "SELECT" || ["ptt", "depth", "rig_mode", "units"].includes(el.name)) el.value = st[el.name];
     else if (el.name === "rig_baud") setSelect(el, st.rig_baud);
   }
   // Remote access: only editable on the computer running Procyon.
@@ -1246,6 +1291,7 @@ function openSettings(welcome) {
   $("#importNotes").textContent = "";
   $("#chimeToggle").checked = chimeOn;
   $("#layoutMode").value = layoutMode;
+  $("#wfScheme").value = wfScheme;
   showRigModel(st.rig_model);
   send({ type: "devices" });
   dlg.showModal();
@@ -1442,6 +1488,7 @@ function openAbout() {
 $("#brandBtn").addEventListener("click", openAbout);
 $("#aboutLink").addEventListener("click", () => { $("#settings").close(); openAbout(); });
 $("#layoutMode").addEventListener("change", (e) => saveMode(e.target.value));
+$("#wfScheme").addEventListener("change", (e) => setWfScheme(e.target.value));
 $("#resetLayout").addEventListener("click", () => {
   sizes = { w: {}, h: {} };
   saveSizes();

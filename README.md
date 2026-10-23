@@ -2,7 +2,7 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 0.9.20** · 22 October 2026
+**Version 0.9.22** · 22 October 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
 A simpler, friendlier FT8 station. Procyon uses WSJT-X's own decoder (`jt9`)
@@ -16,11 +16,11 @@ the Hamlib copy it includes): https://wsjt.sourceforge.io
 
 | System | Download | How |
 |---|---|---|
-| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.20_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.20_all.deb`. Then start **Procyon FT8** from your menu, or run `procyon`. |
-| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.20-arch.tar.gz` | `tar xf procyon-0.9.20-arch.tar.gz`, `cd procyon-0.9.20-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
-| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.20-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
-| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.20-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
-| Windows 10/11 (64-bit) | `Procyon-0.9.20-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
+| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.22_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.22_all.deb`. Then start **Procyon FT8** from your menu, or run `procyon`. |
+| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.22-arch.tar.gz` | `tar xf procyon-0.9.22-arch.tar.gz`, `cd procyon-0.9.22-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
+| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.22-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
+| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.22-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
+| Windows 10/11 (64-bit) | `Procyon-0.9.22-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
 
 Add `--demo` (or use **Procyon Demo.bat** on Windows, or *Settings → Advanced →
 Demo band*) to try it with a simulated band: nothing is transmitted. Close WSJT-X while using Procyon;
@@ -96,8 +96,10 @@ transmitting.
   the right slot for you.
 - **Radio power:** your rig's output in watts. It's written to every QSO in the log
   (ADIF `TX_PWR`).
-- **Audio drive:** the audio level sent to the radio. Use *Tune* to send a steady
-  carrier while you set ALC.
+- **TX audio drive:** the audio level sent to the radio when you transmit. Use
+  *Tune* to send a steady carrier while you watch the radio's ALC. (The **RX
+  audio** meter at the top is the other direction: the radio's audio coming in.
+  Set it with the radio's AF/volume knob, aiming for about -30 dB.)
 - **Log note:** an optional comment for the current QSO (ADIF `COMMENT`). Typing
   it after the QSO is logged updates the log entry.
 - **Grids and distances:** Procyon remembers the grid of every station it hears
@@ -239,6 +241,19 @@ and Procyon B. (Earlier versions were called Skywave; settings and logbooks move
 across automatically on first start.)
 
 ## Roadmap
+
+0.9.22: Procyon follows your callsign. Distances default to miles for US and
+UK calls and kilometres everywhere else (*Settings → Display → Distances*:
+Automatic, Kilometers or Miles), and the few words spelled differently -
+color/colour, license/licence, kilometer/kilometre - use American spelling for
+US calls and British spelling for everyone else.
+
+0.9.21: a new **Experimental** tab in Settings, for things being tried out.
+First up: waterfall colour schemes - *Lightning* (the standard look), *Classic*
+(yellow on dark navy), *Tube glow* (a dim incandescent bulb) and *Ember*
+(glowing coals), chosen per device. And clearer labels: the meter at the top is
+now **RX audio** (set it with your radio's AF/volume) and the slider is **TX
+audio drive** (set it with Tune while watching ALC).
 
 0.9.20: distances in **miles** if you prefer (*Settings → Display*), and a
 new **Advanced** tab in Settings for things most stations never touch: the
