@@ -9,7 +9,7 @@ PROCYON FT8 for Mac
 3. First launch: this copy isn't signed with an Apple Developer ID, so macOS
    will say it can't verify it. Open Procyon once, then go to
        System Settings > Privacy & Security
-   scroll down and click "Open Anyway" next to Procyon FT8, then confirm.
+   scroll down and click "Open Anyway" next to Procyon, then confirm.
    You only need to do this once.
 
    (Terminal alternative:  xattr -cr /Applications/Procyon.app )
@@ -23,3 +23,8 @@ without a radio; nothing is transmitted.
 
 Procyon's settings and log are in  ~/Library/Application Support/Procyon
 Its own log (for troubleshooting) is in  ~/Library/Logs/Procyon
+
+USE AT YOUR OWN RISK: Procyon is provided as is, without warranty of any
+kind. Its author accepts no responsibility for any damage, loss or harm
+from its use, to equipment, data, logbooks or otherwise. You are
+responsible for how your station transmits.

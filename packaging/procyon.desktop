@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
-Name=Procyon FT8
-GenericName=FT8 station
+Name=Procyon
+GenericName=FT8 station (amateur radio)
 Comment=A friendly FT8 station built on the WSJT-X decoder
 Exec=procyon
 Icon=procyon

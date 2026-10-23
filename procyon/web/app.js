@@ -26,7 +26,7 @@ function showStopped() {
   stopped = true;
   $("#offline").firstElementChild.outerHTML = `<div class="stopped">
     <img src="/static/icon.svg" alt=""><b>Procyon has stopped</b>
-    ${isLocal ? "You can close this tab. To start again, open Procyon FT8 from your menu."
+    ${isLocal ? "You can close this tab. To start again, open Procyon from your menu."
     : "It was stopped on the station computer."}<br>This page reconnects by itself when Procyon is running again.</div>`;
   $("#offline").hidden = false;
 }
@@ -129,6 +129,21 @@ function setWfScheme(name) {
   wctx.fillRect(0, 0, wf.width, wf.height);
 }
 document.documentElement.dataset.wf = wfScheme;
+
+// Colour palettes (Settings → Experimental; per device): <html data-palette>
+// switches the CSS variables in style.css. "night" is the standard look.
+const PALETTES = ["night", "classic", "radio", "campfire"];
+let palette = "night";
+try { palette = localStorage.getItem("procyon.palette") || palette; } catch { /* default */ }
+if (!PALETTES.includes(palette)) palette = "night";
+function setPalette(name) {
+  if (!PALETTES.includes(name)) return;
+  palette = name;
+  try { localStorage.setItem("procyon.palette", name); } catch { /* not persisted */ }
+  if (name === "night") delete document.documentElement.dataset.palette;
+  else document.documentElement.dataset.palette = name;
+}
+setPalette(palette);
 
 function sizeWaterfall() {
   const r = wf.getBoundingClientRect();
@@ -445,7 +460,7 @@ function renderCallers() {
   // Only redraw when something changed, so a click never lands on a replaced button.
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
   document.title = callers.size
-    ? `${[...callers.keys()][0]} calling${callers.size > 1 ? ` (+${callers.size - 1})` : ""} – Procyon FT8` : "Procyon FT8";
+    ? `${[...callers.keys()][0]} calling${callers.size > 1 ? ` (+${callers.size - 1})` : ""} – Procyon` : "Procyon";
 }
 
 $("#callers").addEventListener("click", (e) => {
@@ -486,7 +501,7 @@ document.addEventListener("pointerdown", () => {
   }
 }, { once: true });
 
-const snrColor = (s) => s >= 0 ? "#5fe08f" : s >= -10 ? "#9be36b" : s >= -16 ? "#ffd166" : "#ff8a5b";
+const snrColor = (s) => `var(--snr${s >= 0 ? 1 : s >= -10 ? 2 : s >= -16 ? 3 : 4})`;   // palette colours
 
 // Procyon's team. Every copy knows these calls and puts a small raccoon next to
 // them - shown only on this screen, nothing extra is transmitted.
@@ -842,6 +857,11 @@ function renderUploads() {
       title="Upload ${u.pending} new QSO${u.pending === 1 ? "" : "s"} to ${esc(u.name)}">Upload to ${esc(u.name)}<span class="n">${u.pending}</span></button>`;
   }).join("");
   if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }   // keep clicks landing
+  // The demo log only ever leaves as plain text, so it can't be imported anywhere
+  const exp = $("#exportLog"), demo = !!S.settings.demo;
+  exp.textContent = demo ? "Export practice log (.txt)" : "Export ADIF";
+  exp.title = demo ? "Demo band: simulated QSOs, saved as a plain text list - not a logbook file, so they can't be uploaded anywhere by mistake"
+    : "Download your logbook as an ADIF file";
 }
 $("#uploadBtns").addEventListener("click", (e) => {
   const b = e.target.closest("[data-upload]");
@@ -1292,6 +1312,7 @@ function openSettings(welcome) {
   $("#chimeToggle").checked = chimeOn;
   $("#layoutMode").value = layoutMode;
   $("#wfScheme").value = wfScheme;
+  $("#palette").value = palette;
   showRigModel(st.rig_model);
   send({ type: "devices" });
   dlg.showModal();
@@ -1489,6 +1510,7 @@ $("#brandBtn").addEventListener("click", openAbout);
 $("#aboutLink").addEventListener("click", () => { $("#settings").close(); openAbout(); });
 $("#layoutMode").addEventListener("change", (e) => saveMode(e.target.value));
 $("#wfScheme").addEventListener("change", (e) => setWfScheme(e.target.value));
+$("#palette").addEventListener("change", (e) => setPalette(e.target.value));
 $("#resetLayout").addEventListener("click", () => {
   sizes = { w: {}, h: {} };
   saveSizes();

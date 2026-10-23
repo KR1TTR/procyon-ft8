@@ -7,7 +7,7 @@ transparent background).
 
 | File | Use it for |
 |---|---|
-| `procyon-logo-stacked-dark-bg-flat.svg` / `.png` | **Apparel: caps and shirts.** Raccoon above "Procyon FT8", for dark fabric, made for embroidery. |
+| `procyon-logo-stacked-dark-bg-flat.svg` / `.png` | **Apparel: caps and shirts.** Raccoon above "Procyon", for dark fabric, made for embroidery. |
 | `procyon-logo-stacked-dark-bg.svg` / `.png` | Stacked, for printing (shirts, stickers) on dark fabric. |
 | `procyon-logo-stacked-light-bg…` | Stacked, for light fabric: dark lettering. |
 | `procyon-logo-dark-bg.svg` / `.png` | The long logo, as in the app, for dark backgrounds (banners, web). |

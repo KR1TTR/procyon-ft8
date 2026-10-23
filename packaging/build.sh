@@ -33,7 +33,7 @@ build_deb() {
   copy_app "$d/usr/lib/procyon"
   install -Dm755 /dev/stdin "$d/usr/bin/procyon" <<EOF
 #!/bin/sh
-# Procyon FT8 $VERSION
+# Procyon $VERSION
 export PYTHONPATH=/usr/lib/procyon\${PYTHONPATH:+:\$PYTHONPATH}
 exec python3 -m procyon "\$@"
 EOF
@@ -41,7 +41,7 @@ EOF
   install -Dm644 "$ROOT/procyon/web/icon.svg" "$d/usr/share/icons/hicolor/scalable/apps/procyon.svg"
   install -Dm644 "$ROOT/README.md" "$d/usr/share/doc/procyon/README.md"
   install -Dm644 /dev/stdin "$d/usr/share/doc/procyon/copyright" <<EOF
-Procyon FT8 $VERSION ($DATE)
+Procyon $VERSION ($DATE)
 Created by Justin Stapleton, KR1TTR, with Claude Code (Claude Opus 5.5).
 
 License: GPL-3+
@@ -121,9 +121,9 @@ build_windows_zip() {
   for w in "$CACHE"/wheels-win/*.whl; do unzip -qo "$w" -d "$d/$top/python/Lib/site-packages"; done
   # 3. Procyon and its launchers
   copy_app "$d/$top"
-  cp "$PKG/Procyon.bat" "$PKG/Procyon Demo.bat" "$ROOT/LICENSE" "$d/$top/"
+  cp "$PKG/Procyon.bat" "$PKG/Procyon DEMO ONLY - no radio.bat" "$ROOT/LICENSE" "$d/$top/"
   sed "s/{VERSION}/$VERSION/; s/{DATE}/$DATE/" "$PKG/README-Windows.txt" > "$d/$top/README.txt"
-  crlf "$d/$top/Procyon.bat" "$d/$top/Procyon Demo.bat" "$d/$top/README.txt" "$d/$top/LICENSE"
+  crlf "$d/$top/Procyon.bat" "$d/$top/Procyon DEMO ONLY - no radio.bat" "$d/$top/README.txt" "$d/$top/LICENSE"
   rm -f "$DIST/$top.zip"
   (cd "$d" && zip -qr "$DIST/$top.zip" "$top")
   echo "  built dist/$top.zip ($(du -h "$DIST/$top.zip" | cut -f1))"

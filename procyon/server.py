@@ -58,6 +58,9 @@ async def ws_handler(request):
 
 async def download_log(request):
     eng: Engine = request.app["engine"]
+    if eng.s["demo"]:   # the practice log only ever leaves as plain text, never ADIF
+        return web.Response(text=eng.practice_log_text(), content_type="text/plain", headers={
+            "Content-Disposition": 'attachment; filename="Procyon-DEMO-practice-log.txt"'})
     if not os.path.exists(eng.logbook.path):
         raise web.HTTPNotFound()
     return web.FileResponse(eng.logbook.path, headers={
@@ -194,7 +197,7 @@ def port_free(host, port) -> bool:
 def main():
     ap = argparse.ArgumentParser(description="Procyon - a friendly FT8 station")
     ap.add_argument("--version", action="version",
-                    version=f"Procyon FT8 {__version__} ({RELEASE_DATE}) - created by {AUTHORS}")
+                    version=f"Procyon {__version__} ({RELEASE_DATE}) - created by {AUTHORS}")
     ap.add_argument("--port", type=int, default=8073)
     ap.add_argument("--host", default=None,
                     help="address to listen on (default: this computer only, or the "
@@ -275,7 +278,7 @@ def main():
         eng.on_quit = quit_procyon
         await listener.apply(eng.s["remote_enabled"])
         url = f"http://127.0.0.1:{args.port}/"
-        print(f"\n  Procyon FT8 {__version__} is running at {url}")
+        print(f"\n  Procyon {__version__} is running at {url}")
         if listener.host != "127.0.0.1":
             for u in eng.state()["remote"]["urls"]:
                 print(f"  Other devices on your network: {u}  (PIN required)")

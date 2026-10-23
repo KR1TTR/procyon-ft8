@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Procyon FT8 - setup for the Linux zip (any distribution).
+# Procyon - setup for the Linux zip (any distribution).
 # Checks what Procyon needs, says exactly what to install if anything is
 # missing, and adds Procyon to your applications menu. Needs no admin rights.
 set -u
@@ -9,7 +9,7 @@ say() { printf '%s\n' "$*"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 say ""
-say "  Procyon FT8 setup"
+say "  Procyon setup"
 say "  -----------------"
 
 # Which package manager, for the install hints
@@ -57,7 +57,7 @@ cp "$HERE/procyon/web/icon.svg" "$ICONS/procyon.svg"
 sed "s|^Exec=.*|Exec=\"$HERE/run.sh\"|" "$HERE/procyon.desktop" > "$APPS/procyon.desktop"
 chmod +x "$HERE/run.sh"
 have update-desktop-database && update-desktop-database "$APPS" >/dev/null 2>&1
-say "  ✓ Added Procyon FT8 to your applications menu"
+say "  ✓ Added Procyon to your applications menu"
 
 say ""
 if [ ${#missing[@]} -gt 0 ]; then

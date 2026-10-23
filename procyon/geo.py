@@ -152,7 +152,7 @@ class Logbook:
         return any(q.get("call", "").upper() == call and
                    (band is None or q.get("band", "").lower() == band) for q in self.qsos)
 
-    HEADER = (f"Procyon FT8 ADIF export\n<adif_ver:5>3.1.4 <programid:7>Procyon "
+    HEADER = (f"Procyon ADIF export\n<adif_ver:5>3.1.4 <programid:7>Procyon "
               f"<programversion:{len(__version__)}>{__version__} <eoh>\n")
 
     @staticmethod

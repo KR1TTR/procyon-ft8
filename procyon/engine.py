@@ -19,7 +19,8 @@ from . import AUTHORS, RELEASE_DATE, __version__
 from .audio import choose_backend
 from .auth import PIN_RE, Auth, lan_addresses
 from .demo import DemoBand
-from .geo import BANDS, DEMO_MARK, DEMO_MARKS, Cty, Logbook, band_of, distance_bearing, grid_to_latlon, utc_now
+from .geo import (BANDS, DEMO_MARK, DEMO_MARKS, Cty, Logbook, band_of, distance_bearing, grid_to_latlon,
+                  strip_demo_mark, utc_now)
 from .qso import Qso
 from . import pota, uploads, wsjtx_install
 from .radio_detect import detect_radios, test_rig
@@ -88,8 +89,9 @@ class Engine:
                 if "units" not in saved:
                     self.s["units"] = "mi" if saved["miles"] else "auto"
                 self.s.pop("miles")
-        if force_demo:
-            self.s["demo"] = True
+        # The demo band never carries over: every launch starts live, unless
+        # started with --demo (e.g. the Windows "DEMO ONLY" launcher).
+        self.s["demo"] = bool(force_demo)
         self.auth = Auth(data_dir)
         self.port = 8073
         self.on_remote_change = None   # set by the server: start/stop listening on the network
@@ -971,10 +973,17 @@ class Engine:
         out["today"] = pota.count_on(qsos, utc_now().strftime("%Y%m%d"))
         out["total"] = len(qsos)
         out["folder"] = self._pota_dir()
+        if self.s["demo"]:   # practice park logs: plain text only, never ADIF
+            out["files"] = [{"park": p, "name": self._pota_practice_name(p),
+                             "count": len(self._pota_qsos(p))} for p in parks]
+            return out
         out["files"] = [{"park": p, "name": os.path.basename(self._pota_path(p)),
                          "count": len(Logbook(self._pota_path(p)).qsos)
                          if os.path.exists(self._pota_path(p)) else 0} for p in parks]
         return out
+
+    def _pota_practice_name(self, park: str) -> str:
+        return os.path.splitext(os.path.basename(self._pota_path(park)))[0] + "-DEMO-practice.txt"
 
     def _pota_dir(self) -> str:
         """Park logs live next to the main log; demo QSOs get their own folder."""
@@ -987,8 +996,8 @@ class Engine:
         """Keep each park's own log file up to date (after every QSO or edit).
         The QSOs stay in the main log too - that's what QRZ/LoTW uploads use."""
         parks, start = self.s["pota_parks"], self.s["pota_start"]
-        if not (parks and start and self.s["mycall"]):
-            return
+        if not (parks and start and self.s["mycall"]) or self.s["demo"]:
+            return   # demo park logs are never written as ADIF (see pota_export)
         for park in parks:
             current = [uploads.for_upload(q) for q in self._pota_qsos(park)]
             path = self._pota_path(park)
@@ -1007,11 +1016,39 @@ class Engine:
         park = park.upper()
         if park not in self.s["pota_parks"] or not self.s["pota_start"]:
             return None
+        if self.s["demo"]:
+            return self._pota_practice_name(park), self.practice_log_text(
+                self._pota_qsos(park), f"POTA park {park}")
         self._pota_save()
         path = self._pota_path(park)
         if not os.path.exists(path):
             return None
         return os.path.basename(path), open(path, encoding="utf-8").read()
+
+    def practice_log_text(self, qsos=None, what="logbook") -> str:
+        """The demo log as plain text, never ADIF: no logbook program or site can
+        import it, so simulated QSOs can't end up on QRZ, LoTW or POTA by mistake."""
+        qsos = self.logbook.qsos if qsos is None else qsos
+        n = len(qsos)
+        lines = [
+            "DEMO PRACTICE LOG - SIMULATED STATIONS, NOT REAL QSOs",
+            "Made with Procyon's demo band: nothing was transmitted or received.",
+            "Do not upload or copy these into QRZ, LoTW, POTA or any other logbook.",
+            "",
+            f"{what.capitalize() if what == 'logbook' else what} - {self.s['mycall'] or 'no callsign'} - "
+            f"{n} simulated QSO{'' if n == 1 else 's'} - exported {utc_now():%Y-%m-%d %H:%M} UTC",
+            "",
+            f"{'Date':10}  {'UTC':5}  {'Call':12} {'Grid':6} {'Band':5} {'Sent':>4}  {'Rcvd':>4}  Note",
+        ]
+        for q in qsos:
+            d, t = q.get("qso_date", ""), q.get("time_on", "")
+            lines.append(f"{d[:4]}-{d[4:6]}-{d[6:8]}  {t[:2]}:{t[2:4]}  {q.get('call', ''):12} "
+                         f"{q.get('gridsquare', ''):6} {q.get('band', ''):5} {q.get('rst_sent', ''):>4}  "
+                         f"{q.get('rst_rcvd', ''):>4}  {strip_demo_mark(q.get('comment', ''))}".rstrip())
+        if not qsos:
+            lines.append("(no QSOs yet)")
+        lines += ["", "DEMO PRACTICE LOG - not real QSOs. Switch the demo band off to log real contacts."]
+        return "\r\n".join(lines) + "\r\n"   # Windows line endings: opens cleanly in Notepad too
 
     # ---------------------------------------------------- online logbooks
 

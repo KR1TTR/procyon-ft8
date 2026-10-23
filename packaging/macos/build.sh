@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build Procyon FT8 for macOS: a universal (Apple Silicon + Intel) Procyon.app with
+# Build Procyon for macOS: a universal (Apple Silicon + Intel) Procyon.app with
 # its own Python, then a drag-to-install .dmg and a double-click .pkg installer.
 #
 #   packaging/macos/build.sh            # app + dmg + pkg, into dist/
@@ -128,8 +128,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>CFBundleName</key><string>Procyon FT8</string>
-  <key>CFBundleDisplayName</key><string>Procyon FT8</string>
+  <key>CFBundleName</key><string>Procyon</string>
+  <key>CFBundleDisplayName</key><string>Procyon</string>
   <key>CFBundleIdentifier</key><string>org.procyon.ft8</string>
   <key>CFBundleExecutable</key><string>Procyon</string>
   <key>CFBundleIconFile</key><string>Procyon</string>
@@ -142,7 +142,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSMicrophoneUsageDescription</key>
   <string>Procyon listens to your radio's sound card input to decode FT8 signals.</string>
   <key>NSHumanReadableCopyright</key>
-  <string>Procyon FT8 is free software under the GNU GPL v3. Created by Justin Stapleton, KR1TTR.</string>
+  <string>Procyon is free software under the GNU GPL v3. Created by Justin Stapleton, KR1TTR.</string>
 </dict></plist>
 PLIST
 cp "$ROOT/LICENSE" "$APP/Contents/Resources/LICENSE.txt"
@@ -197,7 +197,7 @@ cp -a "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 cp "$HERE/Read Me First.txt" "$STAGE/"
 rm -f "$DMG"
-hdiutil create -quiet -volname "Procyon FT8 $VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO -imagekey zlib-level=9 "$DMG"
+hdiutil create -quiet -volname "Procyon $VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO -imagekey zlib-level=9 "$DMG"
 if [ "$SIGN_ID" != - ]; then codesign --force --sign "$SIGN_ID" --timestamp "$DMG"; fi
 
 # ---------------------------------------------------------------- PKG

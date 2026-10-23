@@ -1,4 +1,4 @@
-// Procyon FT8 - macOS launcher.
+// Procyon - macOS launcher.
 // A small native app: it starts the bundled Python server, gives Procyon a Dock
 // icon and a Quit command (so the server and any transmission always stop with
 // it), and opens the web interface in the default browser.
@@ -27,7 +27,7 @@ final class Delegate: NSObject, NSApplicationDelegate {
         let main = NSMenu()
         let appItem = NSMenuItem(); main.addItem(appItem)
         let app = NSMenu(); appItem.submenu = app
-        app.addItem(withTitle: "About Procyon FT8", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        app.addItem(withTitle: "About Procyon", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         app.addItem(.separator())
         let open = app.addItem(withTitle: "Open Procyon in Browser", action: #selector(openBrowser), keyEquivalent: "o")
         open.target = self
@@ -36,9 +36,9 @@ final class Delegate: NSObject, NSApplicationDelegate {
         let logs = app.addItem(withTitle: "Show Log", action: #selector(showLog), keyEquivalent: "")
         logs.target = self
         app.addItem(.separator())
-        app.addItem(withTitle: "Hide Procyon FT8", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        app.addItem(withTitle: "Hide Procyon", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         app.addItem(.separator())
-        app.addItem(withTitle: "Quit Procyon FT8", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        app.addItem(withTitle: "Quit Procyon", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         NSApp.mainMenu = main
     }
 
@@ -128,7 +128,7 @@ final class Delegate: NSObject, NSApplicationDelegate {
 
     func fail(_ text: String) {
         let a = NSAlert()
-        a.messageText = "Procyon FT8"
+        a.messageText = "Procyon"
         a.informativeText = text
         a.addButton(withTitle: "Quit")
         a.addButton(withTitle: "Show Log")

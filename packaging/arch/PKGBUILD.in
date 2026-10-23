@@ -1,5 +1,5 @@
 # Maintainer: Justin Stapleton, KR1TTR <cq@kr1ttr.radio>
-# Procyon FT8 - built from the Linux zip, which sits next to this file.
+# Procyon - built from the Linux zip, which sits next to this file.
 #   makepkg -si      (builds and installs it)
 pkgname=procyon
 pkgver=@VERSION@
@@ -22,7 +22,7 @@ package() {
   python -m compileall -q -d /usr/lib/procyon/procyon "$pkgdir/usr/lib/procyon/procyon"
   install -Dm755 /dev/stdin "$pkgdir/usr/bin/procyon" <<END
 #!/bin/sh
-# Procyon FT8 $pkgver
+# Procyon $pkgver
 export PYTHONPATH=/usr/lib/procyon\${PYTHONPATH:+:\$PYTHONPATH}
 exec python3 -m procyon "\$@"
 END
