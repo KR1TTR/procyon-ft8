@@ -23,7 +23,10 @@ SERVICES = {
     "qrz": ("QRZ", "qrzcom_qso_upload_status", "qrzcom_qso_upload_date"),
     "lotw": ("LoTW", "lotw_qsl_sent", "lotw_qslsdate"),
 }
-TRACKING = {f for _, sent, date in SERVICES.values() for f in (sent, date)}
+# "Export only new QSOs" (Settings → Advanced) remembers what was exported in an
+# app-defined ADIF field, which other programs ignore.
+EXPORTED_FIELD = "app_procyon_exported"
+TRACKING = {f for _, sent, date in SERVICES.values() for f in (sent, date)} | {EXPORTED_FIELD}
 
 QRZ_URL = os.environ.get("PROCYON_QRZ_URL", "https://logbook.qrz.com/api")
 USER_AGENT = f"Procyon/{__version__} (FT8; github.com/KR1TTR/procyon-ft8)"

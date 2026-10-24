@@ -53,6 +53,7 @@ DEFAULTS = {
     "log_reports_in_comment": False,  # add "FT8 Sent: -05 Rcvd: -12" to log comments
     "team_badges": True,             # raccoon next to Procyon's developer and testers
     "units": "auto",                 # distances: "auto" (from your callsign), "km" or "mi"
+    "export_new_only": False,        # Export ADIF gives only QSOs not exported before
     "dial_hz": 14_074_000, "tx_freq": 1500, "rx_freq": 1500,
     "remote_enabled": False, "remote_pin_hash": "",
     # WSJT-X compatible UDP for GridTracker, JTAlert, loggers (WSJT-X defaults)
@@ -206,6 +207,7 @@ class Engine:
             "type": "state",
             "settings": {k: v for k, v in self.s.items() if k not in SECRETS},
             "home": self._home(),
+            "export": {"new_only": self.s["export_new_only"], "pending": len(self._not_exported())},
             "qrz_key_set": bool(self.s["qrz_key"]), "tqsl_found": bool(self.tqsl),
             "uploads": self._upload_status(),
             "pota": self._pota_status(),
@@ -1050,6 +1052,31 @@ class Engine:
         lines += ["", "DEMO PRACTICE LOG - not real QSOs. Switch the demo band off to log real contacts."]
         return "\r\n".join(lines) + "\r\n"   # Windows line endings: opens cleanly in Notepad too
 
+    # ------------------------------------------------- export new QSOs only
+
+    def _not_exported(self) -> list[int]:
+        return [i for i, q in enumerate(self.logbook.qsos) if not q.get(uploads.EXPORTED_FIELD)]
+
+    def export_new(self):
+        """(file name, ADIF text, count) of the QSOs not exported before, marked as
+        exported now - for importing into another logging program (e.g. N3FJP)
+        without bringing in the same QSOs twice."""
+        idxs = self._not_exported()
+        now = utc_now()
+        qsos = [uploads.for_upload(self.logbook.qsos[i]) for i in idxs]
+        text = Logbook.HEADER + "".join(Logbook._record(q) for q in qsos)
+        self.logbook.mark(idxs, {uploads.EXPORTED_FIELD: now.strftime("%Y%m%d")})
+        return f"procyon-new-qsos-{now:%Y%m%d-%H%M}.adi", text, len(idxs)
+
+    def _export_mark_all(self) -> dict:
+        """For switching the option on when the other program already has them all."""
+        idxs = self._not_exported()
+        self.logbook.mark(idxs, {uploads.EXPORTED_FIELD: utc_now().strftime("%Y%m%d")})
+        n = len(idxs)
+        return {"type": "export_marked", "text": (
+            f"✓ {n} QSO{'' if n == 1 else 's'} marked as exported - the next export starts after them."
+            if n else "✓ Every QSO was already marked as exported.")}
+
     # ---------------------------------------------------- online logbooks
 
     def _logbook_settings(self, new: dict):
@@ -1263,6 +1290,12 @@ class Engine:
                 self.toast("That can only be done on the computer running Procyon", "warn")
                 return None
             return await self._qrz_check(str(m.get("key", "")).strip())
+        elif t == "export_mark_all":
+            if self.s["demo"]:
+                return {"type": "export_marked", "text": "Not in demo mode - switch the demo band off first."}
+            out = self._export_mark_all()
+            await self.push_state()
+            return out
         elif t == "tx_level":
             self.s["tx_level"] = max(0, min(100, int(m["v"])))
             self.save()

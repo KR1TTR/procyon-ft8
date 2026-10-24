@@ -406,6 +406,18 @@
         </fieldset>
 
         <fieldset>
+          <legend>Logbook export</legend>
+          <label class="toggle"><input type="checkbox" name="export_new_only"><span></span>Export ADIF: only QSOs not exported before</label>
+          <p class="hint">For importing into another logging program (e.g. N3FJP): each export then holds only the QSOs logged since the last one, so the same QSO is never imported twice. The Export button shows how many are new. Press Save to switch it on or off.</p>
+          <div class="radio-tools">
+            <button type="button" class="btn ghost small" id="exportMarkAll">Mark every QSO as already exported</button>
+            <a class="btn ghost small" href="/log.adi?all=1" download>Download the whole log (ADIF)</a>
+            <span class="hint" id="exportMsg"></span>
+          </div>
+          <p class="hint">Switching it on for the first time and your logging program already has your QSOs? Press "Mark every QSO as already exported" once, so the first export doesn't bring them in again. "Download the whole log" always gives everything, e.g. for a backup.</p>
+        </fieldset>
+
+        <fieldset>
           <legend>Radio control connection (rigctld)</legend>
           <label class="toggle"><input type="checkbox" name="rig_spawn"><span></span>Start rigctld for me (recommended)</label>
           <div class="grid2">

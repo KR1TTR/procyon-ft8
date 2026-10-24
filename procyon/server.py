@@ -61,6 +61,13 @@ async def download_log(request):
     if eng.s["demo"]:   # the practice log only ever leaves as plain text, never ADIF
         return web.Response(text=eng.practice_log_text(), content_type="text/plain", headers={
             "Content-Disposition": 'attachment; filename="Procyon-DEMO-practice-log.txt"'})
+    if eng.s["export_new_only"] and "all" not in request.query:
+        name, text, n = eng.export_new()
+        asyncio.get_event_loop().create_task(eng.push_state())   # the button's count changes
+        if not n:
+            return web.Response(status=204)   # nothing new: no empty file to import
+        return web.Response(text=text, content_type="application/octet-stream", headers={
+            "Content-Disposition": f'attachment; filename="{name}"'})
     if not os.path.exists(eng.logbook.path):
         raise web.HTTPNotFound()
     return web.FileResponse(eng.logbook.path, headers={

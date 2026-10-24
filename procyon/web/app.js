@@ -70,6 +70,7 @@ function connect() {
     else if (m.type === "detect_radio") onDetected(m);
     else if (m.type === "rig_test") onRigTest(m);
     else if (m.type === "qrz_check") onQrzCheck(m);
+    else if (m.type === "export_marked") { $("#exportMsg").textContent = m.text; $("#exportMsg").classList.add("ok"); }
     else if (m.type === "pota") onPota(m);
     else if (m.type === "install") onInstall(m);
   };
@@ -859,8 +860,13 @@ function renderUploads() {
   if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }   // keep clicks landing
   // The demo log only ever leaves as plain text, so it can't be imported anywhere
   const exp = $("#exportLog"), demo = !!S.settings.demo;
-  exp.textContent = demo ? "Export practice log (.txt)" : "Export ADIF";
+  const ex = S.export || {}, newOnly = !demo && ex.new_only;
+  exp.textContent = demo ? "Export practice log (.txt)"
+    : !newOnly ? "Export ADIF"
+    : ex.pending ? `Export ${ex.pending} new QSO${ex.pending === 1 ? "" : "s"}` : "No new QSOs to export";
+  exp.classList.toggle("disabled", newOnly && !ex.pending);
   exp.title = demo ? "Demo band: simulated QSOs, saved as a plain text list - not a logbook file, so they can't be uploaded anywhere by mistake"
+    : newOnly ? "Only the QSOs not exported before (Settings → Advanced → Logbook export)"
     : "Download your logbook as an ADIF file";
 }
 $("#uploadBtns").addEventListener("click", (e) => {
@@ -1511,6 +1517,7 @@ $("#aboutLink").addEventListener("click", () => { $("#settings").close(); openAb
 $("#layoutMode").addEventListener("change", (e) => saveMode(e.target.value));
 $("#wfScheme").addEventListener("change", (e) => setWfScheme(e.target.value));
 $("#palette").addEventListener("change", (e) => setPalette(e.target.value));
+$("#exportMarkAll").addEventListener("click", () => { $("#exportMsg").textContent = "…"; send({ type: "export_mark_all" }); });
 $("#resetLayout").addEventListener("click", () => {
   sizes = { w: {}, h: {} };
   saveSizes();
