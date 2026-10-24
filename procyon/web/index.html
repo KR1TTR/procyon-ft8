@@ -82,6 +82,10 @@
     <div class="marker rx" id="rxMarker"><span>RX</span></div>
     <div class="marker tx" id="txMarker"><span>TX</span></div>
     <div class="hover-line" id="hoverLine"><span id="hoverFreq"></span></div>
+    <div class="demo-banner" id="demoBanner" hidden>
+      <b>DEMO BAND</b><span>Simulated stations, not real signals · nothing is transmitted · QSOs go to a practice log</span>
+      <button type="button" id="demoOff">Switch off</button>
+    </div>
   </div>
   <div class="wf-scale" id="wfScale"></div>
   <div class="wf-hint">Click the waterfall to set your <b class="rx-t">receive</b> frequency · <kbd>Shift</kbd>+click (or press and hold on a touchscreen) to set your <b class="tx-t">transmit</b> frequency</div>
@@ -215,9 +219,10 @@
     </div>
     <div class="import-row">
       <button type="button" class="btn ghost small" id="importWsjtx">Import settings from WSJT-X</button>
+      <a class="btn ghost small" href="/static/guide.html" target="_blank" rel="noopener">Setup guide</a>
       <div class="hint" id="importNotes"></div>
     </div>
-    <p class="welcome" id="welcome" hidden>Welcome! Enter your callsign and grid to get started. No radio connected yet? Turn on <b>Demo band</b> (on the Advanced tab) to try everything with a simulated band.</p>
+    <p class="welcome" id="welcome" hidden>Welcome! Enter your callsign and grid to get started. No radio connected yet? Turn on <b>Demo band</b> (on the Advanced tab) to try everything with a simulated band. Step-by-step help: the <a href="/static/guide.html" target="_blank" rel="noopener">setup guide</a>.</p>
 
     <div class="set-body">
       <nav class="set-tabs" role="tablist" aria-label="Settings sections">
@@ -520,7 +525,7 @@
     <h2><img class="wordmark" src="/static/wordmark.svg" alt="Procyon" height="40"></h2>
     <p class="about-version">Version <b id="aboutVersion">—</b> · <span id="aboutDate">—</span></p>
     <p class="about-credit">Created by <b>Justin Stapleton, KR1TTR</b><br>with <b>Claude Code</b> (Claude Opus 5.5)</p>
-    <p class="about-contact"><a href="mailto:procyon@kr1ttr.radio">procyon@kr1ttr.radio</a></p>
+    <p class="about-contact"><a href="/static/guide.html" target="_blank" rel="noopener">Setup guide</a> · <a href="mailto:procyon@kr1ttr.radio">procyon@kr1ttr.radio</a></p>
     <p class="about-name"><i>Procyon lotor</i> is the raccoon, and Procyon is a binary star, the brightest in
       Canis Minor. Our raccoon's eyes are its two stars, Procyon A and Procyon B.</p>
     <div class="about-thanks">

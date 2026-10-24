@@ -4,7 +4,8 @@ Detection asks each port "who are you?" in the radios' own CAT languages
 (Yaesu/Kenwood/Elecraft "ID;" and Icom CI-V "read frequency"), at the baud
 rates those radios ship with. Nothing here ever transmits: only ID and
 frequency reads are sent, and RTS/DTR are dropped as soon as a port opens.
-Works on macOS and Linux; on Windows the radio is picked by hand."""
+macOS and Linux use the system's serial calls (termios); Windows uses pyserial,
+which is bundled with the Windows build."""
 
 import logging
 import os
@@ -53,6 +54,58 @@ def _model(mfg: str, name: str):
     return ""
 
 
+class _PosixPort:
+    """A serial port through termios (Linux, macOS)."""
+    def __init__(self, path: str, baud: int):
+        self.fd = _open(path, baud)
+
+    def exchange(self, data: bytes, wait: float, until: bytes = b"") -> bytes:
+        return _exchange(self.fd, data, wait, until)
+
+    def close(self):
+        os.close(self.fd)
+
+
+class _PySerialPort:
+    """A serial port through pyserial (Windows; on Linux for testing with
+    PROCYON_DETECT_PYSERIAL=1)."""
+    def __init__(self, path: str, baud: int):
+        import serial  # noqa: PLC0415 - only needed here
+        s = serial.Serial()
+        s.port, s.baudrate, s.timeout, s.write_timeout = path, baud, 0, 1
+        # Lines low BEFORE opening: an interface that keys the transmitter from
+        # RTS or DTR (e.g. a Digirig set up that way) must never be keyed.
+        s.rts, s.dtr = False, False
+        s.open()
+        self.s = s
+
+    def exchange(self, data: bytes, wait: float, until: bytes = b"") -> bytes:
+        import time  # noqa: PLC0415
+        self.s.reset_input_buffer()
+        self.s.write(data)
+        end, buf = time.time() + wait, b""
+        while time.time() < end:
+            chunk = self.s.read(256)
+            if chunk:
+                buf += chunk
+                if until and until in buf:
+                    break
+            else:
+                time.sleep(0.02)
+        return buf
+
+    def close(self):
+        self.s.close()
+
+
+def _use_pyserial() -> bool:
+    return IS_WINDOWS or termios is None or os.environ.get("PROCYON_DETECT_PYSERIAL") == "1"
+
+
+def _port(path: str, baud: int):
+    return _PySerialPort(path, baud) if _use_pyserial() else _PosixPort(path, baud)
+
+
 def _open(path: str, baud: int):
     fd = os.open(path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
     try:
@@ -90,13 +143,13 @@ def _exchange(fd: int, data: bytes, wait: float, until: bytes = b"") -> bytes:
 def _identify(path: str, baud: int):
     """What radio answers on this port at this speed? None if nothing sensible."""
     try:
-        fd = _open(path, baud)
-    except (*SerialError, AttributeError, ValueError) as e:
+        port = _port(path, baud)
+    except Exception as e:  # noqa: BLE001 - busy, missing, unsupported speed: not this one
         log.info("detect: can't open %s at %d: %s", path, baud, e)
         return None
     try:
         # Yaesu, Kenwood, Elecraft
-        m = re.search(rb"ID(\d{3,4});", _exchange(fd, b"ID;", 0.5, b";"))
+        m = re.search(rb"ID(\d{3,4});", port.exchange(b"ID;", 0.5, b";"))
         if m:
             code = m.group(1).decode()
             if len(code) == 4 and code in YAESU:
@@ -112,26 +165,34 @@ def _identify(path: str, baud: int):
                     "note": f"A radio answered (ID {code}) but I don't know which. Pick it from the Radio list."}
         # Icom CI-V: ask every common address for its frequency in one go
         frames = b"".join(bytes([0xFE, 0xFE, a, 0xE0, 0x03, 0xFD]) for a in ICOM)
-        reply = _exchange(fd, frames, 0.8)
+        reply = port.exchange(frames, 0.8)
         for a, (model, label) in ICOM.items():
             if bytes([0xFE, 0xFE, 0xE0, a, 0x03]) in reply:
                 return {"make": "Icom", "name": label, "model": _model("Icom", model)}
-    except SerialError as e:
+    except Exception as e:  # noqa: BLE001 - a port that misbehaves just isn't a radio
         log.info("detect: %s at %d: %s", path, baud, e)
     finally:
-        os.close(fd)
+        port.close()
     return None
 
 
-def detect_radios() -> list[dict]:
-    """[{path, baud, make, name, model, ptt, note?}] for every radio found."""
-    if IS_WINDOWS or termios is None:
-        return []
+def detect_radios():
+    """[{path, baud, make, name, model, ptt, note?}] for every radio found, or
+    None if this computer can't probe serial ports (Windows without pyserial)."""
+    if _use_pyserial():
+        try:
+            import serial  # noqa: F401, PLC0415
+        except ImportError:
+            return None
     found = []
     for p in serial_ports():
         path = p["path"]
-        # USB serial adapters only; skip Bluetooth, debug consoles, modems
-        if not re.search(r"usb|ttyACM|ttyUSB", path, re.I):
+        # USB serial adapters only; skip Bluetooth, debug consoles, modems. On
+        # Windows only COM ports found under USB devices have a description.
+        if IS_WINDOWS:
+            if " - " not in p["desc"]:
+                continue
+        elif not re.search(r"usb|ttyACM|ttyUSB", path, re.I):
             continue
         hit = None
         for baud in dict.fromkeys(ASCII_BAUDS + CIV_BAUDS):

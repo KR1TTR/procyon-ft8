@@ -2,7 +2,7 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 0.9.28** · 24 October 2026
+**Version 0.9.31** · 24 October 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
 A simpler, friendlier FT8 station. Procyon uses WSJT-X's own decoder (`jt9`)
@@ -16,11 +16,11 @@ the Hamlib copy it includes): https://wsjt.sourceforge.io
 
 | System | Download | How |
 |---|---|---|
-| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.28_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.28_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
-| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.28-arch.tar.gz` | `tar xf procyon-0.9.28-arch.tar.gz`, `cd procyon-0.9.28-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
-| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.28-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
-| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.28-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
-| Windows 10/11 (64-bit) | `Procyon-0.9.28-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
+| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.31_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.31_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
+| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.31-arch.tar.gz` | `tar xf procyon-0.9.31-arch.tar.gz`, `cd procyon-0.9.31-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
+| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.31-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
+| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.31-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
+| Windows 10/11 (64-bit) | `Procyon-0.9.31-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
 
 Add `--demo` (or use **Procyon DEMO ONLY - no radio.bat** on Windows, or
 *Settings → Advanced → Demo band*) to try it with a simulated band: nothing is
@@ -161,7 +161,7 @@ transmitting.
 Settings and the log live in `~/.local/share/procyon/` (change with `--data DIR`).
 ## Setting up your radio
 
-- **Easiest (Linux and macOS):** in *Settings → Station & radio*, press **Detect my radio**. Procyon asks each
+- **Easiest:** in *Settings → Station & radio*, press **Detect my radio**. Procyon asks each
   USB serial port who it is (Yaesu, Kenwood, Elecraft and Icom radios answer), and fills
   in the model, port and baud. Then press **Test radio** (it reads the frequency, never
   transmits) and **Save**. If the radio can't be reached, the status line says why.
@@ -244,6 +244,20 @@ and Procyon B. (Earlier versions were called Skywave; settings and logbooks move
 across automatically on first start.)
 
 ## Roadmap
+
+0.9.31: a built-in **setup guide** (Settings, the About card and the welcome
+message link to it; it works offline): what you need, installing on each
+system, setting the clock, first-time Settings, common radio setups (built-in
+USB audio, Digirig, SignaLink, KX3), audio levels, a first QSO, and a
+troubleshooting table.
+
+0.9.30: **Detect my radio** now works on Windows too: it asks each USB COM
+port which radio is there, the same read-only way as on Linux and macOS
+(nothing is transmitted).
+
+0.9.29: in demo mode, a striped **DEMO BAND** banner across the bottom of the
+waterfall says the stations are simulated, nothing is transmitted and QSOs go
+to a practice log - with a **Switch off** button.
 
 0.9.28: for importing into another logging program such as N3FJP, *Settings →
 Advanced → Logbook export* can make Export ADIF give only the QSOs not exported

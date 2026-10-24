@@ -343,6 +343,7 @@ function onState(m) {
   $("#rigLabel").textContent = m.rig.connected ? "Rig" : "Rig offline";
   rig.title = m.rig.error || "Connected to rigctld";
   $("#chipDemo").hidden = !st.demo;
+  $("#demoBanner").hidden = !st.demo;
   renderPota();
   requestAnimationFrame(() => fitHeader());   // after the other chips are updated too
   $("#chipRemote").hidden = !m.remote.enabled;
@@ -1391,8 +1392,8 @@ $("#detectRadio").addEventListener("click", () => {
 function onDetected(m) {
   $("#detectRadio").disabled = false;
   if (m.unsupported) {
-    radioMsg("Automatic detection isn't available on Windows yet - choose your radio from the list, "
-             + "pick its COM port, then press Test radio.");
+    radioMsg("Automatic detection isn't available on this computer - choose your radio from the list, "
+             + "pick its serial (COM) port, then press Test radio.");
     return;
   }
   const r = (m.found || [])[0];
@@ -1517,6 +1518,7 @@ $("#aboutLink").addEventListener("click", () => { $("#settings").close(); openAb
 $("#layoutMode").addEventListener("change", (e) => saveMode(e.target.value));
 $("#wfScheme").addEventListener("change", (e) => setWfScheme(e.target.value));
 $("#palette").addEventListener("change", (e) => setPalette(e.target.value));
+$("#demoOff").addEventListener("click", () => send({ type: "settings", settings: { demo: false } }));
 $("#exportMarkAll").addEventListener("click", () => { $("#exportMsg").textContent = "…"; send({ type: "export_mark_all" }); });
 $("#resetLayout").addEventListener("click", () => {
   sizes = { w: {}, h: {} };

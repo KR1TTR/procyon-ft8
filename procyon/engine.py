@@ -25,7 +25,7 @@ from .qso import Qso
 from . import pota, uploads, wsjtx_install
 from .radio_detect import detect_radios, test_rig
 from .setup_help import hamlib_rigs, import_wsjtx
-from .system import IS_WINDOWS, find_tool, serial_ports, tools
+from .system import find_tool, serial_ports, tools
 from .udp import WsjtxUdp
 from .rig import Rig
 
@@ -1324,9 +1324,10 @@ class Engine:
                 self.on_quit()
             return None
         elif t == "detect_radio":
-            if IS_WINDOWS:   # detection needs Unix serial-port calls
+            found = await self._radio_job(detect_radios)
+            if found is None:   # no way to probe serial ports here
                 return {"type": "detect_radio", "found": [], "unsupported": True}
-            return {"type": "detect_radio", "found": await self._radio_job(detect_radios)}
+            return {"type": "detect_radio", "found": found}
         elif t == "rig_test":
             return await self._rig_test(m)
         elif t == "install_wsjtx":

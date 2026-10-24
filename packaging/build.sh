@@ -116,7 +116,7 @@ build_windows_zip() {
   # 2. Procyon's libraries, as Windows builds from PyPI
   mkdir -p "$CACHE/wheels-win"
   python3 -m pip download -q --only-binary=:all: --platform win_amd64 --python-version "$pyver" \
-      --implementation cp --abi "cp$tag" -d "$CACHE/wheels-win" numpy aiohttp sounddevice
+      --implementation cp --abi "cp$tag" -d "$CACHE/wheels-win" numpy aiohttp sounddevice pyserial
   mkdir -p "$d/$top/python/Lib/site-packages"
   for w in "$CACHE"/wheels-win/*.whl; do unzip -qo "$w" -d "$d/$top/python/Lib/site-packages"; done
   # 3. Procyon and its launchers
