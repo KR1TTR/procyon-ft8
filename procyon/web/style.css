@@ -539,6 +539,10 @@ dialog.about form { padding: 26px 30px 24px; position: relative; }
 .about-version { margin: 6px 0 16px; color: var(--muted); font-size: 13px; }
 .about-version b { color: var(--text); font-family: var(--mono); }
 .about-credit { margin: 0 0 14px; font-size: 14.5px; line-height: 1.6; }
+.about-credit:has(+ .about-contact) { margin-bottom: 4px; }
+.about-contact { margin: 0 0 14px; font-size: 13px; }
+.about-contact a { color: var(--info); text-decoration: none; }
+.about-contact a:hover { text-decoration: underline; }
 .about-name { margin: 0 0 16px; color: var(--muted); font-size: 12.5px; }
 .about-thanks { text-align: left; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; }
 .about-thanks h3 { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }

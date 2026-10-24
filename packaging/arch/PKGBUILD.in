@@ -1,4 +1,4 @@
-# Maintainer: Justin Stapleton, KR1TTR <cq@kr1ttr.radio>
+# Maintainer: Justin Stapleton, KR1TTR <procyon@kr1ttr.radio>
 # Procyon - built from the Linux zip, which sits next to this file.
 #   makepkg -si      (builds and installs it)
 pkgname=procyon
