@@ -472,7 +472,7 @@ input[type=range] { width: 100%; accent-color: var(--tx); height: 30px; }
 
 /* --------------------------------------------------------------- logbook */
 .logbook { height: calc(100vh - 340px); min-height: 360px; }
-.log-list { overflow-y: auto; padding: 0 8px 10px; flex: 1; }
+.log-list { overflow-y: auto; padding: 0 8px 10px; flex: 1; scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
 .link-btn.disabled { opacity: .5; pointer-events: none; }
 a.btn { text-decoration: none; color: var(--text); display: inline-flex; align-items: center; }
 .lrow { padding: 8px 10px; border-radius: 9px; border-bottom: 1px solid var(--line); }
@@ -745,25 +745,6 @@ dialog.pota-dlg { width: min(520px, calc(100vw - 32px)); }
 :root[data-palette="classic"] .top,
 :root[data-palette="classic"] .top .menu { color: var(--text); }
 
-/* Antique radio: walnut and bakelite browns, brass, cream lettering - made to
-   go with the Tube glow waterfall. */
-:root[data-palette="radio"] {
-  --bg: #110b07; --bg2: #170f0a;
-  --surface: #1f150e; --surface2: #2a1c12;
-  --border: #3b2a1b; --border2: #56402a;
-  --text: #f2e7d0; --muted: #b8a587; --faint: #816e55;
-  --rx: #d4ad55; --tx: #e2533f; --cq: #9fd06a; --me: #ff9a3d; --info: #8db3d8;
-  --pota: #b7d27a; --rpt: #e0a8d0; --text2: #dccdb2;
-  --me-soft: #f0d2a8; --rx-soft: #f1dfae; --tx-soft: #ffc6bc;
-  --on-accent: #1a1006; --on-me: #1a0d00;
-  --snr1: #9fd06a; --snr2: #c4d36a; --snr3: #f0c060; --snr4: #f08a50;
-  --header-bg: #120c08d9; --glow1: #4a2c1240; --glow2: #5a3a1430;
-  --wf-bg: #0b0805;
-  --hover-bg: #33241a; --hover-border: #6a5034;
-  --line: #fff3dc0a; --ghost-bg: #fff3dc12; --ghost-border: #fff3dc45;
-  --overlay: #110b07cc; --backdrop: #0a0604cc;
-}
-
 /* Campfire: night-forest greens over blue-black, bark-brown edges, a bright
    amber for "calling you" - made to go with the Ember waterfall, and dim enough
    for dark-adapted eyes on a late-night activation. */
@@ -783,3 +764,29 @@ dialog.pota-dlg { width: min(520px, calc(100vw - 32px)); }
   --line: #ffffff07; --ghost-bg: #ffffff0e; --ghost-border: #ffffff38;
   --overlay: #050a0bcc; --backdrop: #020504cc;
 }
+
+/* Antique radio: a 1930s tabletop "tombstone" set - stained-maple cabinet framing
+   dark bakelite workspaces, brass accents. Made to go with the Tube glow waterfall. */
+:root[data-palette="radio"] {
+  --bg: #9a5a28; --bg2: #8a4e22;
+  --surface: #1f150e; --surface2: #2b1d13;
+  --border: #5e4024; --border2: #8a6634;
+  --text: #f2e4c8; --muted: #bfa483; --faint: #8f7659;
+  --rx: #d9b25a; --tx: #e8553f; --cq: #a3d46c; --me: #ff9a3d; --info: #93b7dc;
+  --pota: #b9d47c; --rpt: #e0a8d0; --text2: #dccdb2;
+  --me-soft: #f0d2a8; --rx-soft: #f1dfae; --tx-soft: #ffc6bc;
+  --on-accent: #1a1006; --on-me: #1a0d00;
+  --snr1: #a3d46c; --snr2: #c4d36a; --snr3: #f0c060; --snr4: #f08a50;
+  --header-bg: linear-gradient(180deg, #6e3d18, #5a3112);
+  --glow1: #ffd9a028; --glow2: #3a1a0830;
+  --wf-bg: #0b0805;
+  --hover-bg: #3a281a; --hover-border: #a07a40;
+  --line: #fff3dc0a; --ghost-bg: #fff3dc12; --ghost-border: #fff3dc45;
+  --overlay: #9a5a28cc; --backdrop: #1a0f08cc;
+}
+/* text that sits right on the wood */
+:root[data-palette="radio"] .wf-card { --muted: #f8e8c8; --faint: #efd6aa; --border2: #3a2414; }
+:root[data-palette="radio"] .top { --muted: #ecd6b0; --faint: #d8bd92; --border: #3a2414; border-bottom-color: #3a2010; }
+:root[data-palette="radio"] .wf-wrap { border: 2px solid #2b1d13; box-shadow: 0 0 0 1px #c9a25a55; }
+/* inside the panels and dialogs: bakelite, not wood */
+:root[data-palette="radio"] .card, :root[data-palette="radio"] dialog { --bg: #120b07; --bg2: #150d08; }

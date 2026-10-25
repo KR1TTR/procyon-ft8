@@ -2,7 +2,7 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 0.9.34** · 24 October 2026
+**Version 0.9.36** · 24 October 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
 A simpler, friendlier FT8 station. Procyon uses WSJT-X's own decoder (`jt9`)
@@ -16,11 +16,11 @@ the Hamlib copy it includes): https://wsjt.sourceforge.io
 
 | System | Download | How |
 |---|---|---|
-| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.34_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.34_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
-| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.34-arch.tar.gz` | `tar xf procyon-0.9.34-arch.tar.gz`, `cd procyon-0.9.34-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
-| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.34-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
-| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.34-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
-| Windows 10/11 (64-bit) | `Procyon-0.9.34-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
+| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.36_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.36_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
+| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.36-arch.tar.gz` | `tar xf procyon-0.9.36-arch.tar.gz`, `cd procyon-0.9.36-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
+| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.36-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
+| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.36-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
+| Windows 10/11 (64-bit) | `Procyon-0.9.36-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
 
 Add `--demo` (or use **Procyon DEMO ONLY - no radio.bat** on Windows, or
 *Settings → Advanced → Demo band*) to try it with a simulated band: nothing is
@@ -245,6 +245,14 @@ across automatically on first start.)
 
 ## Roadmap
 
+0.9.36: the **Antique radio** palette (*Settings → Experimental*) is now a
+stained-maple cabinet framing dark bakelite panels, after a 1930s tabletop
+radio - it pairs well with the Tube glow waterfall. The Logbook's scrollbar
+matches the others (slim, in the palette's colours) instead of the browser's
+plain grey one.
+
+0.9.35: a test build of the new Antique radio look (see 0.9.36).
+
 0.9.34: when Procyon's last browser tab is closed, transmitting stops after 10
 seconds, so it never keeps calling with nobody watching, and Procyon closes
 itself after a minute so it doesn't run unseen, holding the radio and sound card
@@ -286,7 +294,7 @@ grey panels and dark text, instead of white panels on darker grey.
 
 0.9.25: colour palettes to try (*Settings → Experimental*, per device), mixing
 freely with the waterfall schemes: **Classic** (light grey with a navy title bar,
-in the spirit of Windows 95), **Antique radio** (walnut, bakelite and brass) and
+in the spirit of Windows 95), **Antique radio** (stained maple and bakelite since 0.9.36) and
 **Campfire** (night forest and bark), next to the standard **Night sky**.
 
 0.9.24: the name is now simply **Procyon** everywhere it's shown - the
