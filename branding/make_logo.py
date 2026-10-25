@@ -31,9 +31,15 @@ ROW_TOP = MID - TAG_H / 2 if TAG else MID - WORD_CAP / 2        # top of the tag
 ROW_BOTTOM = MID + WORD_CAP / 2 + 40.8                            # .. bottom of the "y"
 
 COLOURS = {
-    "dark": {"word": "#e7ecf6", "tag": "#3dd6c4", "tag_text": "#080c17"},    # as in the app
-    "light": {"word": "#0b1020", "tag": "#3dd6c4", "tag_text": "#080c17"},
+    "dark": {"word": "#e7ecf6", "tag": "#3dd6c4", "tag_text": "#080c17", "line": "#3dd6c4"},  # as in the app
+    "light": {"word": "#0b1020", "tag": "#3dd6c4", "tag_text": "#080c17", "line": "#0a8f84"},
 }
+
+# The tagline under "Procyon" on stickers and cards (since 0.9.40): teal
+# capitals in the mono font, stretched to the width of "Procyon".
+TAGLINE = "FRIENDLY DIGITAL HAM SOFTWARE"
+LINE_SIZE, LINE_GAP = 38, 30
+LINE_Y = MID + WORD_CAP / 2 + 40.8 + LINE_GAP + LINE_SIZE * 0.75   # baseline, below the "y"
 
 
 def icon_body(flat=False):
@@ -62,6 +68,14 @@ def wordmark(x0, colours):
         font-weight="700" font-size="100" letter-spacing="5" fill="{colours['tag_text']}">{TAG}</text>''', tag_x + tag_w
 
 
+def with_tagline(colours):
+    """ "Procyon" with the tagline underneath; (svg, width)."""
+    marks, right = wordmark(0, colours)
+    return marks + f'''
+  <text x="0" y="{LINE_Y:.2f}" font-family="DejaVu Sans Mono" font-weight="700" font-size="{LINE_SIZE}"
+        textLength="{right:.2f}" lengthAdjust="spacing" fill="{colours['line']}">{TAGLINE}</text>''', right
+
+
 def outline(svg_text, out):
     """Write the SVG with its text turned into shapes."""
     with tempfile.NamedTemporaryFile("w", suffix=".svg", delete=False) as f:
@@ -88,7 +102,7 @@ def main():
             outline(svg, os.path.join(HERE, name + ".svg"))
             png(os.path.join(HERE, name + ".svg"), os.path.join(HERE, name + ".png"), 4000)
             made.append(name)
-    # Stacked: raccoon on top, "Procyon" underneath - best on caps and shirts
+    # Stacked: raccoon on top, "Procyon" underneath
     for bg, colours in COLOURS.items():
         for flat in (False, True):
             marks, right = wordmark(0, colours)
@@ -108,6 +122,29 @@ def main():
             f.write(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
                     f"<title>Procyon</title>{icon_body(flat)}</svg>\n")
         png(os.path.join(HERE, name + ".svg"), os.path.join(HERE, name + ".png"), 2000)
+        made.append(name)
+    # With the tagline: side by side (cards, banners) and stacked (stickers)
+    top = MID - WORD_CAP / 2                       # top of the capital P
+    for bg, colours in COLOURS.items():
+        marks, right = with_tagline(colours)
+        size = 300                                 # the icon spans "Procyon" and the tagline
+        dy = (size - (LINE_Y - top)) / 2 - top
+        name = f"procyon-logo-tagline-{bg}-bg"
+        svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {size + GAP + right:.0f} {size}">'
+               f'<title>Procyon</title><g transform="scale({size / 32})">{icon_body()}</g>'
+               f'<g transform="translate({size + GAP} {dy:.2f})">{marks}</g>\n</svg>\n')
+        outline(svg, os.path.join(HERE, name + ".svg"))
+        png(os.path.join(HERE, name + ".svg"), os.path.join(HERE, name + ".png"), 4000)
+        made.append(name)
+        icon = 420                                 # smaller raccoon than the plain stacked logo,
+        dy = icon + 60 - top                       # so the tagline stays readable on a sticker
+        name = f"procyon-logo-stacked-tagline-{bg}-bg"
+        svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {right:.0f} {dy + LINE_Y + 12:.0f}">'
+               f'<title>Procyon</title><g transform="translate({(right - icon) / 2:.2f} 0) '
+               f'scale({icon / 32})">{icon_body()}</g>'
+               f'<g transform="translate(0 {dy:.2f})">{marks}</g>\n</svg>\n')
+        outline(svg, os.path.join(HERE, name + ".svg"))
+        png(os.path.join(HERE, name + ".svg"), os.path.join(HERE, name + ".png"), 3000)
         made.append(name)
     # Wordmark for the app header (the icon is shown separately there)
     marks, right = wordmark(0, COLOURS["dark"])
