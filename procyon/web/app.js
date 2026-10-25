@@ -1,7 +1,11 @@
 "use strict";
 
 const $ = (s) => document.querySelector(s);
-const PERIOD = 15;
+// Cycle timing of the mode in use (FT8: 15 s, FT4: 7.5 s), from the engine.
+const T = () => (S && S.timing) || { mode: "FT8", period: 15, tx_start: 0.5, signal: 12.64, decode_at: 13.4, width: 50 };
+const period = () => T().period;
+// Which slots a cycle is in: FT8 :00/:30 and :15/:45, FT4 :00/:15 and :07/:22 (7.5 s apart).
+const slotName = (par) => (T().mode === "FT4" ? (par ? ":07/:22" : ":00/:15") : (par ? ":15/:45" : ":00/:30"));
 const BIN_HZ = 12000 / 4096;    // width of one waterfall bin from the engine
 // The visible waterfall range comes from Settings (to match the radio's filter).
 const wfLo = () => (S ? +S.settings.wf_start : 0);
@@ -62,7 +66,12 @@ function connect() {
     else if (m.type === "stopped") showStopped();
     else if (m.type === "state") onState(m);
     else if (m.type === "decodes") onDecodes(m, true);
-    else if (m.type === "history") { batches = []; m.batches.forEach((b) => onDecodes(b, false)); renderDecodes(); }
+    else if (m.type === "history") {
+      batches = [];
+      callers.clear(); dismissed.clear(); renderCallers();   // e.g. after an FT8/FT4 switch
+      m.batches.forEach((b) => onDecodes(b, false));
+      renderDecodes();
+    }
     else if (m.type === "level") onLevel(m.db);
     else if (m.type === "toast") toast(m.text, m.kind);
     else if (m.type === "devices") { fillDevices(m); fillRadioLists(m); }
@@ -183,7 +192,7 @@ function wfRow(bins) {
 
   // Mark each cycle with a faint line where it starts. Its timestamp goes ABOVE
   // the line, inside the cycle it names - drawn ~2 s in, once there's room.
-  const p = Math.floor(Date.now() / 1000 / PERIOD);
+  const p = Math.floor(Date.now() / 1000 / period());
   if (p !== lastPeriodMark) {
     if (lastPeriodMark !== -1) {
       wctx.fillStyle = "#ffffff30";
@@ -194,7 +203,7 @@ function wfRow(bins) {
   } else if (rowsSinceMark >= 0 && ++rowsSinceMark === LABEL_ROWS) {
     const tx = S && S.tx && !S.tx.tune ? "  TX" : "";
     // Bold and bright with a dark outline, so it stays readable over strong signals.
-    const text = utcStr(new Date(p * PERIOD * 1000)) + tx, x = 6 * dpr, y = LABEL_ROWS * rh - 4 * dpr;
+    const text = utcStr(new Date(p * period() * 1000)) + tx, x = 6 * dpr, y = LABEL_ROWS * rh - 4 * dpr;
     wctx.font = `700 ${11 * dpr}px ui-monospace, monospace`;
     wctx.lineJoin = "round";
     wctx.lineWidth = 3 * dpr;
@@ -210,11 +219,12 @@ function wfLabels(items) {
   // Paint call signs onto the waterfall next to their traces; they scroll with it.
   const dpr = window.devicePixelRatio || 1;
   const rowsPerSec = 8, rh = Math.max(1, Math.round(dpr));
-  const y = (13.4 - 6.8 + 0.4) * rowsPerSec * rh;
+  // Level with the middle of the signals, which scrolled down since they were sent.
+  const y = (T().decode_at - T().tx_start - T().signal / 2 + 0.4) * rowsPerSec * rh;
   wctx.font = `600 ${10.5 * dpr}px ui-monospace, monospace`;
   for (const d of items) {
     const label = d.p.from || d.msg.split(" ")[0];
-    const x = xFrac(d.freq + 25) * wf.width;
+    const x = xFrac(d.freq + T().width / 2) * wf.width;
     const w = wctx.measureText(label).width + 8 * dpr;
     const me = d.to_me && !d.uncertain;
     wctx.fillStyle = me ? "#ffb547e6" : d.p.kind === "cq" ? "#0b2a1ad9" : "#060a16c8";
@@ -244,7 +254,7 @@ function renderScale() {
 function placeMarkers() {
   if (!S) return;
   const pct = (hz) => `${xFrac(hz) * 100}%`;
-  const width = `${50 / (wfHi() - wfLo()) * 100}%`;
+  const width = `${T().width / (wfHi() - wfLo()) * 100}%`;
   for (const [id, hz] of [["#rxMarker", S.settings.rx_freq], ["#txMarker", S.settings.tx_freq]]) {
     $(id).style.left = pct(hz);
     $(id).style.width = width;
@@ -292,15 +302,14 @@ const utcStr = (d) => `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d
 
 function tick() {
   const now = Date.now() / 1000;
-  const p = Math.floor(now / PERIOD), pos = now - p * PERIOD;
+  const P = period(), p = Math.floor(now / P), pos = now - p * P;
   $("#utc").textContent = utcStr(new Date());
   const isTx = S && S.qso.tx_enabled && p % 2 === S.qso.parity;
   const fill = $("#cycleFill");
-  fill.style.width = `${pos / PERIOD * 100}%`;
+  fill.style.width = `${pos / P * 100}%`;
   fill.classList.toggle("tx", !!(S && S.tx) || isTx);
-  const slot = p % 2 ? ":15/:45" : ":00/:30";
-  $("#cycleLabel").textContent = `RX ${slot} ${Math.floor(PERIOD - pos)}s`;
-  $("#onAirSecs").textContent = `${Math.floor(PERIOD - pos)}s`;
+  $("#cycleLabel").textContent = `RX ${slotName(p % 2)} ${Math.floor(P - pos)}s`;
+  $("#onAirSecs").textContent = `${Math.floor(P - pos)}s`;
   if (S && S.tx) {
     const t = S.tx;
     const frac = Math.min(1, Math.max(0, (now - t.start) / (t.end - t.start)));
@@ -311,7 +320,8 @@ function tick() {
 
 // ------------------------------------------------------------------- state
 
-let shownRange = "";
+let shownRange = "", shownMode = "";
+let modePending = "", modePendingTimer = null;   // clicked, waiting for the engine to switch
 
 let shownBadges = null, shownMiles = null;
 
@@ -319,13 +329,24 @@ function onState(m) {
   const first = !S;
   S = m;
   // A new waterfall range: start a fresh picture with the new scale.
-  const range = `${wfLo()}-${wfHi()}`;
+  const range = `${wfLo()}-${wfHi()}-${T().mode}`;
   if (range !== shownRange) {
     shownRange = range;
     if (!first) { wctx.fillStyle = wfBg(); wctx.fillRect(0, 0, wf.width, wf.height); }
     renderScale();
     $("#txFreq").min = Math.max(100, wfLo());
-    $("#txFreq").max = Math.min(3950, wfHi() - 50);
+    $("#txFreq").max = Math.min(4000, wfHi()) - T().width;
+  }
+  if (modePending && T().mode === modePending) {
+    modePending = "";
+    clearTimeout(modePendingTimer);
+    $("#modeSeg").classList.remove("pending");
+  }
+  if (T().mode !== shownMode) {
+    shownMode = T().mode;
+    if (!modePending) showModeButtons(shownMode);
+    [...$("#paritySeg").children].forEach((b) => { b.textContent = slotName(+b.dataset.p).replace("/", " / "); });
+    document.documentElement.dataset.mode = shownMode;
   }
   const st = m.settings;
 
@@ -387,6 +408,26 @@ function renderBandMenu() {
   menu.innerHTML = S.bands.map((b) =>
     `<button data-hz="${b.hz}" class="${b.name === S.band ? "on" : ""}">${b.name}<small>${(b.hz / 1e6).toFixed(3)}</small></button>`).join("");
 }
+function showModeButtons(mode) {
+  [...$("#modeSeg").children].forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
+}
+$("#modeSeg").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b || !S || modePending || b.dataset.mode === T().mode) return;   // one switch at a time
+  const q = S.qso, busy = q.tx_enabled || S.tx || (q.dxcall && !q.logged);
+  if (busy && !window.confirm(`Switch to ${b.dataset.mode}? Transmitting stops`
+      + (q.dxcall && !q.logged ? ` and the QSO with ${q.dxcall} ends (not logged).` : "."))) return;
+  // Light the new mode straight away; the engine's answer confirms it.
+  modePending = b.dataset.mode;
+  showModeButtons(modePending);
+  $("#modeSeg").classList.add("pending");
+  modePendingTimer = setTimeout(() => {   // no answer: show what's really in use
+    modePending = "";
+    $("#modeSeg").classList.remove("pending");
+    showModeButtons(T().mode);
+  }, 5000);
+  send({ type: "mode", mode: b.dataset.mode });
+});
 $("#bandBtn").addEventListener("click", (e) => { e.stopPropagation(); $("#bandMenu").hidden = !$("#bandMenu").hidden; });
 $("#bandMenu").addEventListener("click", (e) => {
   const b = e.target.closest("button");
@@ -418,7 +459,8 @@ function onDecodes(b, live) {
 // Anyone calling you (other than the station you're already working) gets a
 // prominent alert with a Reply button, a chime and a tab-title change.
 
-const CALLER_TIMEOUT = 8;        // cycles (2 minutes) without hearing them again
+const CALLER_TIMEOUT_SEC = 120;  // 2 minutes without hearing them again
+const callerTimeout = () => Math.round(CALLER_TIMEOUT_SEC / period());   // in cycles
 const callers = new Map();       // call -> {d, first, last, count}
 const dismissed = new Map();     // call -> period dismissed
 let chimeOn = true;
@@ -434,13 +476,13 @@ function noteCallers(b) {
     // A guessed decode (see "uncertain" in the engine) never raises a new alert:
     // it's often noise. A real caller's next message usually decodes cleanly.
     if (d.uncertain && !callers.has(call)) continue;
-    if (dismissed.has(call) && b.period - dismissed.get(call) < CALLER_TIMEOUT) continue;
+    if (dismissed.has(call) && b.period - dismissed.get(call) < callerTimeout()) continue;
     const c = callers.get(call);
     if (c) { c.d = d; c.last = b.period; c.count++; }
     else { callers.set(call, { d, first: b.period, last: b.period, count: 1 }); fresh = true; }
   }
   for (const [call, c] of callers) {
-    if (call === dx || b.period - c.last >= CALLER_TIMEOUT) callers.delete(call);
+    if (call === dx || b.period - c.last >= callerTimeout()) callers.delete(call);
   }
   if (fresh) chime();
   renderCallers();
@@ -625,7 +667,7 @@ function renderDecodes(freshPeriod) {
     items.sort((a, c) => (meFirst(c) - meFirst(a)) || a.freq - c.freq);
     const t = b.time;
     html += `<div class="period-head${otherBand ? " other-band" : ""}"><span>${t.slice(0, 2)}:${t.slice(2, 4)}:${t.slice(4)}</span>
-      <span class="slot">${b.period % 2 ? ":15/:45" : ":00/:30"}</span>
+      <span class="slot">${slotName(b.period % 2)}</span>
       ${b.band ? `<span class="band-tag" title="${otherBand ? "Received on a different band than you're on now" : "Band"}">${esc(b.band)}</span>` : ""}
       <span>${items.length} decode${items.length > 1 ? "s" : ""}</span></div>`;
     for (const d of items) {
@@ -654,7 +696,7 @@ function renderDecodes(freshPeriod) {
   if (!total) {
     list.innerHTML = batches.length && (filter !== "all" || terms.length)
       ? `<div class="empty"><p>Nothing matches this filter yet.</p></div>`
-      : `<div class="empty"><div class="pulse-ring"></div><p><b>Listening…</b><br>Decodes appear here at the end of each 15-second cycle.</p></div>`;
+      : `<div class="empty"><div class="pulse-ring"></div><p><b>Listening…</b><br>Decodes appear here at the end of each ${period()}-second cycle.</p></div>`;
     return;
   }
   list.innerHTML = html;
@@ -767,7 +809,7 @@ function renderExchange(q) {
     $("#exStatus").hidden = true;
     return;
   }
-  const time = (p) => utcStr(new Date(p * PERIOD * 1000));
+  const time = (p) => utcStr(new Date(p * period() * 1000));
   const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 20;
   list.innerHTML = t.map((e) => {
     if (e.silent) {

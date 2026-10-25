@@ -2,12 +2,12 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 0.9.36** · 24 October 2026
+**Version 0.9.40** · 25 October 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
-A simpler, friendlier FT8 station. Procyon uses WSJT-X's own decoder (`jt9`)
-and message encoder (`ft8code`), so decoding performance matches WSJT-X, and
-puts a clean, modern interface on top.
+A simpler, friendlier FT8 station (FT4 too, as a beta). Procyon uses WSJT-X's
+own decoder (`jt9`) and message encoder (`ft8code`), so decoding performance
+matches WSJT-X, and puts a clean, modern interface on top.
 
 ## Install
 
@@ -16,11 +16,11 @@ the Hamlib copy it includes): https://wsjt.sourceforge.io
 
 | System | Download | How |
 |---|---|---|
-| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.36_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.36_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
-| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.36-arch.tar.gz` | `tar xf procyon-0.9.36-arch.tar.gz`, `cd procyon-0.9.36-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
-| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.36-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
-| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.36-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
-| Windows 10/11 (64-bit) | `Procyon-0.9.36-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
+| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.40_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.40_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
+| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.40-arch.tar.gz` | `tar xf procyon-0.9.40-arch.tar.gz`, `cd procyon-0.9.40-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
+| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.40-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
+| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.40-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
+| Windows 10/11 (64-bit) | `Procyon-0.9.40-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
 
 Add `--demo` (or use **Procyon DEMO ONLY - no radio.bat** on Windows, or
 *Settings → Advanced → Demo band*) to try it with a simulated band: nothing is
@@ -60,7 +60,9 @@ PyPI (cached in `packaging/cache/`).
    and enter the Hamlib model number (`rigctl -l` lists them), the serial port
    and the baud rate; Procyon starts `rigctld` for you. (Already running your
    own `rigctld`? Point Procyon at it in *Settings → Advanced*.)
-2. **Pick a band** from the frequency button in the header.
+2. **Pick a band** from the frequency button in the header, and **FT8 or FT4**
+   with the switch beside it (FT4: 7.5-second cycles, for quicker QSOs and
+   contests; the band menu then offers the FT4 frequencies, e.g. 14.080).
 3. **Answer someone:** click any row in *Band activity*. Rows calling CQ have a
    green bar, and messages to you are highlighted in amber and pinned to the top.
 4. **Or call CQ** with the *Call CQ* button. The first station to answer is
@@ -218,6 +220,7 @@ Good to know:
 | Radio auto-detect and test (serial ID, Hamlib read-only test) | `procyon/radio_detect.py` |
 | Finds or installs WSJT-X (macOS: right build for the CPU, no admin needed) | `procyon/wsjtx_install.py` |
 | FT8 GFSK waveform (port of WSJT-X `gen_ft8wave`), message parsing | `procyon/ft8.py` |
+| FT4 encoder and waveform (ports of WSJT-X `genft4` / `gen_ft4wave`) | `procyon/ft4.py` |
 | QSO auto-sequencer | `procyon/qso.py` |
 | Country lookup (`cty.dat`), distance/bearing, ADIF log | `procyon/geo.py` |
 | rigctld client (frequency, PTT) | `procyon/rig.py` |
@@ -231,7 +234,11 @@ Good to know:
 | Release packages | `packaging/` |
 
 Each 15-second cycle, audio is buffered at 12 kHz. At 13.4 s the cycle is
-written to a WAV and decoded with `jt9 -8`. Transmit audio is synthesized at
+written to a WAV and decoded with `jt9 -8`. In FT4 the cycle is 7.5 s,
+decoded at 6.2 s with `jt9 -5`. WSJT-X has no stand-alone FT4 encoder, so
+`ft8code` packs the message (FT4 packs it the same way) and `ft4.py` does the
+rest: scrambling, CRC, LDPC parity, tones and audio - checked bit for bit
+against WSJT-X and by decoding with `jt9`. Transmit audio is synthesized at
 the sound card's own rate and starts 0.5 s into the cycle (up to 1.5 s late if
 needed). Procyon only plays transmit audio after the radio confirms it is
 transmitting.
@@ -244,6 +251,29 @@ and Procyon B. (Earlier versions were called Skywave; settings and logbooks move
 across automatically on first start.)
 
 ## Roadmap
+
+0.9.40: the **Campfire** palette (*Settings → Experimental*) has bark-brown
+panels, with dirt-brown boxes and lists inside them, on its near-black night
+background (the panels used to be forest green).
+
+0.9.39: the FT8 / FT4 switch answers at once. It used to wait until the radio
+had moved to the new frequency, which took several seconds when the radio was
+slow to answer, so extra clicks queued up and flipped the mode back and forth.
+Now the new mode lights up straight away, repeat clicks are ignored while it
+switches, and the radio is retuned in the background.
+
+0.9.38: the log's "sent" report is the one you actually sent. Messages are
+rebuilt with the latest signal strength, so the log used to get the newest
+measurement instead (e.g. -14 sent, -12 logged).
+
+0.9.37: **FT4 (beta)**. An FT8 / FT4 switch next to the band in the header.
+FT4 runs 7.5-second cycles with the same messages and QSO flow as FT8, so
+QSOs take half the time (about 3 dB less sensitive - popular in contests).
+Switching stops transmitting, starts Band activity and the QSO afresh, and
+moves the radio to the band's FT4 frequency (e.g. 14.080) if it sat on the
+FT8 one. FT4 QSOs are logged as MODE MFSK / SUBMODE FT4 (the ADIF standard);
+GridTracker and other companion apps are told the mode. The demo band runs
+FT4 too. The mode in use shows in teal on the switch.
 
 0.9.36: the **Antique radio** palette (*Settings → Experimental*) is now a
 stained-maple cabinet framing dark bakelite panels, after a 1930s tabletop
@@ -437,9 +467,7 @@ Next:
      find the band's timing.
    - Setting: Off / Show me / Automatic.
 5. **More modes, after tester feedback:**
-   - **FT4** first: `jt9` already decodes it and the QSO flow is the same as FT8;
-     needs Procyon's own FT4 encoder (no `ft4code` in WSJT-X) verified against
-     `jt9`, 7.5 s cycle timing, and a mode switch in the header.
+   - **FT4**: in as a beta since 0.9.37 (own encoder, verified against `jt9`).
    - **WSPR**: `wsprd` decodes; needs an encoder and its own beacon-style screen
      (2-minute cycles, WSPRnet reporting, band hopping).
    - **A keyboard-mode screen** for free-text modes: received text scrolling

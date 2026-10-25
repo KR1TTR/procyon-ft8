@@ -85,6 +85,13 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--border2)
 .band-btn .unit { color: var(--muted); font-size: 12px; }
 .band-btn .band-name { font-size: 12px; font-weight: 600; color: var(--rx); background: color-mix(in srgb, var(--rx) 10%, transparent); padding: 1px 7px; border-radius: 99px; margin-left: 4px; }
 .chev { width: 12px; height: 12px; align-self: center; }
+/* FT8 / FT4 switch, right beside the band */
+.seg.mode-seg { margin-left: -8px; flex-shrink: 0; background: var(--surface); border-color: var(--border); }   /* matches the band button in every palette */
+.mode-seg button { font: 600 12px var(--mono); padding: 5px 10px; }
+/* the mode in use in teal, so it's clear at a glance (".seg" too: outranks the plain .seg style) */
+.seg.mode-seg button.on { color: var(--rx); background: color-mix(in srgb, var(--rx) 16%, transparent); }
+.mode-seg.pending { cursor: progress; }
+.mode-seg.pending button { pointer-events: none; }
 .chev path { stroke: var(--muted); stroke-width: 1.5; fill: none; }
 .menu {
   position: absolute; top: calc(100% + 6px); left: 0; min-width: 220px;
@@ -745,13 +752,13 @@ dialog.pota-dlg { width: min(520px, calc(100vw - 32px)); }
 :root[data-palette="classic"] .top,
 :root[data-palette="classic"] .top .menu { color: var(--text); }
 
-/* Campfire: night-forest greens over blue-black, bark-brown edges, a bright
-   amber for "calling you" - made to go with the Ember waterfall, and dim enough
-   for dark-adapted eyes on a late-night activation. */
+/* Campfire: bark-brown panels (dirt-brown fields inside them) on a near-black
+   night, a bright amber for "calling you" - made to go with the Ember
+   waterfall, and dim enough for dark-adapted eyes on a late-night activation. */
 :root[data-palette="campfire"] {
   --bg: #050a0b; --bg2: #071011;
-  --surface: #0c1613; --surface2: #12201b;
-  --border: #2a2118; --border2: #3d3022;
+  --surface: #1f170f; --surface2: #2a1f15;
+  --border: #3a2b1c; --border2: #52402b;
   --text: #e4e8de; --muted: #8e9d90; --faint: #5c6b61;
   --rx: #63c7b2; --tx: #ff5a3c; --cq: #a8e35a; --me: #ffc23d; --info: #7fa6d6;
   --pota: #b5d96a; --rpt: #c9a6ff; --text2: #c9d2c4;
@@ -760,10 +767,11 @@ dialog.pota-dlg { width: min(520px, calc(100vw - 32px)); }
   --snr1: #a8e35a; --snr2: #cde35a; --snr3: #ffc23d; --snr4: #ff8a4a;
   --header-bg: #050b0bd9; --glow1: #10284a40; --glow2: #3a1a0a2e;
   --wf-bg: #050302;
-  --hover-bg: #1a2a23; --hover-border: #4a3a29;
+  --hover-bg: #33261a; --hover-border: #6a5238;
   --line: #ffffff07; --ghost-bg: #ffffff0e; --ghost-border: #ffffff38;
   --overlay: #050a0bcc; --backdrop: #020504cc;
 }
+:root[data-palette="campfire"] .card, :root[data-palette="campfire"] dialog { --bg: #150f0a; --bg2: #1a130c; }
 
 /* Antique radio: a 1930s tabletop "tombstone" set - stained-maple cabinet framing
    dark bakelite workspaces, brass accents. Made to go with the Tube glow waterfall. */

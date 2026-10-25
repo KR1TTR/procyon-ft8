@@ -35,6 +35,7 @@ class Qso:
         self.dxcall = ""
         self.dxgrid = ""
         self.snr = -10           # what we measured of the DX station
+        self.report_sent = ""    # the report we actually sent them (what gets logged)
         self.report_rcvd = ""
         self.stage = 0
         self.logged = False
@@ -95,7 +96,7 @@ class Qso:
             "dxcall": self.dxcall, "dxgrid": self.dxgrid, "msgs": self.msgs,
             "next": self.next, "tx_enabled": self.tx_enabled, "parity": self.parity,
             "stage": self.stage, "stage_name": STAGES[self.stage],
-            "report_sent": ft8.fmt_report(self.snr) if self.dxcall else "",
+            "report_sent": self.sent_report() if self.dxcall else "",
             "report_rcvd": self.report_rcvd, "logged": self.logged,
             "thread": self.thread, "note": self.note,
         }
@@ -114,6 +115,19 @@ class Qso:
     def note_tx(self, period, msg):
         self._note("tx", period, msg)
         self.last_tx_period = period
+        # Remember the report as it went out: messages are rebuilt with the
+        # latest signal strength, so by the time the QSO is logged our
+        # measurement may differ from what they were told ("-14" sent, "-12" now).
+        p = ft8.parse(msg, self.mycall)
+        if p["kind"] == "std" and ft8.same_station(p["to"], self.dxcall):
+            if p["extra_kind"] == "report":
+                self.report_sent = p["extra"]
+            elif p["extra_kind"] == "rreport":
+                self.report_sent = p["extra"][1:]
+
+    def sent_report(self) -> str:
+        """The report we sent, or (before we've sent one) the one we would send."""
+        return self.report_sent or ft8.fmt_report(self.snr)
 
     def _note_heard(self, decodes, period):
         """Log what the DX station sent this cycle - or that we heard nothing

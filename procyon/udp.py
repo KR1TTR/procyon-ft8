@@ -124,26 +124,26 @@ class WsjtxUdp(asyncio.DatagramProtocol):
 
     def status(self, s: dict):
         w = Writer(STATUS, self.ident)
-        (w.u64(s["dial"]).utf8("FT8").utf8(s["dx_call"]).utf8(s["report"]).utf8("FT8")
+        (w.u64(s["dial"]).utf8(s["mode"]).utf8(s["dx_call"]).utf8(s["report"]).utf8(s["mode"])
          .boolean(s["tx_enabled"]).boolean(s["transmitting"]).boolean(s["decoding"])
          .u32(s["rx_df"]).u32(s["tx_df"]).utf8(s["de_call"]).utf8(s["de_grid"])
          .utf8(s["dx_grid"]).boolean(False).utf8("").boolean(False).u8(0)
-         .u32(NULL).u32(15).utf8("Default").utf8(s["tx_message"]))
+         .u32(NULL).u32(s["period"]).utf8("Default").utf8(s["tx_message"]))
         self._send(w)
 
     def decode(self, period_start: float, snr: int, dt_: float, df: int, msg: str,
-               low_confidence=False):
+               mode="~", low_confidence=False):
         t = dt.datetime.fromtimestamp(period_start, dt.timezone.utc)
-        ms = ((t.hour * 60 + t.minute) * 60 + t.second) * 1000
+        ms = ((t.hour * 60 + t.minute) * 60 + t.second) * 1000 + t.microsecond // 1000   # FT4: :07.5
         w = Writer(DECODE, self.ident)
-        (w.boolean(True).qtime(ms).i32(snr).f64(dt_).u32(df).utf8("~").utf8(msg)
+        (w.boolean(True).qtime(ms).i32(snr).f64(dt_).u32(df).utf8(mode).utf8(msg)
          .boolean(low_confidence).boolean(False))
         self._send(w)
 
     def qso_logged(self, rec: dict, time_on: dt.datetime, time_off: dt.datetime, adif: str):
         w = Writer(QSO_LOGGED, self.ident)
         (w.qdatetime(time_off).utf8(rec.get("call", "")).utf8(rec.get("gridsquare", ""))
-         .u64(int(round(float(rec.get("freq", "0") or 0) * 1e6))).utf8("FT8")
+         .u64(int(round(float(rec.get("freq", "0") or 0) * 1e6))).utf8(rec.get("submode") or rec.get("mode", ""))
          .utf8(rec.get("rst_sent", "")).utf8(rec.get("rst_rcvd", "")).utf8(rec.get("tx_pwr", ""))
          .utf8(rec.get("comment", "")).utf8("").qdatetime(time_on).utf8("")
          .utf8(rec.get("station_callsign", "")).utf8(rec.get("my_gridsquare", ""))

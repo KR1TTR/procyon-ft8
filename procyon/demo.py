@@ -1,4 +1,4 @@
-"""Simulated FT8 band for trying Procyon without a radio.
+"""Simulated FT8 (or FT4) band for trying Procyon without a radio.
 
 Produces 12 kHz audio containing background QSOs, stations calling CQ, and
 stations that respond to whatever you transmit - so the whole receive,
@@ -12,7 +12,6 @@ import numpy as np
 from . import ft8
 
 FS = 12000
-PERIOD_SAMPLES = int(ft8.PERIOD * FS)
 
 REGIONS = [
     ("K", ["FN42", "EM73", "DM79", "CN87", "EN52", "FM18", "EL96"]),
@@ -66,7 +65,9 @@ class BackgroundQso:
 
 
 class DemoBand:
-    def __init__(self, seed=None):
+    def __init__(self, mode=ft8, seed=None):
+        self.m = mode                 # the ft8 or ft4 module
+        self.period_samples = int(mode.PERIOD * FS)
         self.rng = random.Random(seed)
         self.mycall = ""
         self.bg: list[BackgroundQso] = [BackgroundQso(self.rng, set(), self.rng.randint(0, 4))
@@ -180,14 +181,15 @@ class DemoBand:
     def period_audio(self, period: int) -> np.ndarray:
         if period in self._cache:
             return self._cache[period]
-        buf = np.random.default_rng().normal(0, 1, PERIOD_SAMPLES)
+        n_period = self.period_samples
+        buf = np.random.default_rng().normal(0, 1, n_period)
         for st, msg in self._plan(period):
-            tones, _ = ft8.encode(msg)
-            w = ft8.synth(tones, st.freq, FS)
+            tones, _ = self.m.encode(msg)
+            w = self.m.synth(tones, st.freq, FS)
             snr = st.snr + self.rng.uniform(-2, 2)  # a little QSB
             amp = np.sqrt(2 * (2500 / FS * 2) * 10 ** (snr / 10))
-            s = int((ft8.TX_START + st.dt) * FS)
-            n = min(len(w), PERIOD_SAMPLES - s)
+            s = int((self.m.TX_START + st.dt) * FS)
+            n = min(len(w), n_period - s)
             buf[s:s + n] += amp * w[:n]
         audio = np.clip(buf * 1500, -32767, 32767).astype(np.int16)
         self._cache = {k: v for k, v in self._cache.items() if k >= period - 1}
@@ -198,8 +200,8 @@ class DemoBand:
         """Absolute sample indices since the Unix epoch (12 kHz)."""
         out = []
         while n0 < n1:
-            period, off = divmod(n0, PERIOD_SAMPLES)
-            take = min(n1 - n0, PERIOD_SAMPLES - off)
+            period, off = divmod(n0, self.period_samples)
+            take = min(n1 - n0, self.period_samples - off)
             out.append(self.period_audio(period)[off:off + take])
             n0 += take
         return np.concatenate(out) if out else np.zeros(0, np.int16)

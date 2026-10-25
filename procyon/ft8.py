@@ -14,6 +14,17 @@ NSYM = 79
 TONE_SPACING = 6.25    # Hz
 TX_START = 0.5         # nominal signal start within a period (DT = 0)
 SIGNAL_SEC = NSYM * SYMBOL_SEC  # 12.64 s
+NAME = "FT8"
+WIDTH = 50             # Hz a signal takes up on the waterfall
+DECODE_AT = 13.4       # seconds into the period when we decode
+# A transmission may start up to this many seconds after its normal start. Like
+# WSJT-X, the part that should already have gone out is skipped, so the signal
+# stays aligned and ends on time; FT8's error correction rebuilds the missing
+# start. Tested: still decodes at -18 dB when started 3.5 s late.
+LATE_START_MAX = 3.0
+JT9_MODE = "-8"        # jt9's switch for this mode
+UDP_MODE = "~"         # how WSJT-X marks this mode in its UDP Decode messages
+ADIF = {"mode": "FT8"}
 
 GRID_RE = re.compile(r"^[A-R]{2}[0-9]{2}$")
 REPORT_RE = re.compile(r"^[+-]\d{2}$")

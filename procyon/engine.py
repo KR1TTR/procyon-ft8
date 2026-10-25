@@ -14,7 +14,7 @@ import wave
 
 import numpy as np
 
-from . import ft8
+from . import ft4, ft8
 from . import AUTHORS, RELEASE_DATE, __version__
 from .audio import choose_backend
 from .auth import PIN_RE, Auth, lan_addresses
@@ -32,12 +32,9 @@ from .rig import Rig
 log = logging.getLogger("procyon")
 
 FS = 12000
-DECODE_AT = 13.4          # seconds into the period when we decode
-# A transmission may start up to this many seconds after its normal start. Like
-# WSJT-X, the part that should already have gone out is skipped, so the signal
-# stays aligned and ends on time; FT8's error correction rebuilds the missing
-# start. Tested: still decodes at -18 dB when started 3.5 s late.
-LATE_START_MAX = 3.0
+# The modes: each module has the timing (PERIOD, TX_START, DECODE_AT...) and
+# its own encode() and synth(). Messages are packed the same way in both.
+MODES = {"FT8": ft8, "FT4": ft4}
 RING_SEC = 45
 FFT_N = 4096
 WF_HOP = 1500             # 8 waterfall rows per second
@@ -48,6 +45,7 @@ DEFAULTS = {
     "tx_level": 35, "tx_watts": "", "depth": 2, "demo": False, "ptt": "cat",
     "rig_enabled": False, "rig_host": "127.0.0.1", "rig_port": 4532,
     "rig_spawn": False, "rig_model": "", "rig_device": "", "rig_baud": "",
+    "mode": "FT8",                   # FT8 or FT4 (the switch next to the band)
     "rig_mode": "data",              # what to put the radio in for FT8: data, usb, or none
     "wf_start": 0, "wf_end": 3000,   # waterfall range in Hz, to match the radio's filter
     "log_reports_in_comment": False,  # add "FT8 Sent: -05 Rcvd: -12" to log comments
@@ -67,15 +65,15 @@ DEFAULTS = {
 }
 SECRETS = ("remote_pin_hash", "qrz_key")   # never sent to the browser
 LOCAL_ONLY = ("remote_", "qrz_key", "lotw_")  # only the computer running Procyon changes these
-OWN_COMMANDS = ("pota_",)   # changed by their own commands, not the Settings form
+OWN_COMMANDS = ("pota_", "mode")   # changed by their own commands, not the Settings form
 
-LINE_RE = re.compile(r"^\d{4,6}\s+(-?\d+)\s+(-?\d+\.\d)\s+(\d+)\s+~\s+(.+?)\s*$")
+LINE_RE = re.compile(r"^\d{4,6}\s+(-?\d+)\s+(-?\d+\.\d)\s+(\d+)\s+[~+]\s+(.+?)\s*$")   # ~ FT8, + FT4
 
 # Long/unusual callsigns (3E40CDW, P4/WE9V) are sent as short codes, shown as
 # <...> unless the decoder has heard the full call. jt9 forgets between runs, so
 # each run first decodes a "reminder" recording of the ones heard so far.
 LONG_CALLS_MAX = 40
-PRIMER_TIME = "000007"    # the reminder's time: never a cycle start, so easy to drop
+PRIMER_TIME = "000003"    # the reminder's time: never a cycle start (FT8 or FT4), so easy to drop
 
 
 class Engine:
@@ -94,6 +92,8 @@ class Engine:
         # The demo band never carries over: every launch starts live, unless
         # started with --demo (e.g. the Windows "DEMO ONLY" launcher).
         self.s["demo"] = bool(force_demo)
+        if self.s["mode"] not in MODES:
+            self.s["mode"] = "FT8"
         self.auth = Auth(data_dir)
         self.port = 8073
         self.on_remote_change = None   # set by the server: start/stop listening on the network
@@ -110,14 +110,14 @@ class Engine:
         self.tqsl = uploads.find_tqsl()
         self.qso = Qso(self._log_qso, self.toast)
         self._set_station()
-        self.demo = DemoBand()
+        self.demo = DemoBand(self.m)
         self.clients = set()
         self._ever_connected = False   # a tab has been open at least once
         self._alone_task = None
         self.history = collections.deque(maxlen=80)   # recent decode batches
         self.tmp = tempfile.mkdtemp(prefix="procyon-")
         self.long_calls = collections.OrderedDict()   # heard in full, newest last
-        self._primer = ((), "")                         # (calls, reminder .wav)
+        self._primer = ((), "", "")                     # (calls, mode, reminder .wav)
         # audio ring buffer
         self.ring = np.zeros(RING_SEC * FS, np.int16)
         self.total = 0
@@ -196,6 +196,11 @@ class Engine:
             self.broadcast({"type": "toast", "text": text, "kind": kind}))
 
     @property
+    def m(self):
+        """The mode in use: the ft8 or ft4 module."""
+        return MODES[self.s["mode"]]
+
+    @property
     def dial(self):
         if self.rig.enabled and self.rig.connected and self.rig.freq:
             return self.rig.freq
@@ -221,7 +226,9 @@ class Engine:
             "rig": {"enabled": self.rig.enabled, "connected": self.rig.connected,
                     "freq": self.rig.freq, "error": self.rig.error},
             "dial": self.dial, "band": band_of(self.dial),
-            "bands": [{"name": b[0], "hz": b[3]} for b in BANDS],
+            "bands": [{"name": b[0], "hz": self._band_dial(b)} for b in BANDS],
+            "timing": {"mode": self.m.NAME, "period": self.m.PERIOD, "tx_start": self.m.TX_START,
+                       "signal": self.m.SIGNAL_SEC, "decode_at": self.m.DECODE_AT, "width": self.m.WIDTH},
             "qso": {**self.qso.snapshot(), "info": info},
             "tx": self.tx_info, "tuning": self.tune_task is not None,
             "log": [{**e, **self._station_info(e["call"], e["grid"])}
@@ -252,7 +259,8 @@ class Engine:
         q = self.qso
         self.udp.status({
             "dial": self.dial, "dx_call": q.dxcall,
-            "report": ft8.fmt_report(q.snr) if q.dxcall else "",
+            "report": ft8.fmt_report(q.snr) if q.dxcall else "", "mode": self.m.NAME,
+            "period": int(self.m.PERIOD),
             "tx_enabled": q.tx_enabled, "transmitting": bool(self.tx_info),
             "decoding": self.decoding, "rx_df": int(self.s["rx_freq"]), "tx_df": int(self.s["tx_freq"]),
             "de_call": self.s["mycall"].upper(), "de_grid": self.s["mygrid"][:4].upper(),
@@ -365,10 +373,11 @@ class Engine:
         while True:
             await asyncio.sleep(0.05)
             now = time.time()
-            p = int(now // ft8.PERIOD)
-            pos = now - p * ft8.PERIOD
+            m = self.m
+            p = int(now // m.PERIOD)
+            pos = now - p * m.PERIOD
             try:
-                if pos >= DECODE_AT and self.last_decoded < p and self.t0 is not None:
+                if pos >= m.DECODE_AT and self.last_decoded < p and self.t0 is not None:
                     self.last_decoded = p
                     if p not in self.tx_periods:
                         asyncio.create_task(self._decode(p))
@@ -377,7 +386,7 @@ class Engine:
                         and self.tx_task is None and self.tune_task is None):
                     if self.decoding and pos < 1.0:
                         continue  # let the previous period's decode finish first
-                    if pos <= ft8.TX_START + LATE_START_MAX:
+                    if pos <= m.TX_START + m.LATE_START_MAX:
                         self.tx_periods.add(p)
                         self.tx_task = asyncio.create_task(self._transmit(p))
                 q.watchdog()
@@ -401,9 +410,10 @@ class Engine:
 
     async def _decode(self, p):
         self.decoding = True
+        mode = self.m
         try:
-            t_start = p * ft8.PERIOD
-            audio = self.samples(t_start, t_start + ft8.PERIOD)
+            t_start = p * mode.PERIOD
+            audio = self.samples(t_start, t_start + mode.PERIOD)
             hhmmss = time.strftime("%H%M%S", time.gmtime(t_start))
             path = os.path.join(self.tmp, f"{time.strftime('%y%m%d', time.gmtime(t_start))}_{hhmmss}.wav")
             with wave.open(path, "wb") as wf:
@@ -414,7 +424,7 @@ class Engine:
             jt9 = find_tool("jt9")
             if not jt9:
                 raise RuntimeError("WSJT-X's decoder (jt9) wasn't found - is WSJT-X installed?")
-            args = [jt9, "-8", "-d", str(self.s["depth"]), "-a", self.tmp, "-t", self.tmp]
+            args = [jt9, mode.JT9_MODE, "-d", str(self.s["depth"]), "-a", self.tmp, "-t", self.tmp]
             if self.s["mycall"]:
                 args += ["-c", self.s["mycall"].upper()]
             if self.s["mygrid"]:
@@ -423,7 +433,7 @@ class Engine:
                 args += ["-x", self.qso.dxcall]
             self._remember_call(self.s["mycall"], ours=True)
             self._remember_call(self.qso.dxcall, ours=True)
-            primer = await self._primer_wav()
+            primer = await self._primer_wav(mode)
             if primer:
                 args.append(primer)
             args.append(path)
@@ -431,6 +441,8 @@ class Engine:
                 *args, cwd=self.tmp, stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL)
             out, _ = await asyncio.wait_for(proc.communicate(), 12)
+            if mode is not self.m:
+                return   # the mode was switched while decoding: these belong to the old one
             os.unlink(path)
             decodes, seen = [], set()
             for line in out.decode(errors="replace").splitlines():
@@ -461,7 +473,7 @@ class Engine:
             self.history.append(batch)
             await self.broadcast(batch)
             for d in decodes:
-                self.udp.decode(p * ft8.PERIOD, d["snr"], d["dt"], d["freq"], d["msg"],
+                self.udp.decode(p * mode.PERIOD, d["snr"], d["dt"], d["freq"], d["msg"], mode.UDP_MODE,
                                 low_confidence=bool(d.get("uncertain")))
             self.qso.on_decodes(decodes, p)
             await self.push_state()
@@ -495,29 +507,31 @@ class Engine:
                 self._remember_call(toks[0])
                 self._remember_call(toks[1])
 
-    async def _primer_wav(self) -> str:
+    async def _primer_wav(self, m) -> str:
         """A clean recording of "CQ <call>" for every remembered long callsign,
-        rebuilt only when the list changes. "" when there are none."""
+        in mode `m`, rebuilt only when the list or the mode changes. "" when
+        there are none."""
         calls = tuple(self.long_calls)
         if not calls:
             return ""
-        if self._primer[0] != calls or not os.path.exists(self._primer[1]):
+        if self._primer[:2] != (calls, m.NAME) or not os.path.exists(self._primer[2]):
             path = os.path.join(self.tmp, f"000000_{PRIMER_TIME}.wav")
-            await asyncio.to_thread(self._write_primer, calls, path)
-            self._primer = (calls, path)
-        return self._primer[1]
+            await asyncio.to_thread(self._write_primer, m, calls, path)
+            self._primer = (calls, m.NAME, path)
+        return self._primer[2]
 
     @staticmethod
-    def _write_primer(calls, path):
-        x = np.zeros(int(ft8.PERIOD * FS))
+    def _write_primer(m, calls, path):
+        x = np.zeros(int(m.PERIOD * FS))
         amp = min(1500.0, 24000.0 / len(calls))   # all together never clip
-        start = int(ft8.TX_START * FS)
+        start = int(m.TX_START * FS)
+        step = 60 if m is ft8 else 100   # FT4 signals are wider
         for i, c in enumerate(calls):
             msg = f"CQ {c}"
-            tones, decoded = ft8.encode(msg)
+            tones, decoded = m.encode(msg)
             if decoded != msg:
                 continue
-            w = ft8.synth(tones, 300 + 60 * i, FS) * amp
+            w = m.synth(tones, 300 + (step * i) % 3400, FS) * amp
             x[start:start + len(w)] += w[:len(x) - start]
         with wave.open(path, "wb") as wf:
             wf.setnchannels(1)
@@ -631,6 +645,7 @@ class Engine:
 
     async def _transmit(self, p):
         q = self.qso
+        m = self.m
         idx = q.next
         text = ft8.normalize(q.msgs[idx])
         try:
@@ -641,23 +656,23 @@ class Engine:
                 q.tx_enabled = False
                 self.toast("Set your callsign in Settings before transmitting", "warn")
                 return
-            tones, decoded = ft8.encode(text)
+            tones, decoded = m.encode(text)
             if len(decoded) < len(text):
-                # FT8 would cut this message short (e.g. a callsign it can't
+                # FT8/FT4 would cut this message short (e.g. a callsign it can't
                 # encode falling back to 13 characters of free text). Never put
                 # a cut-off callsign on the air: don't key up at all.
                 q.tx_enabled = False
-                self.toast(f"Not sent: FT8 can't fit “{text}” - it would go out cut short as "
+                self.toast(f"Not sent: {m.NAME} can't fit “{text}” - it would go out cut short as "
                            f"“{decoded}”. Edit the message and enable TX again.", "bad")
                 return
             if decoded != text and decoded != self._warned:
                 self._warned = decoded
                 self.toast(f"Message will be received as “{decoded}”", "warn")
             q.note_tx(p, decoded)
-            target = p * ft8.PERIOD + ft8.TX_START
+            target = p * m.PERIOD + m.TX_START
             late = max(0.0, time.time() - target)
             self.tx_info = {"msg": decoded, "period": p, "idx": idx, "freq": self.s["tx_freq"],
-                            "start": target, "end": target + ft8.SIGNAL_SEC,
+                            "start": target, "end": target + m.SIGNAL_SEC,
                             "late": round(late, 1) if late >= 0.5 else 0}
             self._halt.clear()
             await self.push_state()
@@ -669,7 +684,7 @@ class Engine:
                     pass
             else:
                 f0 = float(self.s["tx_freq"])
-                await self._play(lambda rate: ft8.synth(tones, f0, rate), target)
+                await self._play(lambda rate: m.synth(tones, f0, rate), target)
             if not self._halt.is_set():
                 q.after_tx(idx)
         except Exception as e:  # noqa: BLE001
@@ -857,8 +872,8 @@ class Engine:
         start = q.started or now
         dial = self.dial
         rec = {
-            "call": q.dxcall, "gridsquare": q.dxgrid, "mode": "FT8",
-            "rst_sent": ft8.fmt_report(q.snr), "rst_rcvd": q.report_rcvd,
+            "call": q.dxcall, "gridsquare": q.dxgrid, **self.m.ADIF,
+            "rst_sent": q.sent_report(), "rst_rcvd": q.report_rcvd,
             "qso_date": start.strftime("%Y%m%d"), "time_on": start.strftime("%H%M%S"),
             "qso_date_off": now.strftime("%Y%m%d"), "time_off": now.strftime("%H%M%S"),
             "band": band_of(dial), "freq": f"{(dial + int(self.s['tx_freq'])) / 1e6:.6f}",
@@ -913,9 +928,54 @@ class Engine:
         if not await self.rig.set_mode(want[0]) and self.rig.connected:
             self.toast(f"Couldn't switch the radio to {want[1]} mode - please set it on the radio", "warn")
 
+    def _band_dial(self, band) -> int:
+        """The band's usual dial frequency for the mode in use."""
+        return band[4] if self.m is ft4 and band[4] else band[3]
+
+    async def _set_mode(self, mode: str):
+        """Switch between FT8 and FT4. Transmitting stops, the QSO and Band
+        activity start fresh (their cycle numbers belong to the old mode), and
+        if the radio sits on the old mode's usual frequency it moves to the new
+        one's on the same band, as WSJT-X does."""
+        if mode not in MODES or mode == self.s["mode"]:
+            return
+        await self.halt()
+        busy = [t for t in (self.tx_task, self.tune_task) if t]
+        if busy:
+            await asyncio.wait(busy, timeout=3)
+        old_dial = self.dial
+        self.s["mode"] = mode
+        self.last_decoded = 0
+        self.tx_periods.clear()
+        self.qso.reset()
+        self.qso.regen()
+        self.qso.next = 5
+        self.history.clear()
+        await self.broadcast({"type": "history", "batches": []})
+        self.udp.clear()
+        self.demo = DemoBand(self.m)
+        self.demo.mycall = self.s["mycall"].upper()
+        retune = False
+        for b in BANDS:
+            if old_dial in (b[3], b[4]) and self._band_dial(b) != old_dial:
+                self.s["dial_hz"] = self._band_dial(b)
+                retune = self.rig.enabled
+                break
+        self._clean_wf_range()   # FT4 is wider: keep the TX/RX markers inside the range
+        self.save()
+        log.info("mode switched to %s", mode)
+        if retune:
+            # The radio may be slow to answer (or not answering at all), so
+            # the switch shows at once and the radio follows in the background.
+            asyncio.get_event_loop().create_task(self._retune(self.s["dial_hz"]))
+
+    async def _retune(self, hz: int):
+        await self.rig.set_freq(hz)
+        await self.push_state()
+
     def _audio_range(self):
-        """Where an FT8 signal (50 Hz wide) can sit inside the chosen waterfall range."""
-        return max(100, int(self.s["wf_start"])), min(3950, int(self.s["wf_end"]) - 50)
+        """Where a signal (50 Hz wide in FT8, 83 in FT4) can sit inside the chosen waterfall range."""
+        return max(100, int(self.s["wf_start"])), min(4000 - self.m.WIDTH, int(self.s["wf_end"]) - self.m.WIDTH)
 
     def _clean_wf_range(self):
         try:
@@ -934,7 +994,7 @@ class Engine:
         """The user's note, plus the signal reports if they asked for them."""
         parts = [q.note.strip()]
         if self.s.get("log_reports_in_comment"):
-            parts.append(f"FT8 Sent: {ft8.fmt_report(q.snr)} Rcvd: {q.report_rcvd or '?'}")
+            parts.append(f"{self.m.NAME} Sent: {q.sent_report()} Rcvd: {q.report_rcvd or '?'}")
         return " · ".join(p for p in parts if p)
 
     def _comment(self, note: str) -> str:
@@ -989,7 +1049,7 @@ class Engine:
         await self.push_state()
         where = ", ".join(parks)
         if not was_on and not self.qso.msgs[5].startswith("CQ POTA"):
-            return {"type": "pota", "ok": True, "text": f"Activation started at {where}. Note: FT8 can't "
+            return {"type": "pota", "ok": True, "text": f"Activation started at {where}. Note: {self.m.NAME} can't "
                     f"send \"CQ POTA\" with {self.s['mycall']}, so your CQ goes out as a plain CQ."}
         return {"type": "pota", "ok": True,
                 "text": f"Activation {'updated' if was_on else 'started'}: {where}. Good luck!"}
@@ -1297,6 +1357,8 @@ class Engine:
             lo, hi = self._audio_range()
             self.s[key] = int(max(lo, min(hi, m["hz"])))
             self.save()
+        elif t == "mode":
+            await self._set_mode(str(m.get("mode", "")).upper())
         elif t == "band":
             self.s["dial_hz"] = int(m["hz"])
             self.save()
