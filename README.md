@@ -2,7 +2,7 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 0.9.40** · 25 October 2026
+**Version 0.9.43** · 25 October 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
 A simpler, friendlier FT8 station (FT4 too, as a beta). Procyon uses WSJT-X's
@@ -16,11 +16,11 @@ the Hamlib copy it includes): https://wsjt.sourceforge.io
 
 | System | Download | How |
 |---|---|---|
-| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.40_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.40_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
-| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.40-arch.tar.gz` | `tar xf procyon-0.9.40-arch.tar.gz`, `cd procyon-0.9.40-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
-| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.40-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
-| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.40-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
-| Windows 10/11 (64-bit) | `Procyon-0.9.40-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
+| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.43_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.43_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
+| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.43-arch.tar.gz` | `tar xf procyon-0.9.43-arch.tar.gz`, `cd procyon-0.9.43-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
+| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.43-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
+| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.43-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
+| Windows 10/11 (64-bit) | `Procyon-0.9.43-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
 
 Add `--demo` (or use **Procyon DEMO ONLY - no radio.bat** on Windows, or
 *Settings → Advanced → Demo band*) to try it with a simulated band: nothing is
@@ -251,6 +251,30 @@ and Procyon B. (Earlier versions were called Skywave; settings and logbooks move
 across automatically on first start.)
 
 ## Roadmap
+
+0.9.43: fix - "Import my QSOs from QRZ" said the logbook was empty. QRZ
+sends the downloaded QSOs as plain text with < and > written as &lt; and
+&gt;, which Procyon cut apart. It now reads that format (and the other one,
+in case QRZ changes); if a page of QSOs lacks QRZ's record numbers it fetches
+the whole logbook in one go, and it says so if fewer QSOs arrive than QRZ
+reports.
+
+0.9.42: **safety fix** - only Procyon's own page can talk to Procyon. Before,
+any web site open in a browser on the same computer could have connected to
+Procyon in the background and sent it commands (in the worst case "call CQ"
+or "enable TX"). Now Procyon refuses connections and changes coming from any
+other page, and only answers at this computer's own address (an IP address,
+localhost or the computer's name), which also stops "DNS rebinding" tricks.
+Refused attempts are written to procyon.log.
+
+0.9.41: **logbook import** (*Settings → Advanced*). "Import my QSOs from
+QRZ" downloads your QRZ logbook with your API key (downloading needs a QRZ
+subscription); "Import an ADIF file" takes a file from qrz.com, WSJT-X or
+another logging program. Either way NEW and "new band" then know everyone
+you've worked before Procyon. QSOs already in the log are skipped (same call
+and band within 15 minutes), the log is backed up first and kept in date
+order, and QSOs from QRZ are marked as already uploaded. The logbook is now
+read by each field's length, so a note containing "<" survives intact.
 
 0.9.40: the **Campfire** palette (*Settings → Experimental*) has bark-brown
 panels, with dirt-brown boxes and lists inside them, on its near-black night

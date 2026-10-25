@@ -128,6 +128,33 @@ def band_of(hz):
     return ""
 
 
+FIELD_RE = re.compile(r"<(\w+)(?::(\d+))?(?::[^>]*)?>", re.I)
+
+
+def parse_adif(text: str) -> list[dict]:
+    """The QSOs in an ADIF (.adi) text. Each value is read by its length, so a
+    note containing "<" or ">" comes through intact. Field names lowercase."""
+    m = re.search(r"<eoh>", text, re.I)
+    pos = m.end() if m else (0 if text.lstrip().startswith("<") else len(text))
+    qsos, rec = [], {}
+    while True:
+        m = FIELD_RE.search(text, pos)
+        if not m:
+            break
+        name = m.group(1).lower()
+        if name == "eor":
+            if rec.get("call"):
+                qsos.append(rec)
+            rec, pos = {}, m.end()
+            continue
+        n = int(m.group(2) or 0)
+        value = text[m.end():m.end() + n]
+        pos = m.end() + n
+        if value.strip():
+            rec[name] = value.strip()
+    return qsos
+
+
 class Logbook:
     """Append-only ADIF log, compatible with WSJT-X's wsjtx_log.adi format."""
 
@@ -138,14 +165,7 @@ class Logbook:
             self._read()
 
     def _read(self):
-        text = open(self.path, encoding="utf-8", errors="replace").read()
-        if "<eoh>" in text.lower():
-            text = re.split(r"<eoh>", text, flags=re.I)[1]
-        for rec in re.split(r"<eor>", text, flags=re.I):
-            fields = {m.group(1).lower(): m.group(3)[:int(m.group(2))] for m in
-                      re.finditer(r"<(\w+):(\d+)(?::\w)?>([^<]*)", rec)}
-            if "call" in fields:
-                self.qsos.append(fields)
+        self.qsos = parse_adif(open(self.path, encoding="utf-8", errors="replace").read())
 
     def worked(self, call, band=None):
         call = call.upper()
@@ -172,6 +192,17 @@ class Logbook:
         shutil.copy2(self.path, self.path + ".bak")
         with open(self.path, "w", encoding="utf-8") as f:
             f.write(self.HEADER + "".join(self._record(q) for q in self.qsos))
+
+    def add_many(self, qsos: list, key):
+        """Add QSOs from elsewhere and put the whole log in date order (`key`),
+        so older imported QSOs don't show up as the most recent ones."""
+        self.qsos += [{k.lower(): str(v) for k, v in q.items()} for q in qsos]
+        self.qsos.sort(key=key)
+        if os.path.exists(self.path):
+            self._rewrite()
+        else:
+            with open(self.path, "w", encoding="utf-8") as f:
+                f.write(self.HEADER + "".join(self._record(q) for q in self.qsos))
 
     def update(self, idx: int, fields: dict):
         """Change fields of one QSO (an empty value removes the field)."""

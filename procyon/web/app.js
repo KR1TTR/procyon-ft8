@@ -79,6 +79,7 @@ function connect() {
     else if (m.type === "detect_radio") onDetected(m);
     else if (m.type === "rig_test") onRigTest(m);
     else if (m.type === "qrz_check") onQrzCheck(m);
+    else if (m.type === "log_import") importMsg(m);
     else if (m.type === "export_marked") { $("#exportMsg").textContent = m.text; $("#exportMsg").classList.add("ok"); }
     else if (m.type === "pota") onPota(m);
     else if (m.type === "install") onInstall(m);
@@ -1414,6 +1415,9 @@ function openSettings(welcome) {
   // Online logbooks: set up on the computer running Procyon only (the key stays there).
   $("#onlineLocal").hidden = !isLocal;
   $("#onlineRemote").hidden = isLocal;
+  // Logbook import: on the computer running Procyon only.
+  $("#importLocal").hidden = !isLocal;
+  $("#importRemote").hidden = isLocal;
   showOnlineLogbooks();
   form.elements.remote_pin.placeholder = S.remote.pin_set ? "PIN is set - type a new one to change it" : "Choose a PIN";
   $("#remoteUrls").innerHTML = S.remote.urls.length
@@ -1655,6 +1659,32 @@ function onQrzCheck(m) {
   $("#qrzCheck").disabled = false;
   qrzMsg((m.ok ? "✓ " : "✗ ") + m.text, m.ok);
 }
+// Logbook import (Settings → Advanced): results show inline - notices would be
+// hidden behind the Settings window.
+function importMsg(m) {
+  const el = $("#importMsg");
+  el.textContent = m.busy ? m.text : (m.ok ? "" : "✗ ") + m.text;
+  el.classList.toggle("ok", !!m.ok);
+  $("#qrzImport").disabled = $("#adifImportBtn").disabled = !!m.busy;
+}
+$("#qrzImport").addEventListener("click", () => {
+  importMsg({ busy: true, text: "Asking QRZ for your logbook…" });
+  send({ type: "qrz_import" });
+});
+$("#adifImportBtn").addEventListener("click", () => $("#adifFile").click());
+$("#adifFile").addEventListener("change", async () => {
+  const f = $("#adifFile").files[0];
+  $("#adifFile").value = "";
+  if (!f) return;
+  importMsg({ busy: true, text: `Reading ${f.name}…` });
+  try {
+    const r = await fetch(`/import.adi?name=${encodeURIComponent(f.name)}`, {
+      method: "POST", body: f, headers: { "X-Procyon-Import": "1", "Content-Type": "application/octet-stream" } });
+    importMsg(await r.json());
+  } catch {
+    importMsg({ ok: false, text: "Couldn't send the file to Procyon - is it still running?" });
+  }
+});
 $("#qrzForget").addEventListener("click", () => {
   send({ type: "settings", settings: { qrz_key_forget: true } });
   S.qrz_key_set = false;

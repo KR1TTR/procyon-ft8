@@ -21,7 +21,8 @@ import webbrowser
 from aiohttp import WSCloseCode, WSMsgType, web
 
 from . import AUTHORS, RELEASE_DATE, __version__
-from .auth import COOKIE, SESSION_DAYS, is_local
+from . import logimport
+from .auth import COOKIE, SESSION_DAYS, is_local, trusted_host
 from .engine import Engine
 from .system import IS_WINDOWS, data_dir
 
@@ -118,10 +119,56 @@ async def login(request):
     return resp
 
 
+IMPORT_HEADER = "X-Procyon-Import"   # only Procyon's own page sends it (see import_adif)
+IMPORT_MAX = 64 * 1024 * 1024        # bytes: far more than any ham's logbook
+
+
+async def import_adif(request):
+    """An ADIF file picked in Settings → Advanced, merged into the log.
+    Only from this computer, and only from Procyon's own page: another web
+    site can't add the custom header without the browser asking us first
+    (which we never allow), so it can't slip QSOs into the log."""
+    eng: Engine = request.app["engine"]
+    if not is_local(request.remote) or request.headers.get(IMPORT_HEADER) != "1":
+        return web.json_response({"type": "log_import", "ok": False,
+                                  "text": "That can only be done on the computer running Procyon."}, status=403)
+    if eng.importing:
+        return web.json_response({"type": "log_import", "ok": False,
+                                  "text": "An import is already running - wait for it to finish."})
+    data = await request.read()
+    text = data.decode("utf-8", errors="replace")
+    name = os.path.basename(request.query.get("name", "")) or "the file"
+    reply = eng.import_qsos(logimport.parse_adif(text), name)
+    asyncio.get_event_loop().create_task(eng.push_state())
+    return web.json_response(reply)
+
+
 async def logout(request):
     resp = web.HTTPFound("/login")
     resp.del_cookie(COOKIE, path="/")
     raise resp
+
+
+@web.middleware
+async def own_page_only(request, handler):
+    """Only Procyon's own page may talk to Procyon. Without this, any web site
+    open in a browser on this computer could connect in the background and
+    send commands - even "call CQ" or "enable TX".
+    - The address must be this computer's (see auth.trusted_host).
+    - The live connection (/ws) and anything that changes something (POST)
+      must come from Procyon's own page: browsers always say which page with
+      the Origin header. Tools that aren't browsers send none: allowed."""
+    host = request.host.rsplit(":", 1)[0] if not request.host.endswith("]") else request.host
+    if not trusted_host(host):
+        logging.warning("refused a request for %r (not this computer's address)", request.host)
+        return web.Response(status=403, text="Procyon only answers at this computer's own address, "
+                                             "e.g. http://127.0.0.1:8073/ or the address shown in Settings.")
+    origin = request.headers.get("Origin")
+    if origin and (request.path == "/ws" or request.method not in ("GET", "HEAD")):
+        if origin.rstrip("/").lower() != f"{request.scheme}://{request.host}".lower():
+            logging.warning("refused %s %s from another web page (%s)", request.method, request.path, origin)
+            return web.Response(status=403, text="Only Procyon's own page can do that.")
+    return await handler(request)
 
 
 @web.middleware
@@ -300,12 +347,13 @@ def _run(args):
             except (asyncio.CancelledError, asyncio.TimeoutError, Exception):  # noqa: BLE001
                 pass   # cancelled, as intended
 
-    app = web.Application(middlewares=[guard, no_cache])
+    app = web.Application(middlewares=[own_page_only, guard, no_cache], client_max_size=IMPORT_MAX)
     app["engine"] = eng
     app.router.add_get("/", index)
     app.router.add_get("/ws", ws_handler)
     app.router.add_get("/log.adi", download_log)
     app.router.add_get("/pota/{park}.adi", download_pota)
+    app.router.add_post("/import.adi", import_adif)
     app.router.add_get("/login", login_page)
     app.router.add_post("/login", login)
     app.router.add_get("/logout", logout)

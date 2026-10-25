@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import tempfile
 import time
 import wave
@@ -22,7 +23,7 @@ from .demo import DemoBand
 from .geo import (BANDS, DEMO_MARK, DEMO_MARKS, Cty, Logbook, band_of, distance_bearing, grid_to_latlon,
                   strip_demo_mark, utc_now)
 from .qso import Qso
-from . import pota, uploads, wsjtx_install
+from . import logimport, pota, uploads, wsjtx_install
 from .radio_detect import detect_radios, test_rig
 from .setup_help import hamlib_rigs, import_wsjtx
 from .system import find_tool, serial_ports, tools
@@ -107,6 +108,7 @@ class Engine:
         self.rig = Rig()
         self._installing = False
         self.uploading = set()          # services with an upload in progress
+        self.importing = False          # a logbook import is running
         self.tqsl = uploads.find_tqsl()
         self.qso = Qso(self._log_qso, self.toast)
         self._set_station()
@@ -1213,6 +1215,9 @@ class Engine:
     def _start_upload(self, service: str):
         if service not in uploads.SERVICES or service in self.uploading:
             return
+        if self.importing:   # the import re-sorts the log under the upload's feet
+            self.toast("Wait for the logbook import to finish, then upload", "warn")
+            return
         if not self._upload_ready(service):
             self.toast(f"Set up {uploads.SERVICES[service][0]} in Settings → Logbook first", "warn")
             return
@@ -1271,6 +1276,96 @@ class Engine:
             return {"type": "qrz_check", "ok": True, "text": await uploads.qrz_check(key)}
         except uploads.UploadError as e:
             return {"type": "qrz_check", "ok": False, "text": str(e)}
+
+    # ---------------------------------------------------- importing QSOs
+
+    def import_qsos(self, qsos: list[dict], source: str, on_qrz=False) -> dict:
+        """Merge QSOs from another logbook into Procyon's (skipping the ones it
+        already has), after a dated backup of the log. `on_qrz`: they came from
+        QRZ, so the Upload button mustn't send them back."""
+        def say(text, ok=True):
+            return {"type": "log_import", "ok": ok, "text": text}
+        if self.s["demo"]:
+            return say("Not in demo mode - switch the demo band off first.", False)
+        if self.uploading:
+            return say("An upload is running - try again when it has finished.", False)
+        incoming = [logimport.clean(q) for q in qsos if q.get("call")]
+        if not incoming:
+            return say(f"No QSOs found in {source}.", False)
+        new = logimport.new_qsos(self.logbook.qsos, incoming)
+        had = len(incoming) - len(new)
+        if not new:
+            return say(f"✓ Nothing to add: all {len(incoming)} QSOs from {source} are already in your log.")
+        now = utc_now()
+        backup = ""
+        if os.path.exists(self.logbook.path):
+            backup = f"procyon_log-before-import-{now:%Y%m%d-%H%M%S}.adi"
+            shutil.copy2(self.logbook.path, os.path.join(self.data_dir, backup))
+        today = now.strftime("%Y%m%d")
+        not_on_qrz = 0
+        for q in new:
+            # From QRZ (or a file exported from QRZ): QRZ has them already.
+            if on_qrz or q.get("app_qrzlog_logid"):
+                q.update(qrzcom_qso_upload_status="Y", qrzcom_qso_upload_date=today)
+            elif not uploads.is_sent(q, "qrz"):
+                not_on_qrz += 1
+            q[uploads.EXPORTED_FIELD] = today    # they came from another program
+        self.logbook.add_many(new, logimport.sort_key)
+        for q in new:
+            if q.get("gridsquare"):
+                self.grids.setdefault(q["call"], q["gridsquare"][:4].upper())
+                self._grids_dirty = True
+        self._save_grids()
+        log.info("imported %d QSOs from %s (%d already in the log), backup %s", len(new), source, had, backup)
+        text = (f"✓ Added {len(new)} QSO{'s' if len(new) != 1 else ''} from {source}"
+                + (f" ({had} {'was' if had == 1 else 'were'} already in your log)" if had else "") + ".")
+        if not_on_qrz and self.s["qrz_key"]:
+            text += (f" {not_on_qrz} of them aren't marked as on QRZ, so the Upload to QRZ button now counts "
+                     f"them (QRZ skips any it already has).")
+        if backup:
+            text += f" Your log as it was before is saved as {backup}."
+        return say(text)
+
+    def _start_qrz_import(self) -> dict:
+        if not self.s["qrz_key"]:
+            return {"type": "log_import", "ok": False,
+                    "text": "Set up QRZ first: paste your Logbook API key in Settings → Logbook."}
+        if self.importing:
+            return {"type": "log_import", "busy": True, "text": "The import is already running…"}
+        if self.s["demo"]:
+            return {"type": "log_import", "ok": False, "text": "Not in demo mode - switch the demo band off first."}
+        self.importing = True
+        asyncio.get_event_loop().create_task(self._qrz_import())
+        return {"type": "log_import", "busy": True, "text": "Asking QRZ for your logbook…"}
+
+    async def _qrz_import(self):
+        def progress(n, total):   # n None: the whole logbook in one go
+            text = (f"Downloading {f'all {total}' if total else 'all your'} QSOs from QRZ in one go…" if n is None
+                    else f"Downloading from QRZ: {n}{f' of {total}' if total else ''} QSOs…")
+            asyncio.get_event_loop().create_task(self.broadcast({"type": "log_import", "busy": True, "text": text}))
+        try:
+            qsos, total = await uploads.qrz_fetch(self.s["qrz_key"], logimport.parse_adif, progress)
+            log.info("QRZ import: QRZ reports %s QSOs, received %d", total, len(qsos))
+            if qsos:
+                reply = self.import_qsos(qsos, "QRZ", on_qrz=True)
+                if total and len(qsos) < total and reply.get("ok"):
+                    reply["text"] += (f" Note: QRZ says your logbook holds {total} QSOs, but only {len(qsos)} "
+                                      f"came through - press Import again to fetch the rest.")
+            elif total:
+                reply = {"type": "log_import", "ok": False,
+                         "text": f"QRZ says your logbook holds {total} QSOs, but Procyon couldn't read them. "
+                                 f"Your log wasn't changed - please report this."}
+            else:
+                reply = {"type": "log_import", "ok": True, "text": "Your QRZ logbook is empty - nothing to import."}
+        except uploads.UploadError as e:
+            reply = {"type": "log_import", "ok": False, "text": str(e)}
+        except Exception:  # noqa: BLE001 - never leave the button stuck
+            log.exception("QRZ import")
+            reply = {"type": "log_import", "ok": False, "text": "The import failed unexpectedly - your log wasn't changed."}
+        finally:
+            self.importing = False
+        await self.broadcast(reply)
+        await self.push_state()
 
     # ------------------------------------------------------------- commands
 
@@ -1391,6 +1486,11 @@ class Engine:
             self._pota_end()
         elif t == "upload":
             self._start_upload(str(m.get("service", "")))
+        elif t == "qrz_import":
+            if not local:
+                return {"type": "log_import", "ok": False,
+                        "text": "That can only be done on the computer running Procyon."}
+            return self._start_qrz_import()
         elif t == "qrz_check":
             if not local:
                 self.toast("That can only be done on the computer running Procyon", "warn")

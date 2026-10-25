@@ -9,6 +9,7 @@ import hmac
 import os
 import re
 import secrets
+import ipaddress
 import socket
 import time
 
@@ -21,6 +22,26 @@ MAX_LOCK_SEC = 15 * 60
 
 def is_local(remote: str | None) -> bool:
     return remote in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+
+
+def trusted_host(host: str) -> bool:
+    """Whether a request's address (its Host, without the port) is one this
+    computer is really reached by: an IP address, localhost, or the computer's
+    own name. A web site can point its own name at this computer ("DNS
+    rebinding") to pose as Procyon's page; such a name is refused."""
+    h = (host or "").strip("[]").rstrip(".").lower()
+    if not h:
+        return False
+    try:
+        ipaddress.ip_address(h)
+        return True              # a name can't hide behind a plain IP address
+    except ValueError:
+        pass
+    if h == "localhost" or h.endswith(".localhost"):
+        return True
+    me = socket.gethostname().lower().rstrip(".")
+    short = me.split(".")[0]
+    return h in {me, short, f"{short}.local", f"{short}.lan", f"{short}.home", socket.getfqdn().lower()}
 
 
 def lan_addresses():

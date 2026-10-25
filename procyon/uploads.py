@@ -8,7 +8,9 @@ so a QSO that couldn't be sent simply stays queued for the next click."""
 
 import asyncio
 import glob
+import html
 import os
+import re
 import shutil
 import tempfile
 import urllib.parse
@@ -48,13 +50,29 @@ class UploadError(Exception):
 # ------------------------------------------------------------------ QRZ
 
 def _qrz_reply(text: str) -> dict:
-    return {k.upper(): v for k, v in urllib.parse.parse_qsl(text.strip(), keep_blank_values=True)}
+    """QRZ answers name=value&name=value. A FETCH answer's ADIF comes as plain
+    text with < > written &lt; &gt; (checked against the real QRZ, 2026-10-25),
+    not URL-encoded - so it's cut out whole before the rest is split at "&"."""
+    text = text.strip()
+    adif = None
+    i = text.find("ADIF=")
+    if i >= 0 and (i == 0 or text[i - 1] == "&"):
+        rest = text[i + 5:]
+        m = re.search(r"&[A-Z_]+=", rest)      # the next field (entities like &lt; never match)
+        adif = rest[:m.start()] if m else rest
+        text = text[:i] + (rest[m.start() + 1:] if m else "")
+        if "%3C" in adif.upper() and "<" not in adif and "&lt;" not in adif:
+            adif = urllib.parse.unquote_plus(adif)   # in case QRZ ever URL-encodes it
+    rep = {k.upper(): v for k, v in urllib.parse.parse_qsl(text.rstrip("&"), keep_blank_values=True)}
+    if adif is not None:
+        rep["ADIF"] = adif
+    return rep
 
 
-async def _qrz(session, key: str, **fields) -> dict:
+async def _qrz(session, key: str, timeout=30, **fields) -> dict:
     try:
         async with session.post(QRZ_URL, data={"KEY": key, **fields},
-                                timeout=aiohttp.ClientTimeout(total=30)) as r:
+                                timeout=aiohttp.ClientTimeout(total=timeout)) as r:
             if r.status != 200:
                 raise UploadError(f"QRZ answered with an error (HTTP {r.status}) - try again later")
             return _qrz_reply(await r.text())
@@ -100,6 +118,56 @@ async def qrz_upload(key: str, qsos: list[dict], record) -> tuple[list[int], str
             else:
                 return done, f"QRZ wouldn't take the QSO with {q.get('call', '?')}: {why or 'no reason given'}", dups
     return done, "", dups
+
+
+FETCH_PAGE = 250   # QSOs per request, as QRZ recommends for big logbooks
+
+
+async def qrz_fetch(key: str, parse, progress=None) -> tuple[list[dict], int | None]:
+    """Every QSO in the user's QRZ logbook, 250 at a time (QRZ's paging:
+    AFTERLOGID = the highest logid so far + 1), and the count QRZ reports.
+    If the QSOs don't carry their logid, the whole logbook is asked for in
+    one go instead. Downloading needs a QRZ subscription; uploading doesn't.
+    `parse` turns ADIF text into QSOs; `progress(n, total)` after each page."""
+    qsos, after, total, option = [], 0, None, None
+    async with aiohttp.ClientSession(headers={"User-Agent": USER_AGENT}) as s:
+        while True:
+            rep = await _qrz(s, key, timeout=90 if option is None else 300, ACTION="FETCH",
+                             OPTION=option or f"MAX:{FETCH_PAGE},AFTERLOGID:{after}")
+            result, why = rep.get("RESULT", ""), rep.get("REASON", "")
+            if result == "AUTH" or "invalid api key" in why.lower():
+                raise UploadError(_qrz_auth_problem(rep))
+            if result != "OK":
+                if "subscri" in why.lower():
+                    raise UploadError("Downloading your logbook from QRZ needs a QRZ subscription "
+                                      "(uploading doesn't). Without one, export the logbook as an ADIF "
+                                      "file on qrz.com and use \"Import an ADIF file\" instead.")
+                if rep.get("COUNT") == "0" or re.search(r"\bno\b.*(record|entr|qso|found)|not found",
+                                                       why, re.I) or (qsos and not why):
+                    break       # an empty logbook, or nothing after the last page
+                raise UploadError(f"QRZ wouldn't send the logbook: {why or 'no reason given'}")
+            if total is None and rep.get("COUNT", "").isdigit():
+                total = int(rep["COUNT"])
+            text = rep.get("ADIF", "")
+            if "&lt;" in text:   # QRZ sends the ADIF with < and > written as HTML
+                text = html.unescape(text)
+            page = parse(text)
+            if option:            # the whole logbook in one go
+                qsos = page
+                break
+            qsos += page
+            if progress:
+                progress(len(qsos), total)
+            ids = [int(q["app_qrzlog_logid"]) for q in page if q.get("app_qrzlog_logid", "").isdigit()]
+            if len(page) < FETCH_PAGE:
+                break
+            if not ids:           # can't page without logids: fetch everything at once
+                option = "ALL"
+                if progress:
+                    progress(None, total)
+                continue
+            after = max(ids) + 1
+    return qsos, total
 
 
 # ----------------------------------------------------------------- LoTW

@@ -436,6 +436,19 @@
         </fieldset>
 
         <fieldset>
+          <legend>Logbook import</legend>
+          <p class="hint">Bring in the QSOs you made before Procyon, or with other programs, so <b>NEW</b> and "new band" know everyone you've already worked. QSOs already in your log are skipped, so importing twice adds nothing. Your log is backed up first.</p>
+          <div class="radio-tools" id="importLocal">
+            <button type="button" class="btn ghost small" id="qrzImport">Import my QSOs from QRZ</button>
+            <button type="button" class="btn ghost small" id="adifImportBtn">Import an ADIF file…</button>
+            <input type="file" id="adifFile" accept=".adi,.adif,.ADI,.ADIF" hidden>
+            <span class="hint" id="importMsg"></span>
+          </div>
+          <p class="hint" id="importRemote" hidden>Importing can only be done on the computer running Procyon.</p>
+          <p class="hint">"Import from QRZ" downloads your QRZ logbook with the API key from the Logbook tab (downloading needs a QRZ subscription). Without one, export your logbook as an ADIF file on qrz.com, or from WSJT-X or your logging program, and import the file. QSOs from QRZ are marked as already on QRZ, so they're never uploaded again.</p>
+        </fieldset>
+
+        <fieldset>
           <legend>Radio control connection (rigctld)</legend>
           <label class="toggle"><input type="checkbox" name="rig_spawn"><span></span>Start rigctld for me (recommended)</label>
           <div class="grid2">
