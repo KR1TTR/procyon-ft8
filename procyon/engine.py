@@ -54,6 +54,7 @@ DEFAULTS = {
     "team_badges": True,             # raccoon next to Procyon's developer and testers
     "units": "auto",                 # distances: "auto" (from your callsign), "km" or "mi"
     "export_new_only": False,        # Export ADIF gives only QSOs not exported before
+    "auto_quit": True,               # stop Procyon a minute after its last browser tab closes
     "dial_hz": 14_074_000, "tx_freq": 1500, "rx_freq": 1500,
     "remote_enabled": False, "remote_pin_hash": "",
     # WSJT-X compatible UDP for GridTracker, JTAlert, loggers (WSJT-X defaults)
@@ -111,6 +112,8 @@ class Engine:
         self._set_station()
         self.demo = DemoBand()
         self.clients = set()
+        self._ever_connected = False   # a tab has been open at least once
+        self._alone_task = None
         self.history = collections.deque(maxlen=80)   # recent decode batches
         self.tmp = tempfile.mkdtemp(prefix="procyon-")
         self.long_calls = collections.OrderedDict()   # heard in full, newest last
@@ -750,6 +753,47 @@ class Engine:
                 await self.push_state()
 
         loop.create_task(run())
+
+    # ------------------------------------------------ when every tab is closed
+
+    TX_ALONE_SEC = 10     # long enough for a page reload to reconnect
+    QUIT_ALONE_SEC = 60
+
+    def client_joined(self):
+        self._ever_connected = True
+        if self._alone_task:
+            self._alone_task.cancel()
+            self._alone_task = None
+
+    def client_left(self):
+        if not self.clients and self._ever_connected and not self._alone_task:
+            self._alone_task = asyncio.get_event_loop().create_task(self._alone())
+
+    async def _alone(self):
+        """No Procyon tab is open anywhere: never keep transmitting with nobody
+        watching, and (unless switched off) stop Procyon itself after a minute, so
+        it doesn't sit in the background holding the radio and sound card."""
+        try:
+            await asyncio.sleep(self.TX_ALONE_SEC)
+            if self.clients:
+                return
+            if self.qso.tx_enabled or self.tx_task or self.tune_task:
+                log.info("no Procyon tab open - transmitting stopped")
+                await self.halt()
+                await self.push_state()
+            if not self.s["auto_quit"]:
+                return
+            await asyncio.sleep(self.QUIT_ALONE_SEC - self.TX_ALONE_SEC)
+            if self.clients:
+                return
+            log.info("no Procyon tab open for a minute - stopping")
+            if self.on_quit:
+                self.on_quit()
+        except asyncio.CancelledError:
+            pass
+        finally:
+            if self._alone_task is asyncio.current_task():
+                self._alone_task = None
 
     async def halt(self):
         self.qso.tx_enabled = False

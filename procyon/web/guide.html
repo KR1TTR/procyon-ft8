@@ -207,6 +207,8 @@ or line-out setting (or the interface's RX knob), not in Procyon. Between about 
   <li>Follow the exchange in the <b>QSO</b> panel. When it completes, the contact is logged automatically.</li>
   <li><b>Halt</b> stops a transmission straight away.</li>
 </ol>
+<p>Finished? Press <b>Quit</b> (top right), or just close Procyon's tab: transmitting stops after 10 seconds, and Procyon
+closes itself after a minute (you can switch that off in Settings → Advanced).</p>
 <p>Uploading: set up QRZ (and LoTW, if you use TQSL) under Settings → Logbook; an upload button appears next to Export ADIF.</p>
 
 <h2 id="trouble">8. If something doesn't work</h2>
@@ -236,8 +238,9 @@ or line-out setting (or the interface's RX knob), not in Procyon. Between about 
     <td>Settings → Advanced → Logbook export: "Export ADIF: only QSOs not exported before".</td></tr>
 <tr><td>Remote access from a phone or tablet doesn't connect</td>
     <td>Guest and some ISP Wi-Fi networks keep devices apart ("client isolation"); try your home network or a wired connection.</td></tr>
-<tr><td>A terminal window stays open after Quit (Linux)</td>
-    <td>Close it by hand. In your terminal's preferences you can set "When command exits" to close the window.</td></tr>
+<tr><td>Procyon doesn't open when started from the menu (Linux)</td>
+    <td>A desktop notification says why. Procyon's messages are also saved in <code>~/.local/share/procyon/procyon.log</code>;
+    or run <code>procyon</code> in a terminal to watch them. To stop Procyon, use the <b>Quit</b> button (top right).</td></tr>
 </table>
 
 <a class="back" href="/">← Back to Procyon</a>

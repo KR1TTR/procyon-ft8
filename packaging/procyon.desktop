@@ -5,6 +5,6 @@ GenericName=FT8 station (amateur radio)
 Comment=A friendly FT8 station built on the WSJT-X decoder
 Exec=procyon
 Icon=procyon
-Terminal=true
+Terminal=false
 Categories=HamRadio;Network;Utility;
 Keywords=FT8;ham;amateur;radio;WSJT;

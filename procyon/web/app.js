@@ -1545,7 +1545,7 @@ $("#settingsBtn").addEventListener("click", () => openSettings(false));
 $("#quitBtn").addEventListener("click", () => {
   $("#quitText").textContent = S && S.tx
     ? "Procyon is transmitting - quitting stops the transmission, then closes Procyon and its terminal window. Your settings and logbook are saved."
-    : "Procyon stops listening and closes, along with its terminal window. Your settings and logbook are saved.";
+    : "Procyon stops listening and closes (with its window, if it has one). Your settings and logbook are saved.";
   $("#quitDlg").returnValue = "";   // Esc must never count as "Quit"
   $("#quitDlg").showModal();
 });

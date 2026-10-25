@@ -8,7 +8,10 @@ import argparse
 import asyncio
 import json
 import logging
+import logging.handlers
 import os
+import shutil
+import subprocess
 import signal
 import socket
 import sys
@@ -37,6 +40,7 @@ async def ws_handler(request):
     await ws.prepare(request)
     ws.procyon_local = local
     eng.clients.add(ws)
+    eng.client_joined()
     await ws.send_str(json.dumps({"type": "hello", "local": local}))
     await ws.send_str(json.dumps(eng.state()))
     await ws.send_str(json.dumps({"type": "history", "batches": list(eng.history)}))
@@ -53,6 +57,7 @@ async def ws_handler(request):
                 await ws.send_str(json.dumps({"type": "toast", "text": str(e), "kind": "bad"}))
     finally:
         eng.clients.discard(ws)
+        eng.client_left()
     return ws
 
 
@@ -215,7 +220,47 @@ def main():
                     help="settings and logbook folder")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s: %(message)s")
+    # Started from the menu there's no terminal window, so keep a log file too
+    # (and say where it is if Procyon can't start).
+    log_path = os.path.join(args.data, "procyon.log")
+    where = f"Details are in {log_path}"
+    try:
+        os.makedirs(args.data, exist_ok=True)
+        fh = logging.handlers.RotatingFileHandler(log_path, maxBytes=1_000_000, backupCount=2,
+                                                  encoding="utf-8")
+        fh.setFormatter(logging.Formatter("%(asctime)s %(name)s: %(message)s"))
+        logging.getLogger().addHandler(fh)
+    except OSError as e:
+        log.warning("can't write the log file %s: %s", log_path, e)
+        where = "Start Procyon from a terminal (run: procyon) to see the details"
 
+    log.info("Procyon %s starting (data folder %s)", __version__, args.data)
+    try:
+        _run(args)
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001 - say so even when nobody sees a terminal
+        log.exception("Procyon couldn't start")
+        tell(f"Procyon couldn't start: {e}\n{where}", problem=True)
+        sys.exit(1)
+
+
+def tell(text: str, problem=False):
+    """Something the user must know: printed for a terminal, and as a desktop
+    notification when there's no terminal (started from the menu)."""
+    print(f"\n  {text}\n", flush=True)
+    log.warning(text) if problem else log.info(text)
+    notify = shutil.which("notify-send")
+    if notify and not (sys.stdout and sys.stdout.isatty()):
+        try:
+            subprocess.Popen([notify, "--app-name=Procyon", "--icon=procyon",
+                              *(["--urgency=critical"] if problem else []), "Procyon", text],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
+
+
+def _run(args):
     default_data = data_dir()
     if os.path.abspath(args.data) == default_data and not IS_WINDOWS:
         migrate_old_data(default_data)
@@ -231,10 +276,9 @@ def main():
             if not args.no_browser:
                 webbrowser.open(url)
             sys.exit(0)
-        print(f"\n  Procyon can't start: port {args.port} is already in use.\n"
-              f"  Procyon is probably already running - open http://127.0.0.1:{args.port}/\n"
-              f"  or stop the other copy (Ctrl-C in its terminal) and try again.\n"
-              f"  To run a second copy, pick another port, e.g. --port {args.port + 1}\n")
+        tell(f"Procyon can't start: port {args.port} is already in use by another program.\n"
+             f"If Procyon is already running, open http://127.0.0.1:{args.port}/ - otherwise "
+             f"close the other program, or start Procyon with --port {args.port + 1}.", problem=True)
         sys.exit(1)
 
     async def on_shutdown(app):
@@ -286,6 +330,7 @@ def main():
         await listener.apply(eng.s["remote_enabled"])
         url = f"http://127.0.0.1:{args.port}/"
         print(f"\n  Procyon {__version__} is running at {url}")
+        log.info("running at %s", url)
         if listener.host != "127.0.0.1":
             for u in eng.state()["remote"]["urls"]:
                 print(f"  Other devices on your network: {u}  (PIN required)")

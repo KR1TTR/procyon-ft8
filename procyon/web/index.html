@@ -413,6 +413,12 @@
         </fieldset>
 
         <fieldset>
+          <legend>When Procyon's page is closed</legend>
+          <label class="toggle"><input type="checkbox" name="auto_quit"><span></span>Stop Procyon a minute after its last browser tab is closed</label>
+          <p class="hint">So it doesn't keep running unseen, holding the radio and sound card. Tabs on other devices (remote access) count as open; a page reload doesn't count as closing. Whatever this is set to, transmitting always stops 10 seconds after the last tab closes.</p>
+        </fieldset>
+
+        <fieldset>
           <legend>Logbook export</legend>
           <label class="toggle"><input type="checkbox" name="export_new_only"><span></span>Export ADIF: only QSOs not exported before</label>
           <p class="hint">For importing into another logging program (e.g. N3FJP): each export then holds only the QSOs logged since the last one, so the same QSO is never imported twice. The Export button shows how many are new. Press Save to switch it on or off.</p>
@@ -512,7 +518,7 @@
 <dialog id="quitDlg" class="quit-dlg">
   <form method="dialog">
     <h3>Quit Procyon?</h3>
-    <p id="quitText">Procyon stops listening and closes, along with its terminal window. Your settings and logbook are saved.</p>
+    <p id="quitText">Procyon stops listening and closes (with its window, if it has one). Your settings and logbook are saved.</p>
     <div class="dlg-foot">
       <button class="btn ghost" value="cancel">Cancel</button>
       <button class="btn danger" value="quit" id="quitConfirm">Quit</button>
