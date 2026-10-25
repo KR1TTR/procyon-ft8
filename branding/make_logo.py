@@ -146,6 +146,17 @@ def main():
         outline(svg, os.path.join(HERE, name + ".svg"))
         png(os.path.join(HERE, name + ".svg"), os.path.join(HERE, name + ".png"), 3000)
         made.append(name)
+    # About card: "Procyon" and the tagline as two shapes on the same canvas,
+    # used as CSS masks so each palette can colour them (text and teal)
+    black = {"word": "#000", "tag": "#000", "tag_text": "#000", "line": "#000"}
+    marks, right = wordmark(0, black)
+    line = with_tagline(black)[0][len(marks):]          # just the tagline's <text>
+    top, bottom = MID - WORD_CAP / 2 - 4, LINE_Y + 12
+    box = f'viewBox="0 {top:.2f} {right:.2f} {bottom - top:.2f}"'
+    for name, body in (("about-word", marks), ("about-tagline", line)):
+        outline(f'<svg xmlns="http://www.w3.org/2000/svg" {box}>{body}\n</svg>\n',
+                os.path.join(HERE, "..", "procyon", "web", name + ".svg"))
+        made.append(f"procyon/web/{name}.svg")
     # Wordmark for the app header (the icon is shown separately there)
     marks, right = wordmark(0, COLOURS["dark"])
     outline(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {right:.0f} {ICON_SIZE}">'

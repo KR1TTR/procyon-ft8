@@ -24,6 +24,8 @@
   --on-tx-dark: #1a0306;
   --snr1: #5fe08f; --snr2: #9be36b; --snr3: #ffd166; --snr4: #ff8a5b;
   --header-bg: #0a0f1ccc;
+  /* faint texture behind everything (branding/make_textures.py); "none" for plain */
+  --texture: url(/static/tex/stars-near.svg), url(/static/tex/stars-far.svg);
   --glow1: #13204a55;
   --glow2: #0f3d4a44;
   --wf-bg: #050816;
@@ -44,7 +46,7 @@
 [hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; }
 body {
-  background: radial-gradient(1200px 500px at 10% -10%, var(--glow1), transparent),
+  background: var(--texture), radial-gradient(1200px 500px at 10% -10%, var(--glow1), transparent),
               radial-gradient(900px 400px at 100% 0%, var(--glow2), transparent), var(--bg);
   color: var(--text);
   font: 14px/1.45 var(--sans);
@@ -723,6 +725,7 @@ dialog.pota-dlg { width: min(520px, calc(100vw - 32px)); }
 :root[data-palette="classic"],
 :root[data-palette="classic"] .top .menu {
   color-scheme: light;
+  --texture: none;   /* the calm "focus" palette stays plain */
   --bg: #eef1f3; --bg2: #e3e7ea;
   --surface: #cfd6da; --surface2: #bfc8cd;
   --border: #9aa5ab; --border2: #77838a;
@@ -756,6 +759,7 @@ dialog.pota-dlg { width: min(520px, calc(100vw - 32px)); }
    night, a bright amber for "calling you" - made to go with the Ember
    waterfall, and dim enough for dark-adapted eyes on a late-night activation. */
 :root[data-palette="campfire"] {
+  --texture: url(/static/tex/pine.svg);   /* fallen pine needles */
   --bg: #050a0b; --bg2: #071011;
   --surface: #1f170f; --surface2: #2a1f15;
   --border: #3a2b1c; --border2: #52402b;
@@ -776,6 +780,7 @@ dialog.pota-dlg { width: min(520px, calc(100vw - 32px)); }
 /* Antique radio: a 1930s tabletop "tombstone" set - stained-maple cabinet framing
    dark bakelite workspaces, brass accents. Made to go with the Tube glow waterfall. */
 :root[data-palette="radio"] {
+  --texture: url(/static/tex/maple.svg);  /* maple grain on the cabinet */
   --bg: #9a5a28; --bg2: #8a4e22;
   --surface: #1f150e; --surface2: #2b1d13;
   --border: #5e4024; --border2: #8a6634;
@@ -798,3 +803,14 @@ dialog.pota-dlg { width: min(520px, calc(100vw - 32px)); }
 :root[data-palette="radio"] .wf-wrap { border: 2px solid #2b1d13; box-shadow: 0 0 0 1px #c9a25a55; }
 /* inside the panels and dialogs: bakelite, not wood */
 :root[data-palette="radio"] .card, :root[data-palette="radio"] dialog { --bg: #120b07; --bg2: #150d08; }
+
+/* Plain backgrounds (Settings → Experimental, per device): no texture */
+:root[data-plain] { --texture: none !important; }
+
+/* About card: "Procyon" and the tagline, coloured by the palette (masks
+   made by branding/make_logo.py; same canvas, so they line up) */
+.about .about-logo { display: block; position: relative; width: 240px; aspect-ratio: 648.55 / 236.7;
+  margin: 2px auto 0; font-size: 0; }
+.about-logo span { position: absolute; inset: 0; -webkit-mask: center / contain no-repeat; mask: center / contain no-repeat; }
+.about-logo .w { background: var(--text); -webkit-mask-image: url(/static/about-word.svg); mask-image: url(/static/about-word.svg); }
+.about-logo .t { background: var(--rx); -webkit-mask-image: url(/static/about-tagline.svg); mask-image: url(/static/about-tagline.svg); }

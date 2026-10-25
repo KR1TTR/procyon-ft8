@@ -155,6 +155,13 @@ function setPalette(name) {
   else document.documentElement.dataset.palette = name;
 }
 setPalette(palette);
+// Background textures, per device too: on unless switched off here.
+function setTextures(on) {
+  try { localStorage.setItem("procyon.textures", on ? "on" : "off"); } catch { /* not persisted */ }
+  if (on) delete document.documentElement.dataset.plain;
+  else document.documentElement.dataset.plain = "";
+}
+try { setTextures(localStorage.getItem("procyon.textures") !== "off"); } catch { setTextures(true); }
 
 function sizeWaterfall() {
   const r = wf.getBoundingClientRect();
@@ -1428,6 +1435,7 @@ function openSettings(welcome) {
   $("#layoutMode").value = layoutMode;
   $("#wfScheme").value = wfScheme;
   $("#palette").value = palette;
+  $("#textures").checked = !("plain" in document.documentElement.dataset);
   showRigModel(st.rig_model);
   send({ type: "devices" });
   dlg.showModal();
@@ -1626,6 +1634,7 @@ $("#aboutLink").addEventListener("click", () => { $("#settings").close(); openAb
 $("#layoutMode").addEventListener("change", (e) => saveMode(e.target.value));
 $("#wfScheme").addEventListener("change", (e) => setWfScheme(e.target.value));
 $("#palette").addEventListener("change", (e) => setPalette(e.target.value));
+$("#textures").addEventListener("change", (e) => setTextures(e.target.checked));
 $("#demoOff").addEventListener("click", () => send({ type: "settings", settings: { demo: false } }));
 $("#exportMarkAll").addEventListener("click", () => { $("#exportMsg").textContent = "…"; send({ type: "export_mark_all" }); });
 $("#resetLayout").addEventListener("click", () => {

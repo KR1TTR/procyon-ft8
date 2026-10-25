@@ -1339,19 +1339,29 @@ class Engine:
         return {"type": "log_import", "busy": True, "text": "Asking QRZ for your logbook…"}
 
     async def _qrz_import(self):
+        def whole(total):
+            # QRZ's COUNT turned out to be the batch size (250), not the whole
+            # logbook as its documentation says - only trust a bigger number.
+            return total if total and total > uploads.FETCH_PAGE else None
+
         def progress(n, total):   # n None: the whole logbook in one go
-            text = (f"Downloading {f'all {total}' if total else 'all your'} QSOs from QRZ in one go…" if n is None
-                    else f"Downloading from QRZ: {n}{f' of {total}' if total else ''} QSOs…")
+            total = whole(total)
+            if n is None:
+                text = f"Downloading {f'all {total}' if total else 'all your'} QSOs from QRZ in one go…"
+            elif total and total >= n:
+                text = f"Downloading from QRZ: {n} of {total} QSOs…"
+            else:
+                text = f"Downloading from QRZ: {n} QSOs so far…"
             asyncio.get_event_loop().create_task(self.broadcast({"type": "log_import", "busy": True, "text": text}))
         try:
             qsos, total = await uploads.qrz_fetch(self.s["qrz_key"], logimport.parse_adif, progress)
             log.info("QRZ import: QRZ reports %s QSOs, received %d", total, len(qsos))
             if qsos:
                 reply = self.import_qsos(qsos, "QRZ", on_qrz=True)
-                if total and len(qsos) < total and reply.get("ok"):
+                if whole(total) and len(qsos) < total and reply.get("ok"):
                     reply["text"] += (f" Note: QRZ says your logbook holds {total} QSOs, but only {len(qsos)} "
                                       f"came through - press Import again to fetch the rest.")
-            elif total:
+            elif total:   # QRZ said there were QSOs, but none could be read
                 reply = {"type": "log_import", "ok": False,
                          "text": f"QRZ says your logbook holds {total} QSOs, but Procyon couldn't read them. "
                                  f"Your log wasn't changed - please report this."}
