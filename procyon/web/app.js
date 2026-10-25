@@ -340,7 +340,9 @@ function onState(m) {
   const rig = $("#chipRig");
   rig.hidden = !m.rig.enabled;
   rig.className = `chip ${m.rig.connected ? "ok" : "bad"}`;
-  $("#rigLabel").textContent = m.rig.connected ? "Rig" : "Rig offline";
+  noteRig(m.rig);
+  $("#rigLabel").textContent = !m.rig.connected ? "Rig offline"
+    : Date.now() < rigShinyUntil ? SHINY : "Rig";
   rig.title = m.rig.error || "Connected to rigctld";
   $("#chipDemo").hidden = !st.demo;
   $("#demoBanner").hidden = !st.demo;
@@ -794,9 +796,68 @@ function renderExchange(q) {
   const st = $("#exStatus");
   st.hidden = !hint || q.stage === 4;
   st.textContent = hint;
+  maybeBetrayal(q, t, last);
 }
 
 $("#exClear").addEventListener("click", () => send({ type: "clear_exchange" }));
+
+// --------------------------------------------------------- the quiet quotes
+// A few lines that show up for a moment at rare times and then disappear.
+// They exist only on this screen: never in a transmitted message, the
+// exchange log or the logbook.
+function flashEgg(el, html, ms) {
+  el.innerHTML = html;
+  el.hidden = false;
+  clearTimeout(el.eggTimer);
+  el.eggTimer = setTimeout(() => { el.hidden = true; }, ms);
+}
+
+// The radio connection comes back after dropping out (Kaylee, Firefly).
+const SHINY = "Everything's shiny, Cap'n. Not to fret.";
+let rigSeenUp = false, rigDropped = false, rigShinyUntil = 0, rigShinyLast = 0;
+function noteRig(rig) {
+  if (!rig.enabled) { rigSeenUp = rigDropped = false; return; }
+  if (!rig.connected) { if (rigSeenUp) rigDropped = true; return; }
+  if (rigDropped && Date.now() - rigShinyLast > 30 * 60e3) {   // at most once in half an hour
+    rigShinyLast = Date.now();
+    rigShinyUntil = rigShinyLast + 6000;
+    setTimeout(() => {
+      if (S && S.rig.connected) $("#rigLabel").textContent = "Rig";
+      fitHeader(true);
+    }, 6100);
+    setTimeout(() => fitHeader(true), 0);
+  }
+  rigSeenUp = true;
+  rigDropped = false;
+}
+
+// Every 1,000th QSO in the real logbook (Mr. Universe, Serenity).
+let logCountSeen = null;
+function noteLogCount() {
+  if (S.settings.demo) { logCountSeen = null; return; }   // practice QSOs don't count
+  const n = S.qso_count;
+  if (logCountSeen !== null && Math.floor(n / 1000) > Math.floor(logCountSeen / 1000)) {
+    flashEgg($("#logEgg"), `<b>You can't stop the signal!</b> ${(Math.floor(n / 1000) * 1000).toLocaleString()} QSOs.`, 10000);
+  }
+  logCountSeen = n;
+}
+
+// The station you were working answers someone else instead (Wash, Firefly) -
+// only now and then, and at most once per QSO.
+const betrayed = new Set();
+function maybeBetrayal(q, t, last) {
+  if (!last || last.dir !== "rx" || !last.busy || q.stage === 4 || !q.dxcall) return;
+  const key = `${q.dxcall}:${last.period}`;
+  if (betrayed.has(key) || [...betrayed].some((k) => k.startsWith(q.dxcall + ":"))) return;
+  // They had already sent us a message of this QSO (to us = our call first) -
+  // not just a CQ we answered while they picked someone else.
+  const toUs = (e) => e.dir === "rx" && !e.silent && e.msg
+    && sameStation(e.msg.split(" ")[0].replace(/[<>]/g, ""), S.settings.mycall);
+  const theyWereWorkingUs = t.some((e) => e !== last && toUs(e));
+  if (!theyWereWorkingUs) return;
+  betrayed.add(key);
+  if (Math.random() < 1 / 3) flashEgg($("#qsoEgg"), "Curse your sudden but inevitable betrayal!", 8000);
+}
 
 $("#msgs").addEventListener("click", (e) => {
   const b = e.target.closest("button");
@@ -967,6 +1028,7 @@ function onPota(m) {
 
 function renderLog() {
   renderUploads();
+  noteLogCount();
   $("#qsoCount").textContent = S.qso_count;
   $("#logDemo").hidden = !S.settings.demo;
   if (editingIdx !== null) return;   // don't redraw under the user while they edit
