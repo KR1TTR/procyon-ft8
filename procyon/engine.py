@@ -26,7 +26,7 @@ from .qso import Qso
 from . import logimport, pota, uploads, wsjtx_install
 from .radio_detect import detect_radios, test_rig
 from .setup_help import hamlib_rigs, import_wsjtx
-from .system import find_tool, serial_ports, tools
+from .system import NO_WINDOW, find_tool, serial_ports, tools
 from .udp import WsjtxUdp
 from .rig import Rig
 
@@ -239,7 +239,25 @@ class Engine:
             "tools": {k: bool(v) for k, v in tools().items()},
             "can_install_wsjtx": wsjtx_install.available(),
             "about": {"version": __version__, "date": RELEASE_DATE, "authors": AUTHORS},
+            "update": self._updated_to(),
         }
+
+    _VERSION_FILE = os.path.join(os.path.dirname(__file__), "__init__.py")
+    _VERSION_RE = re.compile(r'^__version__\s*=\s*"([^"]+)"', re.M)
+
+    def _updated_to(self):
+        """The version now installed on disk, when it isn't the one running (an
+        update was installed while Procyon was open) - else "". Read again only
+        when the file changes."""
+        try:
+            mtime = os.stat(self._VERSION_FILE).st_mtime
+            if mtime != getattr(self, "_disk_mtime", None):
+                with open(self._VERSION_FILE, encoding="utf-8") as f:
+                    m = self._VERSION_RE.search(f.read())
+                self._disk_mtime, self._disk_version = mtime, m.group(1) if m else __version__
+        except OSError:
+            return ""
+        return self._disk_version if self._disk_version != __version__ else ""
 
     async def push_state(self):
         await self.broadcast(self.state())
@@ -441,7 +459,7 @@ class Engine:
             args.append(path)
             proc = await asyncio.create_subprocess_exec(
                 *args, cwd=self.tmp, stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL)
+                stderr=asyncio.subprocess.DEVNULL, **NO_WINDOW)
             out, _ = await asyncio.wait_for(proc.communicate(), 12)
             if mode is not self.m:
                 return   # the mode was switched while decoding: these belong to the old one

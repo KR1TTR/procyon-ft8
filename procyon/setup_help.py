@@ -8,7 +8,7 @@ import re
 import subprocess
 import sys
 
-from .system import find_tool
+from .system import NO_WINDOW, find_tool
 
 
 @functools.lru_cache(maxsize=1)
@@ -17,7 +17,7 @@ def hamlib_rigs():
     exe = find_tool("rigctl", "rigctl-wsjtx")
     if not exe:
         return []
-    lines = subprocess.run([exe, "-l"], capture_output=True, text=True, timeout=10).stdout.splitlines()
+    lines = subprocess.run([exe, "-l"], capture_output=True, text=True, timeout=10, **NO_WINDOW).stdout.splitlines()
     if not lines:
         return []
     # Read by column position: some model names run into the version column.

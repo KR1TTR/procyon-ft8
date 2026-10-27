@@ -3,7 +3,9 @@
 #   packaging/build.sh            all three
 #   packaging/build.sh deb        Debian/Ubuntu/Mint/Raspberry Pi OS package
 #   packaging/build.sh linux      Linux zip for other distributions
-#   packaging/build.sh windows    Windows zip with Python included
+#   packaging/build.sh windows    Windows zip with Python included, and the
+#                                 Windows installer (needs NSIS: apt install nsis,
+#                                 or MAKENSIS=/path/to/makensis)
 #   packaging/build.sh arch       Arch Linux PKGBUILD + the Linux zip (builds that first)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -127,6 +129,21 @@ build_windows_zip() {
   rm -f "$DIST/$top.zip"
   (cd "$d" && zip -qr "$DIST/$top.zip" "$top")
   echo "  built dist/$top.zip ($(du -h "$DIST/$top.zip" | cut -f1))"
+  build_windows_installer "$d/$top"
+}
+
+# The installer packs the same folder as the zip (Start-menu shortcuts run
+# pythonw.exe, so there's no console window).
+build_windows_installer() {
+  local src="$1" out="$DIST/Procyon-$VERSION-windows-setup.exe"
+  local nsis="${MAKENSIS:-$(command -v makensis || true)}"
+  if [ -z "$nsis" ]; then
+    echo "  skipped the Windows installer: NSIS isn't installed (sudo apt install nsis)"
+    return
+  fi
+  rm -f "$out"
+  (cd "$PKG/windows" && "$nsis" -V2 -DVERSION="$VERSION" -DSRC="$src" -DOUT="$out" procyon.nsi)
+  echo "  built dist/$(basename "$out") ($(du -h "$out" | cut -f1))"
 }
 
 echo "Procyon $VERSION ($DATE)"
@@ -142,5 +159,5 @@ done
 
 # Checksums for whatever this version has in dist/ (any targets built so far)
 ( cd "$DIST" && sha256sum $(ls procyon_"$VERSION"_all.deb procyon-"$VERSION"-linux.zip \
-    Procyon-"$VERSION"-windows.zip procyon-"$VERSION"-arch.tar.gz 2>/dev/null) > SHA256SUMS )
+    Procyon-"$VERSION"-windows.zip Procyon-"$VERSION"-windows-setup.exe procyon-"$VERSION"-arch.tar.gz 2>/dev/null) > SHA256SUMS )
 echo "  wrote dist/SHA256SUMS"

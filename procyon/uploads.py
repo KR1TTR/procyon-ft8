@@ -18,7 +18,7 @@ import urllib.parse
 import aiohttp
 
 from . import __version__
-from .system import IS_MAC, IS_WINDOWS
+from .system import IS_MAC, IS_WINDOWS, NO_WINDOW
 
 SERVICES = {
     # service: (name shown to the user, "sent" field, date field)
@@ -218,7 +218,7 @@ async def lotw_upload(tqsl: str, location: str, adif_text: str) -> str:
         try:
             proc = await asyncio.create_subprocess_exec(
                 tqsl, "-x", "-d", "-u", "-a", "compliant", "-l", location, path,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, **NO_WINDOW)
             out, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
         except asyncio.TimeoutError as e:
             proc.kill()

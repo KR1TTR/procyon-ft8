@@ -266,7 +266,10 @@ def main():
     ap.add_argument("--data", default=data_dir(),
                     help="settings and logbook folder")
     args = ap.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s: %(message)s")
+    # (On Windows Procyon runs without a console - pythonw - so there's no
+    # stderr to log to; the log file below still gets everything.)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s: %(message)s",
+                        handlers=[logging.StreamHandler()] if sys.stderr else [logging.NullHandler()])
     # Started from the menu there's no terminal window, so keep a log file too
     # (and say where it is if Procyon can't start).
     log_path = os.path.join(args.data, "procyon.log")
@@ -294,9 +297,17 @@ def main():
 
 def tell(text: str, problem=False):
     """Something the user must know: printed for a terminal, and as a desktop
-    notification when there's no terminal (started from the menu)."""
+    notification (Windows: a message box) when there's no terminal (started
+    from the menu)."""
     print(f"\n  {text}\n", flush=True)
     log.warning(text) if problem else log.info(text)
+    if IS_WINDOWS and sys.stdout is None:   # pythonw: nowhere to print
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, text, "Procyon", 0x30 if problem else 0x40)
+        except Exception:  # noqa: BLE001
+            pass
+        return
     notify = shutil.which("notify-send")
     if notify and not (sys.stdout and sys.stdout.isatty()):
         try:

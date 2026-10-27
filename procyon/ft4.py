@@ -14,6 +14,7 @@ from math import pi
 import numpy as np
 
 from .ft8 import _ft8code, _gfsk_pulse, normalize
+from .system import NO_WINDOW
 
 PERIOD = 7.5           # seconds per T/R cycle
 NSPS = 576             # samples per symbol @ 12 kHz
@@ -108,7 +109,7 @@ def message_bits(msg: str):
     """(77 bits, decoded_text) for `msg`, packed by WSJT-X's ft8code.
     decoded_text is how a receiver will see it (differs if it can't fit)."""
     out = subprocess.run([_ft8code(), normalize(msg)], capture_output=True,
-                         text=True, timeout=10).stdout.splitlines()
+                         text=True, timeout=10, **NO_WINDOW).stdout.splitlines()
     decoded, bits = "", None
     for i, line in enumerate(out):
         if line.startswith(" 1.") and not decoded:

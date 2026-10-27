@@ -1,5 +1,5 @@
-PROCYON FT8 for Windows
-=======================
+PROCYON for Windows
+===================
 
 Version {VERSION} - {DATE}
 Created by Justin Stapleton, KR1TTR, with Claude Code (Claude Opus 5.5)
@@ -14,6 +14,11 @@ You don't need to install Python - it's included in this folder.
 
 STARTING PROCYON
 ----------------
+EASIEST: use the installer instead of this zip -
+Procyon-x.y.z-windows-setup.exe puts Procyon in your Start menu, runs it
+without a console window, and updates or uninstalls cleanly.
+
+To run Procyon from this zip without installing it:
 1. EXTRACT THE WHOLE ZIP FIRST. Double-clicking a zip only lets you look
    inside it - Procyon can't run from there. Right-click the zip and choose
    "Extract All...", pick somewhere permanent (e.g. Documents), then open the

@@ -70,6 +70,12 @@
   </div>
 </header>
 
+<div class="tool-warn update-warn" id="updateWarn" hidden>
+  <b>Procyon <span id="updateTo"></span> is installed.</b>
+  <span id="updateHow"></span>
+  <button type="button" class="btn small" id="updateQuit" hidden>Quit Procyon</button>
+</div>
+
 <div class="tool-warn" id="toolWarn" hidden>
   <b>WSJT-X wasn't found.</b> Procyon uses WSJT-X's decoder and encoder, so it can't decode or
   transmit without it.
@@ -258,6 +264,7 @@
             <button type="button" class="btn ghost small" id="detectRadio">Detect my radio</button>
             <button type="button" class="btn ghost small" id="testRadio">Test radio</button>
             <span class="hint" id="radioMsg"></span>
+            <select id="rigChoice" hidden aria-label="Which radio"></select>
           </div>
           <label>Radio
             <input name="rig_pick" list="rigList" autocomplete="off" spellcheck="false"

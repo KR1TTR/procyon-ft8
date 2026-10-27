@@ -165,6 +165,11 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--border2)
 .radio-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 2px 0 10px; }
 .radio-tools .hint { flex: 1 1 200px; min-height: 15px; }
 .radio-tools .hint.ok { color: var(--rx); }
+.radio-tools #rigChoice { flex: 0 1 220px; width: auto; }
+.update-warn { display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap;
+  color: var(--rx-soft); background: color-mix(in srgb, var(--rx) 8%, transparent); border-color: color-mix(in srgb, var(--rx) 40%, transparent); }
+.update-warn b { color: var(--rx); }
+.update-warn #updateHow { flex: 1 1 260px; }
 .tool-warn #toolMissing { color: var(--muted); font-size: 12px; }
 
 /* ---------------------------------------------------------- waterfall */
@@ -315,6 +320,7 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--border2)
 .msg .t-me { color: var(--on-me); background: var(--me); padding: 0 4px; border-radius: 4px; font-weight: 700; }
 .msg .t-grid { color: var(--info); }
 .msg .t-rpt { color: var(--rpt); }
+.msg .t-tester { color: var(--on-me); background: var(--rpt); padding: 0 4px; border-radius: 4px; font-weight: 700; }
 .msg .t-end { color: var(--cq); }
 .msg .t-free { color: var(--muted); font-style: italic; }
 .row .meta { display: flex; align-items: center; justify-content: flex-end; gap: 8px; font-size: 12px; color: var(--muted); white-space: nowrap; min-width: 0; overflow: hidden; }
@@ -664,6 +670,7 @@ dialog#settings { width: min(760px, calc(100vw - 32px)); }
 
 /* Raccoon next to Procyon's developer and testers */
 .team-badge { width: 1.35em; height: 1.35em; vertical-align: -0.32em; margin-left: 3px; }
+.team-badge.star { width: 1.1em; height: 1.1em; vertical-align: -0.18em; }
 
 /* A chosen layout wins over the automatic one for this window width */
 .lay-side .activity, .lay-side .logbook { height: calc(100vh - 340px); min-height: 360px; max-height: none; }

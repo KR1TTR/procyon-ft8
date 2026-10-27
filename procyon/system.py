@@ -12,6 +12,10 @@ import time
 IS_WINDOWS = sys.platform.startswith("win")
 IS_MAC = sys.platform == "darwin"
 EXE = ".exe" if IS_WINDOWS else ""
+# Procyon runs without a console window on Windows, so every program it starts
+# (jt9, ft8code, rigctld...) would open a black window of its own - this stops
+# that. Pass as **NO_WINDOW to subprocess.run / asyncio.create_subprocess_exec.
+NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW, "stdin": subprocess.DEVNULL} if IS_WINDOWS else {}
 
 
 def data_dir() -> str:

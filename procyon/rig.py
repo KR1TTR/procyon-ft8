@@ -4,7 +4,7 @@ import asyncio
 import logging
 import re
 
-from .system import find_tool
+from .system import NO_WINDOW, find_tool
 
 log = logging.getLogger("procyon.rig")
 
@@ -47,7 +47,7 @@ class Rig:
             self._daemon_log = []
             self._daemon = await asyncio.create_subprocess_exec(
                 *args, stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.PIPE)
+                stderr=asyncio.subprocess.PIPE, **NO_WINDOW)
             asyncio.get_running_loop().create_task(self._drain(self._daemon))
             await asyncio.sleep(1.0)
             if self._daemon.returncode is not None:     # rigctld gave up straight away

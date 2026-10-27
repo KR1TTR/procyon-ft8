@@ -94,7 +94,11 @@ class WsjtxUdp(asyncio.DatagramProtocol):
         await self.stop()
         self.target = (host, int(port))
         loop = asyncio.get_running_loop()
-        await loop.create_datagram_endpoint(lambda: self, local_addr=("0.0.0.0", 0))
+        # Companion apps on this computer (the usual case) only need a socket on
+        # this computer's own address - which also keeps Windows Firewall from
+        # asking about network access. Another computer needs the network.
+        local = host == "localhost" or host.startswith("127.")
+        await loop.create_datagram_endpoint(lambda: self, local_addr=("127.0.0.1" if local else "0.0.0.0", 0))
         log.info("sending WSJT-X messages to %s:%s", host, port)
         self.heartbeat()
 

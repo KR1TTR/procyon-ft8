@@ -398,6 +398,17 @@ function onState(m) {
   $("#tuneBtn").classList.toggle("on", m.tuning);
   $("#tuneBtn").textContent = m.tuning ? "Stop tuning" : "Tune";
 
+  // An update was installed while this copy was running: it keeps running the
+  // old version until it's started again.
+  $("#updateWarn").hidden = !m.update;
+  if (m.update) {
+    $("#updateTo").textContent = m.update;
+    $("#updateHow").textContent = isLocal
+      ? `You are still running ${m.about.version}. Quit Procyon and start it again to finish updating.`
+      : `The station computer is still running ${m.about.version}. Quit Procyon there and start it again to finish updating.`;
+    $("#updateQuit").hidden = !isLocal;
+  }
+
   const missing = Object.entries(m.tools || {}).filter(([k, ok]) => !ok && ["jt9", "ft8code"].includes(k)).map(([k]) => k);
   $("#toolWarn").hidden = !missing.length;
   $("#toolInstall").hidden = !(missing.length && m.can_install_wsjtx);
@@ -557,14 +568,21 @@ document.addEventListener("pointerdown", () => {
 
 const snrColor = (s) => `var(--snr${s >= 0 ? 1 : s >= -10 ? 2 : s >= -16 ? 3 : 4})`;   // palette colours
 
-// Procyon's team. Every copy knows these calls and puts a small raccoon next to
-// them - shown only on this screen, nothing extra is transmitted.
-const TEAM = { KR1TTR: "Procyon developer" };
-const teamOf = (call) => (S && S.settings.team_badges === false ? ""
-  : TEAM[String(call || "").replace(/[<>]/g, "").split("/")[0].toUpperCase()] || "");
+// Procyon's team. Every copy knows these calls and puts a small raccoon (the
+// developer) or star (testers - added only with their consent) next to them,
+// and testers' calls get a purple pill. Shown only on this screen, nothing
+// extra is transmitted.
+const TEAM = {
+  KR1TTR: { role: "Procyon developer", icon: "icon.svg" },
+  KE4BFI: { role: "Procyon tester", icon: "star.svg", pill: true },   // Andy Lamb
+  KE8EON: { role: "Procyon tester", icon: "star.svg", pill: true },   // Jim Curley
+};
+const teamMember = (call) => (S && S.settings.team_badges === false ? null
+  : TEAM[String(call || "").replace(/[<>]/g, "").split("/")[0].toUpperCase()] || null);
+const teamOf = (call) => (teamMember(call) || {}).role || "";
 const badge = (call) => {
-  const who = teamOf(call);
-  return who ? `<img class="team-badge" src="/static/icon.svg" alt="" title="${esc(who)}">` : "";
+  const t = teamMember(call);
+  return t ? `<img class="team-badge${t.pill ? " star" : ""}" src="/static/${t.icon}" alt="" title="${esc(t.role)}">` : "";
 };
 
 function fmtMsg(d, terms = []) {
@@ -575,6 +593,7 @@ function fmtMsg(d, terms = []) {
     let c = "";
     if (t === "CQ") c = "t-cq";
     else if (my && bare === my) c = "t-me";
+    else if (teamMember(bare)?.pill) c = "t-tester";
     else if (bare === p.from) c = "t-from";
     else if (bare === p.to || bare === p.other) c = "t-to";
     else if (/^[A-R]{2}\d{2}$/.test(t) && t !== "RR73") c = "t-grid";
@@ -1408,6 +1427,7 @@ function openSettings(welcome) {
   try { tab = localStorage.getItem("procyon.settingsTab") || tab; } catch { /* default */ }
   showSetTab(welcome ? "station" : tab);
   $("#welcome").hidden = !welcome;
+  $("#rigChoice").hidden = true;
   const st = S.settings;
   for (const el of form.elements) {
     if (!el.name || !(el.name in st)) continue;
@@ -1513,6 +1533,7 @@ function onDetected(m) {
     return;
   }
   const r = (m.found || [])[0];
+  $("#rigChoice").hidden = true;
   if (!r) {
     radioMsg("No radio answered. Check it's on and connected by USB, then try again. " +
              "With a Digirig, Signalink or similar, choose the radio by hand.");
@@ -1528,7 +1549,21 @@ function onDetected(m) {
   const more = m.found.length > 1 ? ` (${m.found.length - 1} more found; this is the first)` : "";
   radioMsg(`✓ Found ${r.make} ${r.name} on ${r.path} at ${r.baud} baud.${more} ` +
            (r.note ? r.note + " " : "") + "Press Test radio, then Save.", !!r.model);
+  // Several models answer the same way (Elecraft): a short list to pick from
+  const choices = (r.choices || []).map((c) => rigs.find((x) => String(x.model) === String(c))).filter(Boolean);
+  if (!r.model && choices.length) {
+    $("#rigChoice").innerHTML = `<option value="">Which one?</option>`
+      + choices.map((x) => `<option value="${x.model}">${esc(rigLabel(x))}</option>`).join("");
+    $("#rigChoice").hidden = false;
+  }
 }
+$("#rigChoice").addEventListener("change", (e) => {
+  if (!e.target.value) return;
+  form.elements.rig_model.value = e.target.value;
+  showRigModel(e.target.value);
+  e.target.hidden = true;
+  radioMsg(`✓ ${form.elements.rig_pick.value} on ${form.elements.rig_device.value}. Press Test radio, then Save.`, true);
+});
 $("#testRadio").addEventListener("click", () => {
   const f = form.elements;
   if (!f.rig_model.value && f.rig_spawn.checked) { radioMsg("Pick your radio first (or press Detect my radio)."); return; }
@@ -1598,11 +1633,12 @@ $("#settingsBtn").addEventListener("click", () => openSettings(false));
 // Quit: stops Procyon the same careful way as Ctrl-C (only on the station computer)
 $("#quitBtn").addEventListener("click", () => {
   $("#quitText").textContent = S && S.tx
-    ? "Procyon is transmitting - quitting stops the transmission, then closes Procyon and its terminal window. Your settings and logbook are saved."
+    ? "Procyon is transmitting - quitting stops the transmission, then closes Procyon (and its window, if it has one). Your settings and logbook are saved."
     : "Procyon stops listening and closes (with its window, if it has one). Your settings and logbook are saved.";
   $("#quitDlg").returnValue = "";   // Esc must never count as "Quit"
   $("#quitDlg").showModal();
 });
+$("#updateQuit").addEventListener("click", () => $("#quitBtn").click());
 $("#quitDlg").addEventListener("close", () => {
   if ($("#quitDlg").returnValue === "quit") send({ type: "quit" });
 });

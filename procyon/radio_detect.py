@@ -13,7 +13,7 @@ import re
 import subprocess
 
 from .setup_help import hamlib_rigs
-from .system import IS_WINDOWS, find_tool, serial_ports
+from .system import IS_WINDOWS, NO_WINDOW, find_tool, serial_ports
 
 try:
     import fcntl
@@ -41,6 +41,9 @@ KENWOOD = {"020": ("TS-480", "TS-480"), "021": ("TS-590SG", "TS-590SG"), "024": 
 ICOM = {0x94: ("IC-7300", "IC-7300"), 0xA4: ("IC-705", "IC-705"), 0x98: ("IC-7610", "IC-7610"),
         0xA2: ("IC-9700", "IC-9700"), 0x88: ("IC-7100", "IC-7100"), 0x76: ("IC-7200", "IC-7200"),
         0x7A: ("IC-7600", "IC-7600"), 0x80: ("IC-7410", "IC-7410"), 0x70: ("IC-7000", "IC-7000")}
+
+# Elecraft radios all answer "ID017;", so the user picks one of these
+ELECRAFT = ("KX3", "KX2", "K3", "K3S", "K4")
 
 # Most radios ship at one of these; the likeliest first.
 ASCII_BAUDS = (38400, 9600, 19200, 115200, 4800)
@@ -159,8 +162,10 @@ def _identify(path: str, baud: int):
                 model, label = KENWOOD[code]
                 return {"make": "Kenwood", "name": label, "model": _model("Kenwood", model)}
             if code == "017":
-                return {"make": "Elecraft", "name": "K3 / KX3 / KX2 / K4", "model": "",
-                        "note": "An Elecraft radio answered - pick which one from the Radio list."}
+                # They all answer ID017: offer the short list to pick from
+                choices = [m for m in (_model("Elecraft", n) for n in ELECRAFT) if m]
+                return {"make": "Elecraft", "name": "K3 / KX3 / KX2 / K4", "model": "", "choices": choices,
+                        "note": "An Elecraft radio answered - pick which one."}
             return {"make": "A radio", "name": f"(ID {code})", "model": "",
                     "note": f"A radio answered (ID {code}) but I don't know which. Pick it from the Radio list."}
         # Icom CI-V: ask every common address for its frequency in one go
@@ -217,7 +222,8 @@ def test_rig(model: str, device: str, baud: str = "") -> dict:
     if baud:
         args += ["-s", str(baud)]
     try:
-        r = subprocess.run(args + ["f", "m", "t"], capture_output=True, text=True, timeout=25)
+        r = subprocess.run(args + ["f", "m", "t"], capture_output=True, text=True, timeout=25,
+                           **NO_WINDOW)
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": "The radio didn't answer. Check the model, serial port and baud "
                                       "(on a Yaesu: the radio's CAT RATE menu must match)."}

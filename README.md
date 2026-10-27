@@ -2,7 +2,7 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 0.9.44** · 25 October 2026
+**Version 0.9.46** · 27 October 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
 A simpler, friendlier FT8 station (FT4 too, as a beta). Procyon uses WSJT-X's
@@ -16,13 +16,13 @@ the Hamlib copy it includes): https://wsjt.sourceforge.io
 
 | System | Download | How |
 |---|---|---|
-| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.44_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.44_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
-| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.44-arch.tar.gz` | `tar xf procyon-0.9.44-arch.tar.gz`, `cd procyon-0.9.44-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
-| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.44-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
-| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.44-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
-| Windows 10/11 (64-bit) | `Procyon-0.9.44-windows.zip` | Right-click → **Extract All** (it won't run from inside the zip), then double-click **Procyon.bat** in the extracted folder. Python is included. See `README.txt` inside. |
+| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.46_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.46_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
+| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.46-arch.tar.gz` | `tar xf procyon-0.9.46-arch.tar.gz`, `cd procyon-0.9.46-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
+| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.46-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
+| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.46-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
+| Windows 10/11 (64-bit) | `Procyon-0.9.46-windows-setup.exe` | Double-click it (no administrator password needed), then start **Procyon** from the Start menu. Python is included. To update, run the newer setup the same way. Or, without installing: `Procyon-0.9.46-windows.zip` - right-click → **Extract All**, then double-click **Procyon.bat** in the extracted folder. |
 
-Add `--demo` (or use **Procyon DEMO ONLY - no radio.bat** on Windows, or
+Add `--demo` (or use **Procyon DEMO ONLY - no radio** in the Windows Start menu, or
 *Settings → Advanced → Demo band*) to try it with a simulated band: nothing is
 transmitted. Demo mode is always off when Procyon starts, so it can't be left on
 by mistake, and the practice log only exports as plain text, never as a logbook
@@ -251,6 +251,25 @@ and Procyon B. (Earlier versions were called Skywave; settings and logbooks move
 across automatically on first start.)
 
 ## Roadmap
+
+0.9.46: when **Detect my radio** finds an Elecraft (the K3, KX3, KX2 and K4 all
+answer the same way), a short "Which one?" list appears beside the result
+instead of having to type the model in. Companion-app messages (GridTracker)
+now use a socket on this computer only, so Windows Firewall no longer asks
+about network access just for that (it still asks if you turn on remote
+access, which does need the network).
+
+0.9.45: a **Windows installer** (`Procyon-0.9.45-windows-setup.exe`): installs
+for you only (no administrator password), adds Procyon and the demo to the Start
+menu (and the desktop, if you like) and an uninstaller to Windows' app list.
+Procyon started this way runs **without a console window**, like on Linux: it
+lives in your browser and its Quit button closes it; if it can't start it says
+why in a message box. The zip is still there for running without installing.
+**Restart reminder:** when a newer Procyon is installed while it's running,
+a bar asks you to quit and start it again (it keeps running the old version
+until then). **Tester badges:** Procyon's testers Andy KE4BFI and Jim KE8EON
+get a star next to their calls and a purple pill around them (on this screen
+only; *Settings → Display* switches team badges off).
 
 0.9.44: **background textures** for the palettes (*Settings → Experimental*):
 a faint starfield on Night sky (mostly white, some blue, a few yellow and

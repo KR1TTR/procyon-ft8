@@ -8,6 +8,8 @@ from math import erf, log, pi, sqrt
 
 import numpy as np
 
+from .system import NO_WINDOW
+
 PERIOD = 15.0          # seconds per T/R cycle
 SYMBOL_SEC = 0.16      # 1920 samples @ 12 kHz
 NSYM = 79
@@ -109,7 +111,7 @@ def encode(msg: str):
     the message - it differs from `msg` if the message can't be encoded."""
     msg = normalize(msg)
     out = subprocess.run([_ft8code(), msg], capture_output=True, text=True,
-                         timeout=10).stdout
+                         timeout=10, **NO_WINDOW).stdout
     decoded = None
     tones = None
     lines = out.splitlines()
