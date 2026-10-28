@@ -1,0 +1,16 @@
+name: An idea or wish
+description: Suggest something for Procyon
+labels: [idea]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are welcome! Procyon is a personal hobby project, so not every wish will make it in -
+        but every one gets read.
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: What would you like Procyon to do, and how would it help you on the air?
+    validations:
+      required: true

@@ -1,0 +1,44 @@
+name: Something isn't working
+description: Report a bug in Procyon
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time! Plain words are fine - you don't need to be a programmer.
+        **Never paste your QRZ API key, remote-access PIN or passwords here: this page is public.**
+  - type: input
+    id: version
+    attributes:
+      label: Procyon version
+      description: Settings → About Procyon
+      placeholder: e.g. 0.9.46
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: Computer
+      options: [Windows, macOS, Linux Mint / Ubuntu / Debian, Other Linux, Raspberry Pi]
+    validations:
+      required: true
+  - type: input
+    id: radio
+    attributes:
+      label: Radio and interface
+      placeholder: e.g. Elecraft KX3 + Digirig, IC-7300 over its own USB cable
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead. A photo or screenshot helps.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Procyon's log (optional)
+      description: |
+        The last lines of procyon.log, from the settings folder:
+        Windows %LOCALAPPDATA%\Procyon, Linux ~/.local/share/procyon, Mac ~/Library/Application Support/Procyon
+      render: text
