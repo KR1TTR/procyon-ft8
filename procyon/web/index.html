@@ -31,6 +31,7 @@
 
   <div class="clock">
     <div class="utc"><span id="utc">--:--:--</span><small>UTC</small></div>
+    <span class="chip" id="chipClock"><span class="led"></span><span id="clockLabel">Clock</span></span>
     <div class="cycle">
       <div class="cycle-bar"><div id="cycleFill"></div></div>
       <span id="cycleLabel">RX</span>
@@ -412,6 +413,20 @@
           <legend>Practice</legend>
           <label class="toggle"><input type="checkbox" name="demo"><span></span>Demo band (simulated signals, nothing is transmitted)</label>
           <p class="hint">Try Procyon without a radio: simulated stations call CQ and answer you. Nothing goes on the air, and demo QSOs go into a separate practice log that only exports as plain text. Always off when Procyon starts, so it's never left on by mistake.</p>
+        </fieldset>
+        <fieldset>
+          <legend>Clock</legend>
+          <label>Procyon's timing
+            <select name="clock_sync">
+              <option value="computer">Follow this computer's clock</option>
+              <option value="auto">Sync to the band automatically</option>
+              <option value="manual">Sync to the band when I click the Clock light</option>
+            </select>
+          </label>
+          <p class="hint">FT8 and FT4 need your clock within about a second. Band sync times Procyon by the stations it hears
+            (the middle value of their time offsets, once 8 or more are heard), so it works in the field without internet or GPS.
+            It only shifts Procyon's own timing; your computer's clock isn't changed. A clock more than about 2 s off decodes
+            nothing to sync to - set it once by hand. The correction starts from zero each time Procyon starts.</p>
         </fieldset>
         <fieldset>
           <legend>Decoder</legend>

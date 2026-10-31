@@ -215,6 +215,12 @@ class Logbook:
                 q.pop(k, None)
         self._rewrite()
 
+    def remove(self, idx: int) -> dict:
+        """Delete one QSO (the file is backed up first) and return it."""
+        q = self.qsos.pop(idx)
+        self._rewrite()
+        return q
+
     def mark(self, idxs, fields: dict):
         """Set the same fields on several QSOs, with a single rewrite."""
         for i in idxs:

@@ -61,11 +61,13 @@ def _key(q: dict) -> tuple:
     return (q.get("call", "").upper(), q.get("qso_date", ""), q.get("time_on", ""), q.get("band", "").lower())
 
 
-def merge(saved: list[dict], current: list[dict]) -> list[dict]:
+def merge(saved: list[dict], current: list[dict], drop=()) -> list[dict]:
     """A park's saved log plus the current activation's QSOs. Keeps QSOs from an
     earlier activation of the same park that day; a QSO in both is taken from
-    `current` (it may have been edited since)."""
-    by_key = {_key(q): q for q in saved}
+    `current` (it may have been edited since). QSOs in `drop` (deleted from the
+    main log) are left out."""
+    drop = {_key(q) for q in drop}
+    by_key = {_key(q): q for q in saved if _key(q) not in drop}
     by_key.update({_key(q): q for q in current})
     return sorted(by_key.values(), key=_when)
 

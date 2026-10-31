@@ -4,6 +4,7 @@ Produces 12 kHz audio containing background QSOs, stations calling CQ, and
 stations that respond to whatever you transmit - so the whole receive,
 decode, auto-sequence and log loop can be exercised end to end."""
 
+import os
 import random
 import string
 
@@ -12,6 +13,9 @@ import numpy as np
 from . import ft8
 
 FS = 12000
+# For testing band sync: every demo station arrives this many seconds late, as
+# if this computer's clock were that much fast (e.g. PROCYON_DEMO_CLOCK_ERROR=1.2).
+CLOCK_ERROR = float(os.environ.get("PROCYON_DEMO_CLOCK_ERROR") or 0)
 
 REGIONS = [
     ("K", ["FN42", "EM73", "DM79", "CN87", "EN52", "FM18", "EL96"]),
@@ -188,7 +192,7 @@ class DemoBand:
             w = self.m.synth(tones, st.freq, FS)
             snr = st.snr + self.rng.uniform(-2, 2)  # a little QSB
             amp = np.sqrt(2 * (2500 / FS * 2) * 10 ** (snr / 10))
-            s = int((self.m.TX_START + st.dt) * FS)
+            s = max(0, int((self.m.TX_START + st.dt + CLOCK_ERROR) * FS))
             n = min(len(w), n_period - s)
             buf[s:s + n] += amp * w[:n]
         audio = np.clip(buf * 1500, -32767, 32767).astype(np.int16)

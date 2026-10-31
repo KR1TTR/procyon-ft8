@@ -138,7 +138,10 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--border2)
 .chip .led { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
 .chip.ok .led { background: var(--cq); box-shadow: 0 0 8px var(--cq); }
 .chip.bad .led { background: var(--tx); box-shadow: 0 0 8px var(--tx); }
-.chip.ok, .chip.bad { color: var(--text); }
+.chip.warn .led { background: var(--me); box-shadow: 0 0 8px var(--me); }
+.chip.ok, .chip.bad, .chip.warn { color: var(--text); }
+.chip.clickable { cursor: pointer; }
+.chip.clickable:hover { border-color: var(--hover-border); background: var(--hover-bg); }
 .chip.remote { color: var(--info); border-color: color-mix(in srgb, var(--info) 33%, transparent); background: color-mix(in srgb, var(--info) 8%, transparent); }
 .chip.remote .led { background: var(--info); box-shadow: 0 0 8px var(--info); }
 .chip.demo { color: var(--me); border-color: color-mix(in srgb, var(--me) 33%, transparent); background: color-mix(in srgb, var(--me) 8%, transparent); }
@@ -512,6 +515,8 @@ a.btn { text-decoration: none; color: var(--text); display: inline-flex; align-i
 .ledit .num { padding: 0 8px; }
 .ledit .num input { border: 0; padding: 6px 0; }
 .ledit .acts { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 6px; }
+.ledit .le-delete { margin-right: auto; }
+.ledit .le-delete.ghost { color: var(--tx); }
 .demo-pill { font: 600 10px var(--sans); letter-spacing: .04em; color: var(--me); background: color-mix(in srgb, var(--me) 8%, transparent); border: 1px solid color-mix(in srgb, var(--me) 33%, transparent); padding: 1px 7px; border-radius: 99px; }
 
 /* ------------------------------------------------------- movable panels */
@@ -664,7 +669,7 @@ dialog#settings { width: min(760px, calc(100vw - 32px)); }
   .wf-wrap { height: 150px; }
   .row { grid-template-columns: 40px 44px minmax(0, 1fr); }
   .row .dt, .row .meta { display: none; }
-  .status .chip:not(.demo):not(.pota) { display: none; }
+  .status .chip:not(.demo):not(.pota), #chipClock { display: none; }
   .wf-hint { display: none; }
 }
 

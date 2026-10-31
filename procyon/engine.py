@@ -54,6 +54,7 @@ DEFAULTS = {
     "units": "auto",                 # distances: "auto" (from your callsign), "km" or "mi"
     "export_new_only": False,        # Export ADIF gives only QSOs not exported before
     "auto_quit": True,               # stop Procyon a minute after its last browser tab closes
+    "clock_sync": "computer",        # Procyon's timing: "computer" clock as is, "auto" band sync, "manual" band sync
     "dial_hz": 14_074_000, "tx_freq": 1500, "rx_freq": 1500,
     "remote_enabled": False, "remote_pin_hash": "",
     # WSJT-X compatible UDP for GridTracker, JTAlert, loggers (WSJT-X defaults)
@@ -67,6 +68,16 @@ DEFAULTS = {
 SECRETS = ("remote_pin_hash", "qrz_key")   # never sent to the browser
 LOCAL_ONLY = ("remote_", "qrz_key", "lotw_")  # only the computer running Procyon changes these
 OWN_COMMANDS = ("pota_", "mode")   # changed by their own commands, not the Settings form
+
+# Band clock check: each decode's DT says how early/late that station arrived
+# by our clock. One station's clock may be off, but the median over many is a
+# good stand-in for "the band's time" - so it shows how far off ours is,
+# without internet or GPS.
+CLOCK_WINDOW_SEC = 120     # stations heard in the last two minutes
+CLOCK_MIN_STATIONS = 8     # fewer than this: not enough to judge
+CLOCK_MAX_DT = 2.0         # ignore wild values (a station whose clock is way off)
+CLOCK_MAX_OFFSET = 2.5     # the decoder can't see further than this anyway
+CLOCK_SYNC_MODES = ("computer", "auto", "manual")
 
 LINE_RE = re.compile(r"^\d{4,6}\s+(-?\d+)\s+(-?\d+\.\d)\s+(\d+)\s+[~+]\s+(.+?)\s*$")   # ~ FT8, + FT4
 
@@ -119,6 +130,12 @@ class Engine:
         self.history = collections.deque(maxlen=80)   # recent decode batches
         self.tmp = tempfile.mkdtemp(prefix="procyon-")
         self.long_calls = collections.OrderedDict()   # heard in full, newest last
+        self.clock_dts = {}         # band clock check: sender -> (time heard, DT by the computer's clock)
+        # Band sync: how far the computer's clock is ahead of the band's.
+        # Procyon's own timing (cycles, decoding, transmit) runs on
+        # computer time minus this; the computer's clock itself is never changed.
+        self.clock_offset = 0.0
+        self._clock_logged = None
         self._primer = ((), "", "")                     # (calls, mode, reminder .wav)
         # audio ring buffer
         self.ring = np.zeros(RING_SEC * FS, np.int16)
@@ -225,7 +242,7 @@ class Engine:
                        "urls": [f"http://{a}:{self.port}/" for a in lan_addresses()]},
             "audio": {"running": self.rx_task is not None and not self.audio_error,
                       "error": self.audio_error, "level": round(self.level_db, 1)},
-            "rig": {"enabled": self.rig.enabled, "connected": self.rig.connected,
+            "rig": {"enabled": self.rig.enabled, "connected": self.rig.connected, "answering": self.rig.answering,
                     "freq": self.rig.freq, "error": self.rig.error},
             "dial": self.dial, "band": band_of(self.dial),
             "bands": [{"name": b[0], "hz": self._band_dial(b)} for b in BANDS],
@@ -240,6 +257,7 @@ class Engine:
             "can_install_wsjtx": wsjtx_install.available(),
             "about": {"version": __version__, "date": RELEASE_DATE, "authors": AUTHORS},
             "update": self._updated_to(),
+            "clock": self._clock_status(),
         }
 
     _VERSION_FILE = os.path.join(os.path.dirname(__file__), "__init__.py")
@@ -392,7 +410,7 @@ class Engine:
         last_poll = last_beat = 0
         while True:
             await asyncio.sleep(0.05)
-            now = time.time()
+            now = self.band_time()
             m = self.m
             p = int(now // m.PERIOD)
             pos = now - p * m.PERIOD
@@ -417,11 +435,11 @@ class Engine:
                 if now - last_poll > 2:
                     last_poll = now
                     if self.rig.enabled:
-                        was = (self.rig.connected, self.rig.freq, self.rig.error)
+                        was = (self.rig.up, self.rig.freq, self.rig.error)
                         await self.rig.poll()
-                        if self.rig.connected and not was[0]:
+                        if self.rig.up and not was[0]:
                             await self._apply_rig_mode()   # just connected
-                        if was != (self.rig.connected, self.rig.freq, self.rig.error):
+                        if was != (self.rig.up, self.rig.freq, self.rig.error):
                             await self.push_state()
             except Exception:  # noqa: BLE001
                 log.exception("scheduler")
@@ -433,7 +451,8 @@ class Engine:
         mode = self.m
         try:
             t_start = p * mode.PERIOD
-            audio = self.samples(t_start, t_start + mode.PERIOD)
+            off = self.clock_offset   # the cycle by the band's time, on the computer's clock
+            audio = self.samples(t_start + off, t_start + off + mode.PERIOD)
             hhmmss = time.strftime("%H%M%S", time.gmtime(t_start))
             path = os.path.join(self.tmp, f"{time.strftime('%y%m%d', time.gmtime(t_start))}_{hhmmss}.wav")
             with wave.open(path, "wb") as wf:
@@ -496,12 +515,82 @@ class Engine:
                 self.udp.decode(p * mode.PERIOD, d["snr"], d["dt"], d["freq"], d["msg"], mode.UDP_MODE,
                                 low_confidence=bool(d.get("uncertain")))
             self.qso.on_decodes(decodes, p)
+            self._note_clock(decodes, off)
             await self.push_state()
         except Exception as e:  # noqa: BLE001
             log.exception("decode")
             self.toast(f"Decoder error: {e}", "bad")
         finally:
             self.decoding = False
+
+    def band_time(self):
+        """Now, by the band's clock (the computer's, with any band sync applied)."""
+        return time.time() - self.clock_offset
+
+    def _note_clock(self, decodes, off=0.0):
+        """Keep each station's latest DT for the band clock check, as measured
+        by the computer's own clock (`off` = the correction in use when that
+        audio was cut). Guessed ("?"/a1..) decodes, hashed calls and wild DTs
+        are left out. With automatic band sync, nudges the correction."""
+        now = time.time()
+        for d in decodes:
+            frm = d["p"].get("from") or ""
+            if not frm or frm.startswith("<") or d.get("uncertain") or abs(d["dt"]) > CLOCK_MAX_DT:
+                continue
+            self.clock_dts[frm] = (now, d["dt"] + off)
+        for k in [k for k, (t, _) in self.clock_dts.items() if t < now - CLOCK_WINDOW_SEC]:
+            del self.clock_dts[k]
+        band = self._band_dt()
+        if band is not None and (self._clock_logged is None or abs(band - self._clock_logged) >= 0.1):
+            self._clock_logged = band
+            log.info("band clock: computer clock %+.2f s from the band (median of %d stations)",
+                     band, len(self.clock_dts))
+        if self.s["clock_sync"] == "auto" and band is not None:
+            self._auto_sync(band)
+
+    def _band_dt(self):
+        """Median DT of the stations heard lately, by the computer's clock:
+        how far it is ahead of the band. None if too few stations."""
+        vals = sorted(v for _, v in self.clock_dts.values())
+        n = len(vals)
+        if n < CLOCK_MIN_STATIONS:
+            return None
+        mid = n // 2
+        return vals[mid] if n % 2 else (vals[mid - 1] + vals[mid]) / 2
+
+    def _auto_sync(self, band):
+        """Move the correction part of the way towards the band each cycle -
+        in small steps, and never while transmitting (a shift mid-transmission
+        would stretch or cut it)."""
+        err = band - self.clock_offset
+        if abs(err) < 0.05 or self.tx_task or self.tune_task:
+            return
+        step = err if abs(err) < 0.1 else max(-0.5, min(0.5, err / 2))
+        self._set_offset(self.clock_offset + step)
+
+    def _set_offset(self, off):
+        off = round(max(-CLOCK_MAX_OFFSET, min(CLOCK_MAX_OFFSET, off)), 2)
+        if off != self.clock_offset:
+            log.info("band sync: Procyon's timing %+.2f s from the computer's clock", off)
+        self.clock_offset = off
+
+    def _clock_status(self):
+        band = self._band_dt()
+        return {"n": len(self.clock_dts), "band": None if band is None else round(band, 2),
+                "offset": self.clock_offset, "sync": self.s["clock_sync"]}
+
+    def sync_clock_now(self):
+        """The manual "Sync to the band" click."""
+        band = self._band_dt()
+        if band is None:
+            self.toast(f"Not enough stations to sync to yet: needs {CLOCK_MIN_STATIONS} heard in the "
+                       f"last 2 minutes ({len(self.clock_dts)} so far).", "warn")
+        elif self.tx_task or self.tune_task:
+            self.toast("Transmitting - sync again once this transmission ends.", "warn")
+        else:
+            self._set_offset(band)
+            self.toast(f"Synced to the band: Procyon's timing is now {self.clock_offset:+.1f} s "
+                       f"from the computer's clock.", "info")
 
     def _remember_call(self, tok: str, ours=False):
         """Note a callsign written in full if it's one FT8 sends as a code. Our
@@ -689,7 +778,7 @@ class Engine:
                 self._warned = decoded
                 self.toast(f"Message will be received as “{decoded}”", "warn")
             q.note_tx(p, decoded)
-            target = p * m.PERIOD + m.TX_START
+            target = p * m.PERIOD + m.TX_START + self.clock_offset   # on the computer's clock
             late = max(0.0, time.time() - target)
             self.tx_info = {"msg": decoded, "period": p, "idx": idx, "freq": self.s["tx_freq"],
                             "start": target, "end": target + m.SIGNAL_SEC,
@@ -971,6 +1060,7 @@ class Engine:
         self.qso.regen()
         self.qso.next = 5
         self.history.clear()
+        self.clock_dts.clear()
         await self.broadcast({"type": "history", "batches": []})
         self.udp.clear()
         self.demo = DemoBand(self.m)
@@ -1024,6 +1114,33 @@ class Engine:
         if self.s["demo"]:
             return f"{DEMO_MARK} - {note}" if note else DEMO_MARK
         return note
+
+    def _log_delete(self, m: dict) -> None:
+        """Delete one QSO from the log by hand - e.g. a second entry made when a
+        station missed our 73, sent RR73 again later and we answered it."""
+        i = int(m.get("idx", -1))
+        qsos = self.logbook.qsos
+        # the index must still point at the QSO the user saw (a QSO logged
+        # in the meantime would not move it, but an import could)
+        if not (0 <= i < len(qsos)) or qsos[i].get("call", "") != m.get("call") \
+                or qsos[i].get("qso_date", "") + qsos[i].get("time_on", "") != m.get("when"):
+            self.toast("That log entry has changed - nothing was deleted", "warn")
+            return
+        if self.uploading:
+            self.toast("An upload is running - try again when it has finished", "warn")
+            return
+        q = self.logbook.remove(i)
+        cur = self.qso.log_idx
+        if cur is not None:   # keep the QSO in progress pointing at its own entry
+            self.qso.log_idx = None if cur == i else cur - 1 if cur > i else cur
+        if q.get("my_sig", "").upper() == "POTA":
+            self._pota_save(drop=[q])
+        log.info("log entry deleted by hand: %s %s %s %s", q.get("call"),
+                 q.get("qso_date"), q.get("time_on"), q.get("band"))
+        on_qrz = q.get("qrzcom_qso_upload_status", "").upper() == "Y"
+        self.toast(f"Deleted the QSO with {q.get('call', '')}"
+                   + (" - it's still on QRZ; delete it there too" if on_qrz else ""),
+                   "warn" if on_qrz else "good")
 
     def _logged_entry(self, q: Qso):
         """Index of this QSO's log entry, if it's still in the open logbook."""
@@ -1118,9 +1235,10 @@ class Engine:
     def _pota_path(self, park: str) -> str:
         return os.path.join(self._pota_dir(), pota.filename(self.s["mycall"], park, self.s["pota_start"][:8]))
 
-    def _pota_save(self):
+    def _pota_save(self, drop=()):
         """Keep each park's own log file up to date (after every QSO or edit).
-        The QSOs stay in the main log too - that's what QRZ/LoTW uploads use."""
+        The QSOs stay in the main log too - that's what QRZ/LoTW uploads use.
+        `drop`: QSOs just deleted from the main log, taken out of the park files too."""
         parks, start = self.s["pota_parks"], self.s["pota_start"]
         if not (parks and start and self.s["mycall"]) or self.s["demo"]:
             return   # demo park logs are never written as ADIF (see pota_export)
@@ -1130,7 +1248,7 @@ class Engine:
             saved = Logbook(path).qsos if os.path.exists(path) else []
             if not current and not saved:
                 continue
-            qsos = pota.merge(saved, current)
+            qsos = pota.merge(saved, current, drop)
             os.makedirs(self._pota_dir(), exist_ok=True)
             tmp = path + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
@@ -1413,6 +1531,10 @@ class Engine:
             self.s["mygrid"] = self.s["mygrid"][:4].upper() + self.s["mygrid"][4:].lower()
             if self.s["units"] not in ("auto", "km", "mi"):
                 self.s["units"] = "auto"
+            if self.s["clock_sync"] not in CLOCK_SYNC_MODES:
+                self.s["clock_sync"] = "computer"
+            if self.s["clock_sync"] == "computer":
+                self._set_offset(0.0)
             self._clean_wf_range()
             self.save()
             self._set_station()
@@ -1456,6 +1578,8 @@ class Engine:
                 q.last_progress = time.time()
         elif t == "halt":
             await self.halt()
+        elif t == "clock_sync":
+            self.sync_clock_now()
         elif t == "select_msg":
             q.next = int(m["n"])
         elif t == "edit_msg":
@@ -1508,6 +1632,8 @@ class Engine:
                 })
                 self._pota_save()
                 self.toast("Log entry updated", "good")
+        elif t == "log_delete":
+            self._log_delete(m)
         elif t == "pota_start":
             return await self._pota_start(m)
         elif t == "pota_end":

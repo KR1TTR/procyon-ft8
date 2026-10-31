@@ -200,7 +200,7 @@ function wfRow(bins) {
 
   // Mark each cycle with a faint line where it starts. Its timestamp goes ABOVE
   // the line, inside the cycle it names - drawn ~2 s in, once there's room.
-  const p = Math.floor(Date.now() / 1000 / period());
+  const p = Math.floor(bandNow() / period());
   if (p !== lastPeriodMark) {
     if (lastPeriodMark !== -1) {
       wctx.fillStyle = "#ffffff30";
@@ -309,9 +309,9 @@ const pad = (n) => String(n).padStart(2, "0");
 const utcStr = (d) => `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
 
 function tick() {
-  const now = Date.now() / 1000;
+  const now = bandNow();   // the computer's clock, or the band's with band sync on
   const P = period(), p = Math.floor(now / P), pos = now - p * P;
-  $("#utc").textContent = utcStr(new Date());
+  $("#utc").textContent = utcStr(new Date(now * 1000));
   const isTx = S && S.qso.tx_enabled && p % 2 === S.qso.parity;
   const fill = $("#cycleFill");
   fill.style.width = `${pos / P * 100}%`;
@@ -320,7 +320,7 @@ function tick() {
   $("#onAirSecs").textContent = `${Math.floor(P - pos)}s`;
   if (S && S.tx) {
     const t = S.tx;
-    const frac = Math.min(1, Math.max(0, (now - t.start) / (t.end - t.start)));
+    const frac = Math.min(1, Math.max(0, (Date.now() / 1000 - t.start) / (t.end - t.start)));   // t: computer's clock
     $("#txProgress").style.width = `${frac * 100}%`;
   }
   requestAnimationFrame(tick);
@@ -368,11 +368,16 @@ function onState(m) {
   audio.title = m.audio.error ? `Audio error: ${m.audio.error}` : "Receive audio from your radio - set it with the radio's AF/volume knob, aiming for about -30 dB";
   const rig = $("#chipRig");
   rig.hidden = !m.rig.enabled;
-  rig.className = `chip ${m.rig.connected ? "ok" : "bad"}`;
-  noteRig(m.rig);
+  // Hamlib's rigctld can be running while the radio itself is off: "answering"
+  // says whether the radio replies (older engines don't send it).
+  const radioUp = m.rig.connected && m.rig.answering !== false;
+  rig.className = `chip ${radioUp ? "ok" : "bad"}`;
+  noteRig({ ...m.rig, connected: radioUp });
   $("#rigLabel").textContent = !m.rig.connected ? "Rig offline"
+    : !radioUp ? "Radio off?"
     : Date.now() < rigShinyUntil ? SHINY : "Rig";
-  rig.title = m.rig.error || "Connected to rigctld";
+  rig.title = m.rig.error || "Connected to the radio";
+  renderClock(m.clock);
   $("#chipDemo").hidden = !st.demo;
   $("#demoBanner").hidden = !st.demo;
   renderPota();
@@ -567,6 +572,45 @@ document.addEventListener("pointerdown", () => {
 }, { once: true });
 
 const snrColor = (s) => `var(--snr${s >= 0 ? 1 : s >= -10 ? 2 : s >= -16 ? 3 : 4})`;   // palette colours
+
+// Band clock check: the median DT of the stations heard lately says how far
+// this computer's clock is from the band's (c.band). With band sync
+// (Settings → Advanced) Procyon runs its own timing that much earlier or later
+// (c.offset); the chip then shows what's left over.
+const sec = (x) => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(1)} s`;
+const clockOffset = () => (S && S.clock ? S.clock.offset || 0 : 0);
+const bandNow = () => Date.now() / 1000 - clockOffset();   // seconds, by the band's time
+function renderClock(c) {
+  const chip = $("#chipClock");
+  if (!c) return;
+  const manual = c.sync === "manual", auto = c.sync === "auto";
+  chip.classList.toggle("clickable", manual);
+  const fixed = c.offset ? `Procyon's timing is corrected by ${sec(c.offset)} (your computer's clock itself isn't changed).\n` : "";
+  if (c.band == null) {
+    chip.className = `chip${manual ? " clickable" : ""}`;
+    $("#clockLabel").textContent = auto && c.offset ? `Synced ${sec(c.offset)}` : auto ? "Band sync" : "Clock";
+    chip.title = `Band clock check: needs at least 8 stations decoded in the last 2 minutes (${c.n} so far).\n` + fixed;
+    return;
+  }
+  const left = c.band - c.offset, a = Math.abs(left);
+  chip.className = `chip ${a < 0.5 ? "ok" : a < 1 ? "warn" : "bad"}${manual ? " clickable" : ""}`;
+  $("#clockLabel").textContent = auto ? `Synced ${sec(c.offset)}` : `Clock ${sec(left)}`;
+  const how = a < 0.3 ? `on time, ${sec(left)}`
+    : left > 0 ? `${a.toFixed(1)} s late - ${c.offset ? "Procyon's timing" : "your clock"} is probably about that much fast`
+    : `${a.toFixed(1)} s early - ${c.offset ? "Procyon's timing" : "your clock"} is probably about that much slow`;
+  chip.title = `Band clock check: stations here arrive ${how} (middle value of ${c.n} stations over the last 2 minutes).\n`
+    + fixed
+    + (auto ? "Band sync is on: Procyon keeps itself in time with the stations it hears.\n"
+      : a < 0.5 ? "That's fine for FT8 and FT4.\n"
+      : a < 1 ? "Still decodes, but weak stations may be missed.\n"
+      : "Far enough off to lose decodes.\n")
+    + (manual ? "Click to sync Procyon to the band now." : !auto && a >= 0.5
+      ? "Set your computer's clock, or turn on band sync (Settings → Advanced → Clock)." : "")
+    + "\nA small + (up to 0.2-0.3 s) is normal: sound cards add a little delay.";
+}
+$("#chipClock").addEventListener("click", () => {
+  if (S && S.clock && S.clock.sync === "manual") send({ type: "clock_sync" });
+});
 
 // Procyon's team. Every copy knows these calls and puts a small raccoon (the
 // developer) or star (testers - added only with their consent) next to them,
@@ -891,7 +935,7 @@ function noteRig(rig) {
     rigShinyLast = Date.now();
     rigShinyUntil = rigShinyLast + 6000;
     setTimeout(() => {
-      if (S && S.rig.connected) $("#rigLabel").textContent = "Rig";
+      if (S && S.rig.connected && S.rig.answering !== false) $("#rigLabel").textContent = "Rig";
       fitHeader(true);
     }, 6100);
     setTimeout(() => fitHeader(true), 0);
@@ -1113,7 +1157,7 @@ function renderLog() {
     const utc = t.length >= 4 ? `${t.slice(0, 2)}:${t.slice(2, 4)}` : "";
     const where = [q.country && esc(q.country),
       q.km != null && dist(q.km, q.approx)].filter(Boolean).join(" · ");
-    return `<div class="lrow" data-idx="${q.idx}" title="Click to edit the comment or power">
+    return `<div class="lrow" data-idx="${q.idx}" title="Click to edit the comment or power, or delete the QSO">
       <div class="l1"><span class="c">${esc(q.call)}</span><span class="g">${esc(q.grid)}</span>
         ${q.band ? `<span class="b">${esc(q.band)}</span>` : ""}
         ${q.tx_pwr ? `<span class="pw">${esc(q.tx_pwr)} W</span>` : ""}
@@ -1135,7 +1179,9 @@ function editLogEntry(row) {
   row.insertAdjacentHTML("beforeend", `<div class="ledit">
     <input class="le-comment" maxlength="200" placeholder="Comment" value="${esc(q.comment)}">
     <div class="num"><input class="le-pwr" type="number" min="0" step="1" placeholder="—" value="${esc(q.tx_pwr)}"><span>W</span></div>
-    <div class="acts"><button class="btn ghost small le-cancel" type="button">Cancel</button>
+    <div class="acts"><button class="btn ghost small le-delete" type="button"
+        title="Remove this QSO from your log, e.g. a second entry for the same contact">Delete QSO</button>
+      <button class="btn ghost small le-cancel" type="button">Cancel</button>
       <button class="btn primary small le-save" type="button">Save</button></div>
   </div>`);
   row.querySelector(".le-comment").focus();
@@ -1152,7 +1198,28 @@ function closeLogEdit(save) {
   renderLog();
 }
 
+function deleteLogEntry(btn) {
+  if (!btn.classList.contains("armed")) {   // two clicks, so it can't go by accident
+    btn.classList.add("armed", "danger");
+    btn.classList.remove("ghost");
+    btn.textContent = "Are you sure?";
+    setTimeout(() => {
+      if (!btn.isConnected) return;
+      btn.classList.remove("armed", "danger");
+      btn.classList.add("ghost");
+      btn.textContent = "Delete QSO";
+    }, 4000);
+    return;
+  }
+  const q = S.log.find((x) => x.idx === editingIdx);
+  if (q) send({ type: "log_delete", idx: q.idx, call: q.call, when: q.date + q.time });
+  editingIdx = null;
+  $("#logList").dataset.html = "";
+  renderLog();
+}
+
 $("#logList").addEventListener("click", (e) => {
+  if (e.target.closest(".le-delete")) return deleteLogEntry(e.target.closest(".le-delete"));
   if (e.target.closest(".le-save")) return closeLogEdit(true);
   if (e.target.closest(".le-cancel")) return closeLogEdit(false);
   const row = e.target.closest(".lrow");
@@ -1432,7 +1499,7 @@ function openSettings(welcome) {
   for (const el of form.elements) {
     if (!el.name || !(el.name in st)) continue;
     if (el.type === "checkbox") el.checked = !!st[el.name];
-    else if (el.tagName !== "SELECT" || ["ptt", "depth", "rig_mode", "units"].includes(el.name)) el.value = st[el.name];
+    else if (el.tagName !== "SELECT" || ["ptt", "depth", "rig_mode", "units", "clock_sync"].includes(el.name)) el.value = st[el.name];
     else if (el.name === "rig_baud") setSelect(el, st.rig_baud);
   }
   // Remote access: only editable on the computer running Procyon.
@@ -1766,7 +1833,8 @@ function toast(text, kind = "info") {
 let headerKey = "";
 function fitHeader(force) {
   const h = $(".top");
-  const key = [...document.querySelectorAll(".status > *")].map((c) => (c.hidden ? 0 : 1)).join("") + innerWidth;
+  const key = [...document.querySelectorAll(".status > *")].map((c) => (c.hidden ? 0 : 1)).join("") + innerWidth
+    + $("#clockLabel").textContent.length;   // the clock chip's width changes with its reading
   if (!force && key === headerKey) return;
   headerKey = key;
   h.classList.remove("tight", "wrap");

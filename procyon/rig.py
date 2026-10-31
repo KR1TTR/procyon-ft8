@@ -3,10 +3,16 @@
 import asyncio
 import logging
 import re
+import time
 
 from .system import NO_WINDOW, find_tool
 
 log = logging.getLogger("procyon.rig")
+
+# rigctld repeats the same complaints every few seconds while the radio is off.
+# Each message is written to the log once per this many seconds; the rest are
+# counted and summed up, so they don't push the useful history out of the log.
+REPEAT_LOG_SEC = 300
 
 
 class Rig:
@@ -14,7 +20,8 @@ class Rig:
         self.host = "127.0.0.1"
         self.port = 4532
         self.enabled = False
-        self.connected = False
+        self.connected = False      # rigctld is reachable
+        self.answering = False      # ...and the radio itself answers it (False while it's off)
         self.freq = None
         self.error = ""
         self._reader = None
@@ -22,6 +29,14 @@ class Rig:
         self._lock = asyncio.Lock()
         self._daemon = None
         self._daemon_log: list[str] = []     # rigctld's last few messages, for explaining failures
+        self._logged_at: dict[str, float] = {}   # message -> when it last went into the log
+        self._hidden = 0                     # repeats not written since the last summary
+        self._hidden_since = 0.0
+
+    @property
+    def up(self):
+        """Talking to the radio: rigctld reachable and the radio answering."""
+        return self.connected and self.answering
 
     async def configure(self, s: dict):
         await self.close()
@@ -58,9 +73,24 @@ class Rig:
         while proc.stderr and (line := await proc.stderr.readline()):
             text = line.decode(errors="replace").strip()
             if text:
-                if not self._daemon_log or text != self._daemon_log[-1]:   # retries repeat themselves
-                    log.info("rigctld: %s", text)
+                self._log_daemon(text)
                 self._daemon_log = (self._daemon_log + [text])[-5:]
+
+    def _log_daemon(self, text: str):
+        now = time.monotonic()
+        if now - self._logged_at.get(text, -REPEAT_LOG_SEC) < REPEAT_LOG_SEC:
+            if not self._hidden:
+                self._hidden_since = now
+            self._hidden += 1
+        else:
+            self._logged_at[text] = now
+            log.info("rigctld: %s", text)
+        if self._hidden and now - self._hidden_since >= REPEAT_LOG_SEC:
+            log.info("rigctld: (%d repeats of the messages above in the last %d minutes not shown)",
+                     self._hidden, round((now - self._hidden_since) / 60))
+            self._hidden = 0
+        if len(self._logged_at) > 200:   # forget old messages
+            self._logged_at = {k: t for k, t in self._logged_at.items() if now - t < REPEAT_LOG_SEC}
 
     def _why(self) -> str:
         """rigctld's latest complaint in plain words ('' if it hasn't said anything)."""
@@ -77,7 +107,7 @@ class Rig:
         return self._daemon_log[-1]
 
     async def close(self):
-        self.connected = False
+        self.connected = self.answering = False
         if self._writer:
             self._writer.close()
         self._reader = self._writer = None
@@ -106,7 +136,7 @@ class Rig:
         try:
             return await self._cmd(cmd)
         except Exception as e:  # noqa: BLE001 - any failure means "not connected"
-            self.connected = False
+            self.connected = self.answering = False
             self.error = self._why() or str(e) or type(e).__name__
             if self._writer:
                 self._writer.close()
@@ -116,10 +146,13 @@ class Rig:
         r = await self.cmd("f")
         if r and r.isdigit():
             self.freq = int(r)
+            self.answering = True
             if self.error.startswith("The radio isn't answering"):
                 self.error = ""
         elif r and r.startswith("RPRT -"):   # rigctld is up but the radio isn't answering it
-            self.error = "The radio isn't answering - check the model, serial port and baud"
+            self.answering = False
+            self.error = ("The radio isn't answering - is it switched on and plugged in? Procyon picks "
+                          "it up again by itself. (If it never answers, check the model, serial port and baud.)")
 
     async def set_freq(self, hz: int):
         await self.cmd(f"F {int(hz)}")
