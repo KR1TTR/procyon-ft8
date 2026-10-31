@@ -225,20 +225,47 @@ function wfRow(bins) {
 
 function wfLabels(items) {
   // Paint call signs onto the waterfall next to their traces; they scroll with it.
+  // On a busy band they'd cover each other, so they go in lanes, tier by tier:
+  // CQs on top, stations calling you below them, everything else at the
+  // bottom. A tier uses as many lanes as its labels need, up to what fits in
+  // one cycle (7 in FT8, 3 in FT4); after that the least crowded lane is used.
+  // Calls that only came through hashed ("<...>") get no label.
   const dpr = window.devicePixelRatio || 1;
   const rowsPerSec = 8, rh = Math.max(1, Math.round(dpr));
-  // Level with the middle of the signals, which scrolled down since they were sent.
-  const y = (T().decode_at - T().tx_start - T().signal / 2 + 0.4) * rowsPerSec * rh;
+  const laneH = 16 * dpr, gap = 4 * dpr;
+  const maxLanes = Math.max(1, Math.floor((period() * rowsPerSec * rh - 8 * dpr) / laneH));
   wctx.font = `600 ${10.5 * dpr}px ui-monospace, monospace`;
-  for (const d of items) {
-    const label = d.p.from || d.msg.split(" ")[0];
-    const x = xFrac(d.freq + T().width / 2) * wf.width;
-    const w = wctx.measureText(label).width + 8 * dpr;
-    const me = d.to_me && !d.uncertain;
+  const tier = (d) => d.p.kind === "cq" ? 0 : d.to_me && !d.uncertain ? 1 : 2;
+  const placed = [];   // {d, label, l, r, w, lane}
+  let next = 0;        // first lane free for the next tier
+  for (let t = 0; t < 3; t++) {
+    const first = Math.min(next, maxLanes - 1);
+    for (const d of items.filter((x) => tier(x) === t).sort((a, b) => a.freq - b.freq)) {
+      const label = d.p.from || d.msg.split(" ")[0];
+      if (label === "<...>") continue;   // a call we couldn't resolve: says nothing, takes room
+      const x = xFrac(d.freq + T().width / 2) * wf.width;
+      const w = wctx.measureText(label).width + 8 * dpr;
+      const l = x - w / 2, r = x + w / 2;
+      const hits = (lane) => placed.filter((p) => p.lane === lane && l < p.r + gap && r > p.l - gap).length;
+      let lane = first;
+      while (lane < maxLanes - 1 && hits(lane)) lane++;
+      if (hits(lane)) {   // all full: the tier's least crowded lane
+        for (let k = first; k < maxLanes; k++) if (hits(k) < hits(lane)) lane = k;
+      }
+      placed.push({ d, label, l, r, w, lane });
+      next = Math.max(next, lane + 1);
+    }
+  }
+  // Centre the lanes on the middle of the signals, which scrolled down since they were sent.
+  const mid = (T().decode_at - T().tx_start - T().signal / 2 + 0.4) * rowsPerSec * rh;
+  const top = Math.max(10 * dpr, mid - next * laneH / 2);
+  for (const { d, label, l, w, lane } of placed) {
+    const y = top + lane * laneH + laneH / 2;
+    const me = tier(d) === 1;
     wctx.fillStyle = me ? "#ffb547e6" : d.p.kind === "cq" ? "#0b2a1ad9" : "#060a16c8";
-    roundRect(x - w / 2, y - 8 * dpr, w, 15 * dpr, 4 * dpr);
+    roundRect(l, y - 8 * dpr, w, 15 * dpr, 4 * dpr);
     wctx.fillStyle = me ? "#1a1200" : d.p.kind === "cq" ? "#5fe08f" : "#e7ecf6";
-    wctx.fillText(label, x - w / 2 + 4 * dpr, y + 3.5 * dpr);
+    wctx.fillText(label, l + 4 * dpr, y + 3.5 * dpr);
   }
 }
 
