@@ -2,7 +2,7 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 0.9.53** · 31 October 2026
+**Version 0.9.57** · 1 November 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
 A simpler, friendlier FT8 station (FT4 too, as a beta). Procyon uses WSJT-X's
@@ -16,11 +16,11 @@ the Hamlib copy it includes): https://wsjt.sourceforge.io
 
 | System | Download | How |
 |---|---|---|
-| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.53_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.53_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
-| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.53-arch.tar.gz` | `tar xf procyon-0.9.53-arch.tar.gz`, `cd procyon-0.9.53-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
-| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.53-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
-| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.53-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
-| Windows 10/11 (64-bit) | `Procyon-0.9.53-windows-setup.exe` | Double-click it (no administrator password needed), then start **Procyon** from the Start menu. Python is included. To update, run the newer setup the same way. Or, without installing: `Procyon-0.9.53-windows.zip` - right-click → **Extract All**, then double-click **Procyon.bat** in the extracted folder. |
+| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.57_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.57_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
+| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.57-arch.tar.gz` | `tar xf procyon-0.9.57-arch.tar.gz`, `cd procyon-0.9.57-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
+| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.57-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
+| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.57-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
+| Windows 10/11 (64-bit) | `Procyon-0.9.57-windows-setup.exe` | Double-click it (no administrator password needed), then start **Procyon** from the Start menu. Python is included. To update, run the newer setup the same way. Or, without installing: `Procyon-0.9.57-windows.zip` - right-click → **Extract All**, then double-click **Procyon.bat** in the extracted folder. |
 
 Add `--demo` (or use **Procyon DEMO ONLY - no radio** in the Windows Start menu, or
 *Settings → Advanced → Demo band*) to try it with a simulated band: nothing is
@@ -116,6 +116,9 @@ transmitting.
 - **Reports in comments:** *Settings → Logbook* can also add the signal reports
   to each QSO's comment ("FT8 Sent: -05 Rcvd: -12"), after any note you typed.
   Off by default; the reports are always saved in the standard report fields.
+- **Look up a station on QRZ:** right-click a callsign in Band activity, a
+  caller alert or the Logbook (press and hold on a touch screen), or use the
+  *QRZ ↗* link in the QSO panel. It opens the station's qrz.com page in a new tab.
 - **Edit the log:** click any logbook entry to change its comment or power, or
   to delete it (*Delete QSO*, then *Are you sure?* to confirm) - e.g. a second entry
   made when a station missed your 73 and sent RR73 again later. A copy of the
@@ -255,6 +258,24 @@ and Procyon B. (Earlier versions were called Skywave; settings and logbooks move
 across automatically on first start.)
 
 ## Roadmap
+
+0.9.57: twice as many stars in the Night sky background (Settings →
+Experimental → Background textures).
+
+0.9.56: Procyon tells you when a new version is out - a small message at the
+top of the screen with a link to get it (Settings → Advanced → New versions to
+switch it off). It asks GitHub once a day for the newest version number; nothing
+about you or your log is sent, and without internet it stays quiet.
+
+0.9.55: on Linux, when the computer won't let Procyon open the radio's serial
+port, it now says so plainly and tells you the fix (join the "dialout" group,
+then log out and back in) - before, it wrongly said another program was using
+the port. Detect my radio and Test radio say the same.
+
+0.9.54: look up a station on QRZ - right-click a callsign in Band activity,
+a "calling you" alert or the Logbook (press and hold on a touch screen) and
+pick *Look up ... on QRZ*; the QSO panel has a *QRZ ↗* link for the station
+you're working. It just opens qrz.com in a new tab: no QRZ password needed.
 
 0.9.53: stations whose call only came through in coded form ("<...>") no
 longer get a label on the waterfall - it told you nothing and took up room.

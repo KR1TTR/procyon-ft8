@@ -13,7 +13,7 @@ import re
 import subprocess
 
 from .setup_help import hamlib_rigs
-from .system import IS_WINDOWS, NO_WINDOW, find_tool, serial_ports
+from .system import IS_WINDOWS, NO_WINDOW, find_tool, serial_access_problem, serial_ports
 
 try:
     import fcntl
@@ -211,6 +211,17 @@ def detect_radios():
     return found
 
 
+def blocked_ports() -> str:
+    """After a search that found nothing: the plain-words reason if Linux wouldn't
+    let us open the USB serial ports at all ('' otherwise)."""
+    for p in serial_ports():
+        if re.search(r"usb|ttyACM|ttyUSB", p["path"], re.I):
+            why = serial_access_problem(p["path"])
+            if why:
+                return why
+    return ""
+
+
 def test_rig(model: str, device: str, baud: str = "") -> dict:
     """Read frequency, mode and PTT state once through Hamlib. Never keys the radio."""
     exe = find_tool("rigctl", "rigctl-wsjtx")
@@ -236,6 +247,8 @@ def test_rig(model: str, device: str, baud: str = "") -> dict:
     # so explain in plain words what's most likely, and keep its detail for reference.
     if device and not os.path.exists(device):
         msg = "That serial port doesn't exist - is the radio plugged in and switched on?"
+    elif serial_access_problem(device):
+        return {"ok": False, "error": serial_access_problem(device)}
     elif re.search(r"busy|Permission denied", detail, re.I):
         msg = "The serial port is in use by another program (close WSJT-X or other radio software)."
     else:

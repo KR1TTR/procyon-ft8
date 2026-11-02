@@ -23,8 +23,8 @@ from .demo import DemoBand
 from .geo import (BANDS, DEMO_MARK, DEMO_MARKS, Cty, Logbook, band_of, distance_bearing, grid_to_latlon,
                   strip_demo_mark, utc_now)
 from .qso import Qso
-from . import logimport, pota, uploads, wsjtx_install
-from .radio_detect import detect_radios, test_rig
+from . import logimport, newversion, pota, uploads, wsjtx_install
+from .radio_detect import blocked_ports, detect_radios, test_rig
 from .setup_help import hamlib_rigs, import_wsjtx
 from .system import NO_WINDOW, find_tool, serial_ports, tools
 from .udp import WsjtxUdp
@@ -54,6 +54,7 @@ DEFAULTS = {
     "units": "auto",                 # distances: "auto" (from your callsign), "km" or "mi"
     "export_new_only": False,        # Export ADIF gives only QSOs not exported before
     "auto_quit": True,               # stop Procyon a minute after its last browser tab closes
+    "update_check": True,            # ask GitHub once a day whether a newer Procyon is out
     "clock_sync": "computer",        # Procyon's timing: "computer" clock as is, "auto" band sync, "manual" band sync
     "dial_hz": 14_074_000, "tx_freq": 1500, "rx_freq": 1500,
     "remote_enabled": False, "remote_pin_hash": "",
@@ -154,6 +155,7 @@ class Engine:
         self.tx_periods = set()
         self.tx_task = None
         self.tx_info = None
+        self.newer = None             # {"version", "url"} when a newer release is out
         self.tune_task = None
         self._halt = asyncio.Event()
         self._warned = ""
@@ -166,6 +168,7 @@ class Engine:
         await self.restart_audio()
         await self._configure_udp()
         asyncio.create_task(self._scheduler())
+        asyncio.create_task(self._watch_releases())
 
     def _guess_devices(self):
         """Default to the first USB codec - usually the radio interface."""
@@ -257,8 +260,30 @@ class Engine:
             "can_install_wsjtx": wsjtx_install.available(),
             "about": {"version": __version__, "date": RELEASE_DATE, "authors": AUTHORS},
             "update": self._updated_to(),
+            "newer": self.newer if self.s["update_check"] else None,
             "clock": self._clock_status(),
         }
+
+    async def _watch_releases(self):
+        """Once a day (and soon after start), ask whether a newer Procyon is out.
+        Switching the setting on checks within a minute."""
+        await asyncio.sleep(20)       # let start-up settle first
+        last = 0.0
+        while True:
+            if self.s["update_check"] and time.time() - last >= newversion.CHECK_EVERY_SEC:
+                last = time.time()
+                rel = await newversion.latest()
+                if rel:
+                    newer = rel if newversion.is_newer(rel["version"]) else None
+                    if newer and newer != self.newer:
+                        log.info("new version check: Procyon %s is available (running %s)",
+                                 newer["version"], __version__)
+                    if newer != self.newer:
+                        self.newer = newer
+                        await self.push_state()
+                else:
+                    last -= newversion.CHECK_EVERY_SEC - 3600   # no answer: try again in an hour
+            await asyncio.sleep(60)
 
     _VERSION_FILE = os.path.join(os.path.dirname(__file__), "__init__.py")
     _VERSION_RE = re.compile(r'^__version__\s*=\s*"([^"]+)"', re.M)
@@ -1687,7 +1712,7 @@ class Engine:
             found = await self._radio_job(detect_radios)
             if found is None:   # no way to probe serial ports here
                 return {"type": "detect_radio", "found": [], "unsupported": True}
-            return {"type": "detect_radio", "found": found}
+            return {"type": "detect_radio", "found": found, "help": "" if found else blocked_ports()}
         elif t == "rig_test":
             return await self._rig_test(m)
         elif t == "install_wsjtx":

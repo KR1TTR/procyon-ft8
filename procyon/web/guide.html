@@ -221,6 +221,8 @@ or line-out setting (or the interface's RX knob), not in Procyon. Between about 
   <li>Follow the exchange in the <b>QSO</b> panel. When it completes, the contact is logged automatically.</li>
   <li><b>Halt</b> stops a transmission straight away.</li>
 </ol>
+<p>Curious who a station is? Right-click its callsign (press and hold on a touch screen) and pick
+<b>Look up on QRZ</b>, or use the <b>QRZ ↗</b> link in the QSO panel. It opens their qrz.com page in a new tab.</p>
 <p>Finished? Press <b>Quit</b> (top right), or just close Procyon's tab: transmitting stops after 10 seconds, and Procyon
 closes itself after a minute (you can switch that off in Settings → Advanced).</p>
 <p>Uploading: set up QRZ (and LoTW, if you use TQSL) under Settings → Logbook; an upload button appears next to Export ADIF.</p>
@@ -228,7 +230,8 @@ closes itself after a minute (you can switch that off in Settings → Advanced).
 <h2 id="trouble">8. If something doesn't work</h2>
 <table>
 <tr><th>What you see</th><th>What to try</th></tr>
-<tr><td>Decoding works but the radio doesn't respond (Test radio fails), on Linux</td>
+<tr><td>Decoding works but the radio doesn't respond (Test radio fails), on Linux<br>
+    (Procyon may say your user isn't in the <code>dialout</code> group)</td>
     <td>Add yourself to the serial-port group: <code>sudo usermod -aG dialout $USER</code>, then log out and back in.
     On Ubuntu and Mint, a braille-display service (<code>brltty</code>) can grab USB serial adapters; if you don't use a braille display,
     <code>sudo apt remove brltty</code> and unplug/replug the cable.</td></tr>

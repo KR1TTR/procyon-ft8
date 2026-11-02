@@ -23,8 +23,8 @@ def stars(size, n, seed, rmin, rmax, omin, omax, big=0):
         out.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='{r:.2f}' fill='{col}' opacity='{o:.2f}'/>")
     return f"<svg xmlns='http://www.w3.org/2000/svg' width='{size}' height='{size}'>{''.join(out)}</svg>"
 
-star_near = stars(709, 38, 11, .55, .95, .30, .55, big=5)
-star_far = stars(1013, 79, 23, .35, .6, .14, .28)
+star_near = stars(709, 76, 11, .55, .95, .30, .55, big=5)
+star_far = stars(1013, 158, 23, .35, .6, .14, .28)
 
 maple = ("<svg xmlns='http://www.w3.org/2000/svg' width='640' height='640'>"
          "<filter id='d' x='0' y='0' width='100%' height='100%'>"

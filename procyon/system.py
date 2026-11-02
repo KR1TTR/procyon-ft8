@@ -119,6 +119,33 @@ def find_cty() -> str | None:
     return next((os.path.normpath(p) for p in cands if p and os.path.isfile(p)), None)
 
 
+def serial_access_problem(path: str) -> str:
+    """Why this computer won't let Procyon open a serial port, in plain words
+    ('' if it's allowed, or we can't tell). Linux only: there the port belongs
+    to a group ('dialout', or 'uucp' on Arch) and you must be a member."""
+    if IS_WINDOWS or IS_MAC or not path or not os.path.exists(path):
+        return ""
+    if os.access(path, os.R_OK | os.W_OK):
+        return ""
+    import grp  # noqa: PLC0415 - not on Windows
+    import pwd  # noqa: PLC0415
+    try:
+        gid = os.stat(path).st_gid
+        group = grp.getgrgid(gid).gr_name
+        me = pwd.getpwuid(os.getuid())
+        members = grp.getgrnam(group).gr_mem
+    except (KeyError, OSError):
+        return f"This computer won't let Procyon use the serial port {path} (permission denied)."
+    if me.pw_gid == gid:   # in the group, so it's the port's own settings
+        return f"This computer won't let Procyon use the serial port {path} (permission denied)."
+    if me.pw_name in members:   # added already, but this login doesn't have it yet
+        return (f"You're in the '{group}' group now, but that only takes effect after you "
+                "log out and back in (or restart the computer). Then Procyon can use the radio's serial port.")
+    return (f"This computer won't let Procyon use the serial port {path}: your user isn't in the "
+            f"'{group}' group. Open a terminal, run:  sudo usermod -aG {group} $USER  "
+            "- then log out and back in (or restart the computer).")
+
+
 def serial_ports() -> list[dict]:
     """[{path, desc}] - USB serial adapters get a readable description."""
     if IS_WINDOWS:

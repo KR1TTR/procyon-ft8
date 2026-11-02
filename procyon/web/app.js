@@ -441,6 +441,19 @@ function onState(m) {
     $("#updateQuit").hidden = !isLocal;
   }
 
+  // A newer release is out (checked once a day). Hidden per version once dismissed,
+  // and while the "restart to finish updating" bar is up.
+  let skipped = "";
+  try { skipped = localStorage.getItem("procyon.skipVersion") || ""; } catch { /* not stored */ }
+  const nv = m.newer;
+  $("#newVersion").hidden = !nv || !!m.update || nv.version === skipped;
+  if (nv) {
+    $("#newVersionNo").textContent = nv.version;
+    $("#newVersionHow").textContent = `You have ${m.about.version}.`;
+    $("#newVersionNotes").href = nv.url || "https://procyon.kr1ttr.radio";
+    $("#newVersionNotes").hidden = !nv.url;
+  }
+
   const missing = Object.entries(m.tools || {}).filter(([k, ok]) => !ok && ["jt9", "ft8code"].includes(k)).map(([k]) => k);
   $("#toolWarn").hidden = !missing.length;
   $("#toolInstall").hidden = !(missing.length && m.can_install_wsjtx);
@@ -575,6 +588,11 @@ $("#callers").addEventListener("click", (e) => {
   renderCallers();
 });
 
+$("#newVersionX").addEventListener("click", () => {
+  try { localStorage.setItem("procyon.skipVersion", S.newer ? S.newer.version : ""); } catch { /* not stored */ }
+  $("#newVersion").hidden = true;
+});
+
 function chime() {
   if (!chimeOn) return;
   try {
@@ -671,7 +689,8 @@ function fmtMsg(d, terms = []) {
     else if (/^R?[+-]\d\d$/.test(t)) c = "t-rpt";
     else if (["RR73", "RRR", "73"].includes(bare)) c = "t-end";
     if (terms.length && tokenHits(t, terms)) c += " t-hit";
-    return `<span class="${c}">${esc(t)}</span>${badge(bare)}`;
+    const call = /\bt-(me|tester|from|to)\b/.test(c) && lookupable(bare) ? ` data-call="${esc(bare)}"` : "";
+    return `<span class="${c}"${call}>${esc(t)}</span>${badge(bare)}`;
   }).join(" ");
 }
 
@@ -856,9 +875,11 @@ function renderQso() {
   if (teamOf(q.dxcall)) bits.push(`${badge(q.dxcall)} ${esc(teamOf(q.dxcall))}`);
   if (info.country) bits.push(`<b>${esc(info.country)}</b>`);
   if (info.km != null) bits.push(dist(info.km, info.approx, " "), `${info.az}°`);
-  $("#dxInfo").innerHTML = q.dxcall ? (bits.join(" · ") || "&nbsp;")
+  if (lookupable(q.dxcall)) bits.push(`<a class="qrz-link" href="${esc(qrzUrl(q.dxcall))}" target="_blank" rel="noopener" title="Open ${esc(baseCall(q.dxcall))} on QRZ.com in a new tab">QRZ ↗</a>`);
+  const infoHtml = q.dxcall ? (bits.join(" · ") || "&nbsp;")
     : (q.next === 5 && q.tx_enabled ? "Calling CQ — the first station to answer will be worked automatically."
       : "Click a station in Band activity to answer it, or call CQ.");
+  if ($("#dxInfo").dataset.html !== infoHtml) { $("#dxInfo").innerHTML = infoHtml; $("#dxInfo").dataset.html = infoHtml; }   // keep clicks landing
 
   const steps = [...$("#stepper").children];
   steps.forEach((li, i) => {
@@ -1090,6 +1111,86 @@ function sameStation(a, b) {
   if (!a || !b || a.startsWith("...") || b.startsWith("...")) return false;
   return a === b || ((a.includes("/") || b.includes("/")) && baseCall(a) === baseCall(b));
 }
+
+// ------------------------------------------------------------ look up on QRZ
+// Right-click a callsign (press and hold on a touch screen) in Band activity, a
+// caller alert or the logbook for a small menu that opens its QRZ.com page in a
+// new tab. Only a link: Procyon itself never contacts QRZ for this.
+const qrzUrl = (call) => `https://www.qrz.com/db/${encodeURIComponent(baseCall(call))}`;
+function lookupable(c) {
+  c = (c || "").replace(/[<>]/g, "");
+  return !c.startsWith("...") && /\d/.test(c) && /[A-Z]/.test(c);
+}
+
+// The calls under the pointer: the one clicked first, then the rest of that row.
+function callsAt(target) {
+  const calls = [];
+  const add = (c) => {
+    c = (c || "").replace(/[<>]/g, "").toUpperCase();
+    if (lookupable(c) && !calls.some((x) => baseCall(x) === baseCall(c))) calls.push(c);
+  };
+  add(target.closest("[data-call]")?.dataset.call);
+  const row = target.closest("#decodes .row, #callers .caller, #logList .lrow");
+  if (!row) return calls;
+  if (row.matches(".lrow")) add(row.querySelector(".l1 .c")?.textContent);
+  else if (row.matches(".caller")) add(row.dataset.call);
+  else for (const el of row.querySelectorAll(".msg [data-call]")) add(el.dataset.call);
+  const my = S ? S.settings.mycall : "";
+  return calls.length > 1 ? calls.filter((c) => !sameStation(c, my)) : calls;
+}
+
+const callMenu = document.createElement("div");
+callMenu.className = "call-menu";
+callMenu.hidden = true;
+document.body.append(callMenu);
+
+function openCallMenu(calls, x, y) {
+  callMenu.innerHTML = calls.map((c) => `<a href="${esc(qrzUrl(c))}" target="_blank" rel="noopener">
+    Look up <b>${esc(baseCall(c))}</b> on QRZ <span>↗</span></a>`).join("");
+  callMenu.hidden = false;
+  const w = callMenu.offsetWidth, h = callMenu.offsetHeight;
+  callMenu.style.left = `${Math.max(8, Math.min(x, innerWidth - w - 8))}px`;
+  callMenu.style.top = `${Math.max(8, y + h + 8 > innerHeight ? y - h : y)}px`;
+}
+const closeCallMenu = () => { callMenu.hidden = true; };
+callMenu.addEventListener("click", closeCallMenu);   // the link opens its tab, then the menu goes
+
+document.addEventListener("contextmenu", (e) => {
+  if (e.target.closest("input, textarea, .call-menu")) return;   // keep the browser's own menu there
+  const calls = callsAt(e.target);
+  if (!calls.length) return;
+  e.preventDefault();
+  openCallMenu(calls, e.clientX, e.clientY);
+});
+
+// Press and hold for touch screens that don't send "contextmenu" (iPhone, iPad).
+// The click that follows the hold must not answer the station.
+let holdCalls = null, holdTimer2 = 0, holdDone = false, holdAt = null;
+document.addEventListener("pointerdown", (e) => {
+  if (e.pointerType !== "touch") return;
+  holdDone = false;
+  const calls = callsAt(e.target);
+  if (!calls.length) return;
+  holdCalls = calls; holdAt = [e.clientX, e.clientY];
+  holdTimer2 = setTimeout(() => {
+    holdDone = true;
+    if (callMenu.hidden) openCallMenu(holdCalls, holdAt[0], holdAt[1]);
+    if (navigator.vibrate) navigator.vibrate(30);
+  }, 550);
+});
+document.addEventListener("pointermove", (e) => {
+  if (holdAt && Math.hypot(e.clientX - holdAt[0], e.clientY - holdAt[1]) > 10) clearTimeout(holdTimer2);
+});
+for (const t of ["pointerup", "pointercancel"]) document.addEventListener(t, () => { clearTimeout(holdTimer2); holdAt = null; });
+document.addEventListener("click", (e) => {
+  if (holdDone && !e.target.closest(".call-menu")) { holdDone = false; e.stopPropagation(); e.preventDefault(); }
+}, true);
+
+document.addEventListener("pointerdown", (e) => { if (!e.target.closest(".call-menu")) closeCallMenu(); }, true);
+addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !callMenu.hidden) { e.stopPropagation(); closeCallMenu(); }   // close the menu, don't halt TX
+}, true);
+for (const t of ["scroll", "resize", "blur"]) addEventListener(t, closeCallMenu, true);
 
 // ------------------------------------------------------------------ POTA
 
@@ -1628,6 +1729,7 @@ function onDetected(m) {
   }
   const r = (m.found || [])[0];
   $("#rigChoice").hidden = true;
+  if (!r && m.help) return radioMsg(m.help);
   if (!r) {
     radioMsg("No radio answered. Check it's on and connected by USB, then try again. " +
              "With a Digirig, Signalink or similar, choose the radio by hand.");

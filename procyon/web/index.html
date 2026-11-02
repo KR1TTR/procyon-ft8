@@ -77,6 +77,14 @@
   <button type="button" class="btn small" id="updateQuit" hidden>Quit Procyon</button>
 </div>
 
+<div class="tool-warn update-warn" id="newVersion" hidden>
+  <b>Procyon <span id="newVersionNo"></span> is available.</b>
+  <span id="newVersionHow"></span>
+  <a class="btn small" id="newVersionGet" href="https://procyon.kr1ttr.radio" target="_blank" rel="noopener">Get it</a>
+  <a class="link-btn" id="newVersionNotes" target="_blank" rel="noopener">What's new</a>
+  <button type="button" class="icon-btn" id="newVersionX" title="Hide until the next version">✕</button>
+</div>
+
 <div class="tool-warn" id="toolWarn" hidden>
   <b>WSJT-X wasn't found.</b> Procyon uses WSJT-X's decoder and encoder, so it can't decode or
   transmit without it.
@@ -443,6 +451,12 @@
           <legend>When Procyon's page is closed</legend>
           <label class="toggle"><input type="checkbox" name="auto_quit"><span></span>Stop Procyon a minute after its last browser tab is closed</label>
           <p class="hint">So it doesn't keep running unseen, holding the radio and sound card. Tabs on other devices (remote access) count as open; a page reload doesn't count as closing. Whatever this is set to, transmitting always stops 10 seconds after the last tab closes.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>New versions</legend>
+          <label class="toggle"><input type="checkbox" name="update_check"><span></span>Tell me when a new version of Procyon is out</label>
+          <p class="hint">Once a day Procyon asks GitHub (where it's published) for the newest version number, and shows a message at the top of the screen when there is one. Nothing about you, your station or your log is sent. Without internet it just stays quiet.</p>
         </fieldset>
 
         <fieldset>

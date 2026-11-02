@@ -5,7 +5,7 @@ import logging
 import re
 import time
 
-from .system import NO_WINDOW, find_tool
+from .system import NO_WINDOW, find_tool, serial_access_problem
 
 log = logging.getLogger("procyon.rig")
 
@@ -24,6 +24,7 @@ class Rig:
         self.answering = False      # ...and the radio itself answers it (False while it's off)
         self.freq = None
         self.error = ""
+        self.device = ""            # the radio's serial port, for explaining failures
         self._reader = None
         self._writer = None
         self._lock = asyncio.Lock()
@@ -44,6 +45,7 @@ class Rig:
         self.host = s.get("rig_host") or "127.0.0.1"
         self.port = int(s.get("rig_port") or 4532)
         model = str(s.get("rig_model") or "").strip()
+        self.device = s.get("rig_device") or ""
         if self.enabled and model and s.get("rig_spawn"):
             exe = find_tool("rigctld", "rigctld-wsjtx")
             if not exe:
@@ -99,6 +101,8 @@ class Rig:
         last = " ".join(self._daemon_log)
         if re.search(r"No such file|not configured", last, re.I):
             return "Serial port not found - is the radio plugged in and switched on?"
+        if re.search(r"Permission denied", last, re.I) and serial_access_problem(self.device):
+            return serial_access_problem(self.device)
         if re.search(r"busy|Permission denied", last, re.I):
             return "The serial port is in use by another program (close WSJT-X or other radio software)."
         if re.search(r"power is off|get_powerstat while off|validation failed|time ?out|IO error|protocol error", last, re.I):
