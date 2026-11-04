@@ -23,12 +23,17 @@ from .system import IS_MAC, IS_WINDOWS, NO_WINDOW
 SERVICES = {
     # service: (name shown to the user, "sent" field, date field)
     "qrz": ("QRZ", "qrzcom_qso_upload_status", "qrzcom_qso_upload_date"),
-    "lotw": ("LoTW", "lotw_qsl_sent", "lotw_qslsdate"),
+    # LoTW upload switched off in 0.9.60 (user's choice: ARRL's certificate
+    # process doesn't fit Procyon's easy setup). The code below (find_tqsl,
+    # lotw_upload) is kept; to bring it back, un-comment this line, the
+    # LoTW parts marked "LoTW off" in engine.py, index.html and app.js.
+    # "lotw": ("LoTW", "lotw_qsl_sent", "lotw_qslsdate"),
 }
 # "Export only new QSOs" (Settings → Advanced) remembers what was exported in an
 # app-defined ADIF field, which other programs ignore.
 EXPORTED_FIELD = "app_procyon_exported"
 TRACKING = {f for _, sent, date in SERVICES.values() for f in (sent, date)} | {EXPORTED_FIELD}
+TRACKING |= {"lotw_qsl_sent", "lotw_qslsdate"}   # still ours to strip while LoTW is off
 
 QRZ_URL = os.environ.get("PROCYON_QRZ_URL", "https://logbook.qrz.com/api")
 USER_AGENT = f"Procyon/{__version__} (FT8; github.com/KR1TTR/procyon-ft8)"

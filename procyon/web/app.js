@@ -479,10 +479,23 @@ $("#modeSeg").addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b || !S || modePending || b.dataset.mode === T().mode) return;   // one switch at a time
   const q = S.qso, busy = q.tx_enabled || S.tx || (q.dxcall && !q.logged);
-  if (busy && !window.confirm(`Switch to ${b.dataset.mode}? Transmitting stops`
-      + (q.dxcall && !q.logged ? ` and the QSO with ${q.dxcall} ends (not logged).` : "."))) return;
+  if (!busy) return switchMode(b.dataset.mode);
+  // Our own dialog, not window.confirm: the browser's pop-up can open behind a
+  // full-screen page, which then looks frozen.
+  $("#modeTitle").textContent = `Switch to ${b.dataset.mode}?`;
+  $("#modeText").textContent = "Transmitting stops"
+    + (q.dxcall && !q.logged ? ` and the QSO with ${q.dxcall} ends (not logged).` : ".");
+  $("#modeConfirm").textContent = `Switch to ${b.dataset.mode}`;
+  $("#modeDlg").returnValue = "";   // Esc must never count as "Switch"
+  $("#modeDlg").dataset.mode = b.dataset.mode;
+  $("#modeDlg").showModal();
+});
+$("#modeDlg").addEventListener("close", () => {
+  if ($("#modeDlg").returnValue === "switch" && !modePending) switchMode($("#modeDlg").dataset.mode);
+});
+function switchMode(mode) {
   // Light the new mode straight away; the engine's answer confirms it.
-  modePending = b.dataset.mode;
+  modePending = mode;
   showModeButtons(modePending);
   $("#modeSeg").classList.add("pending");
   modePendingTimer = setTimeout(() => {   // no answer: show what's really in use
@@ -490,8 +503,8 @@ $("#modeSeg").addEventListener("click", (e) => {
     $("#modeSeg").classList.remove("pending");
     showModeButtons(T().mode);
   }, 5000);
-  send({ type: "mode", mode: b.dataset.mode });
-});
+  send({ type: "mode", mode });
+}
 $("#bandBtn").addEventListener("click", (e) => { e.stopPropagation(); $("#bandMenu").hidden = !$("#bandMenu").hidden; });
 $("#bandMenu").addEventListener("click", (e) => {
   const b = e.target.closest("button");
@@ -1882,9 +1895,10 @@ function showOnlineLogbooks() {
   form.elements.qrz_key_new.placeholder = S.qrz_key_set ? "Key is saved - type a new one to change it" : "Paste your key here";
   $("#qrzForget").hidden = !S.qrz_key_set;
   qrzMsg("");
-  $("#tqslHint").innerHTML = S.tqsl_found
-    ? "Type the name exactly as it appears in TQSL's \"Station Locations\" tab. Procyon hands your QSOs to TQSL, which signs and uploads them."
-    : "TQSL, ARRL's LoTW program, isn't installed on this computer. Install it from lotw.arrl.org and set up your callsign certificate and a station location, then come back here.";
+  // LoTW off (0.9.60):
+  // $("#tqslHint").innerHTML = S.tqsl_found
+  //   ? "Type the name exactly as it appears in TQSL's \"Station Locations\" tab. Procyon hands your QSOs to TQSL, which signs and uploads them."
+  //   : "TQSL, ARRL's LoTW program, isn't installed on this computer. Install it from lotw.arrl.org and set up your callsign certificate and a station location, then come back here.";
 }
 // Results show inside Settings: notices (toasts) would be hidden behind it.
 function qrzMsg(text, ok) {

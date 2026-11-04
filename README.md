@@ -2,7 +2,7 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 0.9.57** · 1 November 2026
+**Version 0.9.60** · 4 November 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
 A simpler, friendlier FT8 station (FT4 too, as a beta). Procyon uses WSJT-X's
@@ -16,11 +16,11 @@ the Hamlib copy it includes): https://wsjt.sourceforge.io
 
 | System | Download | How |
 |---|---|---|
-| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.57_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.57_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
-| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.57-arch.tar.gz` | `tar xf procyon-0.9.57-arch.tar.gz`, `cd procyon-0.9.57-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
-| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.57-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
-| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.57-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
-| Windows 10/11 (64-bit) | `Procyon-0.9.57-windows-setup.exe` | Double-click it (no administrator password needed), then start **Procyon** from the Start menu. Python is included. To update, run the newer setup the same way. Or, without installing: `Procyon-0.9.57-windows.zip` - right-click → **Extract All**, then double-click **Procyon.bat** in the extracted folder. |
+| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.60_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.60_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
+| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.60-arch.tar.gz` | `tar xf procyon-0.9.60-arch.tar.gz`, `cd procyon-0.9.60-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
+| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.60-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
+| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.60-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
+| Windows 10/11 (64-bit) | `Procyon-0.9.60-windows-setup.exe` | Double-click it (no administrator password needed), then start **Procyon** from the Start menu. Python is included. To update, run the newer setup the same way. Or, without installing: `Procyon-0.9.60-windows.zip` - right-click → **Extract All**, then double-click **Procyon.bat** in the extracted folder. |
 
 Add `--demo` (or use **Procyon DEMO ONLY - no radio** in the Windows Start menu, or
 *Settings → Advanced → Demo band*) to try it with a simulated band: nothing is
@@ -123,7 +123,7 @@ transmitting.
   to delete it (*Delete QSO*, then *Are you sure?* to confirm) - e.g. a second entry
   made when a station missed your 73 and sent RR73 again later. A copy of the
   log from before the change is kept as `procyon_log.adi.bak`. Deleting doesn't
-  touch QRZ or LoTW: remove an uploaded QSO there too.
+  touch QRZ: remove an uploaded QSO there too.
 - **POTA activations:** press *POTA* in the QSO panel, enter your park (or
   several - US-1234, US-5678, ... - for a 2-fer or more), and optionally the
   grid and state you're operating from. Your CQ becomes `CQ POTA KR1TTR EN80`,
@@ -132,7 +132,7 @@ transmitting.
   this UTC day. Each park also gets its own log file, saved as you go in
   `pota/` next to your logbook and named the way pota.app expects
   (`KR1TTR@US-1234-20261021.adi`); the POTA window has download links. The
-  QSOs are in your main logbook as well, so QRZ/LoTW uploads include them.
+  QSOs are in your main logbook as well, so QRZ uploads include them.
   Procyon doesn't send anything to pota.app - you upload the files there yourself. The
   activation survives a restart; *End activation* when you're done. Hunters:
   stations calling `CQ POTA` get a green POTA tag in Band activity.
@@ -142,9 +142,8 @@ transmitting.
   (`<P4/WE9V> KR1TTR -05`). Every message is checked with WSJT-X's encoder,
   and both full calls are logged. (A call like `KR1TTR/QRP` can't send
   "CQ POTA" in FT8; its CQ goes out as a plain CQ.)
-- **Upload to QRZ and LoTW:** set them up in *Settings → Logbook → Online logbooks* (your
-  QRZ Logbook API key; for LoTW, the station location name from ARRL's TQSL,
-  which must be installed). An *Upload to QRZ* / *Upload to LoTW* button then
+- **Upload to QRZ:** put your QRZ Logbook API key in *Settings → Logbook →
+  Online logbooks*. An *Upload to QRZ* button then
   appears next to *Export ADIF*, showing how many QSOs haven't been sent yet.
   Nothing is sent until you click, so it never clashes with GridTracker, and a
   portable station can log offline and send everything once it's back online.
@@ -233,7 +232,7 @@ Good to know:
 | rigctld client (frequency, PTT) | `procyon/rig.py` |
 | Simulated band for `--demo` | `procyon/demo.py` |
 | PIN sign-in for remote devices | `procyon/auth.py` |
-| Upload to QRZ / LoTW (via TQSL) | `procyon/uploads.py` |
+| Upload to QRZ (LoTW code kept, switched off) | `procyon/uploads.py` |
 | WSJT-X-compatible UDP (GridTracker, JTAlert, loggers) | `procyon/udp.py` |
 | WSJT-X import, Hamlib rig list | `procyon/setup_help.py` |
 | Web server | `procyon/server.py` |
@@ -257,7 +256,39 @@ the brightest in Canis Minor. Hence the icon: a raccoon whose eyes are Procyon A
 and Procyon B. (Earlier versions were called Skywave; settings and logbooks move
 across automatically on first start.)
 
-## Roadmap
+## Known limitations
+
+- **WSJT-X must be installed.** Procyon uses its decoder (`jt9`), message
+  encoder (`ft8code`) and country list (`cty.dat`); the WSJT-X program itself
+  never runs. Radio control uses Hamlib (included with WSJT-X on Windows and
+  macOS; the `hamlib` package on Linux).
+- **Online logbooks:** upload to QRZ.com only (needs your QRZ Logbook API key).
+  For LoTW, eQSL or Club Log, use *Export ADIF* with their own tools.
+- **FT4 is new** (since 0.9.37). It works on the air, but has had far less use
+  than FT8.
+- **Not signed:** the Mac app needs *Open Anyway* the first time, and Windows
+  may show a "protect your PC" notice for the setup program (*More info* →
+  *Run anyway*).
+- **Remote access** works on your home network only, not over the internet.
+- **One copy at a time:** a second start just opens the browser on the
+  running one.
+- **Detect my radio** can't tell Elecraft models apart (they all answer the
+  same way); it asks which one you have.
+- **FT8 and FT4 only** for now; other modes are on the roadmap.
+
+## Changes
+
+0.9.60: LoTW upload taken out (for now). It needed ARRL's TQSL program and
+certificate, which is too much setup for the easy start Procyon aims for. QRZ
+upload is unchanged; QSOs already marked as sent to LoTW keep their tag.
+
+0.9.59: a small Ohio flag at the bottom of the About card - Procyon is made in
+Columbus, Ohio.
+
+0.9.58: fix - switching between FT8 and FT4 while transmitting or in a QSO
+in full screen seemed to freeze Procyon: its "are you sure?" question used
+the browser's own pop-up, which could open behind the full-screen page. It's
+now Procyon's own dialog, shown on top.
 
 0.9.57: twice as many stars in the Night sky background (Settings →
 Experimental → Background textures).
@@ -567,26 +598,17 @@ stations that call you after you've called CQ.
 normal start (up to 3.5 s into the cycle), skipping the part already missed so
 it still ends on time, as WSJT-X does.
 
-Done: on-air operation (first QSO 18 October 2026, KF8CTG), PIN-protected
-remote access, packages for Linux (.deb and zip) and Windows, GPLv3 licence.
+## Roadmap
+
+Done: on-air operation (first QSO 18 October 2026, KF8CTG), FT4, POTA
+activations, band clock sync, QRZ upload and import, PIN-protected remote
+access, packages for Linux (.deb, Arch, zip), Windows (setup and zip) and
+macOS, tested on Linux Mint, Manjaro, Windows and macOS. GPLv3 licence.
 
 Next:
-1. **Windows test on real hardware** (the Surface), then release 1.0.
-2. **Remote access over Spectrum Wi-Fi:** devices couldn't reach each other
-   (router-side isolation). Try Ethernet for the station computer, or ask
-   Spectrum to disable client isolation; then test from the tablet.
-3. **Arch Linux package:** the PKGBUILD is in place (0.9.6) but needs a test on
-   a real Arch system; publish it on the AUR once Procyon is on GitHub.
-4. **Time accuracy** for home and field stations (no admin rights needed, and
-   adjusts only Procyon's own timing):
-   - A clock-health light next to the clock, using an occasional NTP/NIST check.
-   - Band sync: use the median DT of many decoded stations (offline, e.g. POTA),
-     applied gradually with a minimum number of stations, as JTSync does. If
-     nothing decodes, search the recent audio shifted by up to about ±7 s to
-     find the band's timing.
-   - Setting: Off / Show me / Automatic.
-5. **More modes, after tester feedback:**
-   - **FT4**: in as a beta since 0.9.37 (own encoder, verified against `jt9`).
+1. **1.0**: the first stable release, with the source code public on GitHub.
+2. **Arch Linux:** publish the package on the AUR.
+3. **More modes, after tester feedback:**
    - **WSPR**: `wsprd` decodes; needs an encoder and its own beacon-style screen
      (2-minute cycles, WSPRnet reporting, band hopping).
    - **A keyboard-mode screen** for free-text modes: received text scrolling
@@ -617,24 +639,31 @@ Next:
      decoder/encoder (port from WSJT-X's GPLv3 source) and a chat/contest-style
      screen. Revisit once WSJT-X 3.2 is generally released and the protocol is
      settled.
-6. **Stats page** (Andy's idea): QSOs by band and day, countries and grids
+4. **Stats page** (Andy's idea): QSOs by band and day, countries and grids
    worked, best DX, busiest hours, heard vs worked - all from your own log.
-7. **Product direction:** FT8 stays the front-facing product, with FT4 beside
+5. **Product direction:** FT8 stays the front-facing product, with FT4 beside
    it on the same screen. The other modes (JS8, FSQ, ...) live behind a
    "More modes" entry for curious users to discover - findable, not secret.
    The name is simply **Procyon** (it was "Procyon FT8" until 0.9.24); a short
    descriptor after it may come back once the direction is clearer.
-8. Smaller ideas: custom frequencies and per-band memory in the band menu, dim
+6. Smaller ideas: custom frequencies and per-band memory in the band menu, dim
    the waterfall during your own transmissions, live S-meter and output power
    from the radio.
-9. Browser polish: Brave shows its "New Email Alias" suggestion in Settings
-   fields (seen on Linux and Windows). Mark the form and its fields
-   `autocomplete="off"` (and give number fields clear types/names) so browsers
-   stop offering autofill there; check in Brave.
-10. Radio detection on Windows (currently Linux and macOS only).
+7. **Standing on its own:** Procyon's own decoder and encoder, so WSJT-X no
+   longer has to be installed. Other programs would only be used for
+   importing settings while setting up a station (e.g. *Import settings from
+   WSJT-X*). Today Procyon borrows WSJT-X's `jt9` (decoder), `ft8code`
+   (message packing; Procyon already makes the tones and the FT4 coding
+   itself) and `cty.dat` (country list, really from country-files.com).
+   The decoder is the big part: JTDX (GPLv3, like Procyon) has a stronger
+   FT8 decoder for crowded bands, but its decoder program only works inside
+   JTDX, so it would have to be built into a program of Procyon's own.
+   Radio control stays with Hamlib, as in most ham programs.
 
 Only transmit with a valid amateur licence, and keep your PC clock synced
-(NTP). FT8 needs it to be within about a second.
+(NTP) - FT8 needs it to be within about a second. In the field without
+internet, *band sync* (Settings → Advanced → Clock) can line Procyon up with
+the stations you hear instead.
 
 ## Credits and licence
 

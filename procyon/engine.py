@@ -121,7 +121,7 @@ class Engine:
         self._installing = False
         self.uploading = set()          # services with an upload in progress
         self.importing = False          # a logbook import is running
-        self.tqsl = uploads.find_tqsl()
+        self.tqsl = None   # LoTW off (0.9.60): was uploads.find_tqsl()
         self.qso = Qso(self._log_qso, self.toast)
         self._set_station()
         self.demo = DemoBand(self.m)
@@ -1352,9 +1352,10 @@ class Engine:
             self.s["qrz_key"] = key
         if new.get("qrz_key_forget"):
             self.s["qrz_key"] = ""
-        if "lotw_location" in new:
-            self.s["lotw_location"] = str(new["lotw_location"]).strip()
-        self.tqsl = uploads.find_tqsl()   # they may have just installed it
+        # LoTW off (0.9.60):
+        # if "lotw_location" in new:
+        #     self.s["lotw_location"] = str(new["lotw_location"]).strip()
+        # self.tqsl = uploads.find_tqsl()   # they may have just installed it
         self.save()
 
     def _upload_ready(self, service: str) -> bool:
@@ -1401,7 +1402,7 @@ class Engine:
                 done = [idxs[p] for p in pos]
                 if dups:
                     note = "QRZ already had all of them" if dups == len(done) else f"QRZ already had {dups}"
-            else:
+            else:   # LoTW - not reachable while LoTW is off (0.9.60)
                 text = Logbook.HEADER + "".join(Logbook._record(uploads.for_upload(q)) for q in qsos)
                 try:
                     note = await uploads.lotw_upload(self.tqsl, self.s["lotw_location"], text)

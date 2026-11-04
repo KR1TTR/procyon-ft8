@@ -328,7 +328,7 @@
         <fieldset>
           <legend>Online logbooks</legend>
           <div id="onlineLocal">
-            <p class="hint">Each logbook you set up gets an upload button next to Export ADIF. Nothing is sent until you click it, and QSOs logged without internet wait until you do. Already uploading with GridTracker? Then you can leave these empty.</p>
+            <p class="hint">With your key saved, an Upload to QRZ button appears next to Export ADIF. Nothing is sent until you click it, and QSOs logged without internet wait until you do. Already uploading with GridTracker? Then you can leave this empty.</p>
             <label>QRZ Logbook API key
               <input name="qrz_key_new" type="password" autocomplete="new-password" spellcheck="false">
             </label>
@@ -338,10 +338,12 @@
               <span class="hint" id="qrzMsg"></span>
             </div>
             <p class="hint">On QRZ.com, open your logbook and press "Settings": the key is listed under API.</p>
+            <!-- LoTW off (0.9.60):
             <label>LoTW station location (from TQSL)
               <input name="lotw_location" autocomplete="off" spellcheck="false" placeholder="e.g. Home">
             </label>
             <p class="hint" id="tqslHint"></p>
+            -->
           </div>
           <p class="hint" id="onlineRemote" hidden>You're connected from another device. Online logbooks can only be set up on the computer running Procyon, but the upload buttons work from here.</p>
         </fieldset>
@@ -570,6 +572,16 @@
   </form>
 </dialog>
 
+<dialog id="modeDlg" class="quit-dlg">
+  <form method="dialog">
+    <h3 id="modeTitle">Switch mode?</h3>
+    <p id="modeText"></p>
+    <div class="dlg-foot">
+      <button class="btn ghost" value="cancel">Cancel</button>
+      <button class="btn danger" value="switch" id="modeConfirm">Switch</button>
+    </div>
+  </form>
+</dialog>
 <dialog id="quitDlg" class="quit-dlg">
   <form method="dialog">
     <h3>Quit Procyon?</h3>
@@ -601,6 +613,7 @@
     </div>
     <p class="about-licence">Free software under the GNU General Public License v3.<br>Only transmit with a valid amateur radio <span data-uk="licence">license</span>.</p>
     <p class="about-licence about-risk"><b>Use at your own risk.</b> Procyon is provided as is, without warranty of any kind. Its author accepts no responsibility for any damage, loss or harm from its use, to equipment, data, logbooks or otherwise. You are responsible for how your station transmits.</p>
+    <img class="about-ohio" src="/static/ohio.svg" alt="Ohio flag" title="Made in Ohio" width="42" height="26">
   </form>
 </dialog>
 
