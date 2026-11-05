@@ -1678,10 +1678,12 @@ function setSelect(sel, v) {
 
 let rigs = [];
 const rigLabel = (r) => `${r.mfg} ${r.name}`;
+// Radio names without spaces, hyphens or slashes: "ftdx10" finds Hamlib's "FTDX-10".
+const squash = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
 
 function fillRadioLists(m) {
   rigs = m.rigs || [];
-  $("#rigList").innerHTML = rigs.map((r) => `<option value="${esc(rigLabel(r))}">#${r.model}</option>`).join("");
+  $("#rigList").innerHTML = rigs.map((r) => `<option value="${esc(rigLabel(r))}">#${r.model}${squash(r.name) !== r.name.toLowerCase() ? " " + esc(squash(r.name).toUpperCase()) : ""}</option>`).join("");
   $("#serialList").innerHTML = (m.serial || []).map((p) => `<option value="${esc(p.path)}">${esc(p.desc)}</option>`).join("");
   showRigModel(form.elements.rig_model.value);
 }
@@ -1697,7 +1699,13 @@ function showRigModel(model) {
 function rigPicked(fromUser) {
   const el = form.elements.rig_pick, status = $("#rigStatus");
   const text = el.value.trim().toLowerCase();
-  const r = rigs.find((x) => rigLabel(x).toLowerCase() === text);
+  const flat = squash(text);
+  // An exact name, typed with or without the maker and the punctuation.
+  let r = rigs.find((x) => rigLabel(x).toLowerCase() === text);
+  if (!r && flat) {
+    const same = rigs.filter((x) => squash(rigLabel(x)) === flat || squash(x.name) === flat);
+    if (same.length === 1) r = same[0];
+  }
   if (r) {
     if (fromUser && String(form.elements.rig_model.value) !== String(r.model)) {
       form.elements.rig_enabled.checked = true;
@@ -1708,9 +1716,11 @@ function rigPicked(fromUser) {
     status.textContent = `✓ ${rigLabel(r)} · Hamlib #${r.model}`;
     status.className = "field-status ok";
   } else if (text && !/^model #\d+$/.test(text)) {
-    const n = rigs.filter((x) => rigLabel(x).toLowerCase().includes(text)).length;
+    const n = rigs.filter((x) => rigLabel(x).toLowerCase().includes(text) || (flat && squash(rigLabel(x)).includes(flat))).length;
     el.setCustomValidity("Pick a radio from the list");
-    status.textContent = n ? `${n} match${n > 1 ? "es" : ""} - pick one from the list` : "No radio by that name - try the model, e.g. 7300";
+    status.textContent = !rigs.length
+      ? "Procyon has no list of radios: it comes with WSJT-X (Hamlib), which Procyon can't find on this computer. Install WSJT-X, then close and reopen Settings."
+      : n ? `${n} match${n > 1 ? "es" : ""} - pick one from the list` : "No radio by that name - try the model, e.g. 7300";
     status.className = "field-status";
   } else {
     if (!text) form.elements.rig_model.value = "";

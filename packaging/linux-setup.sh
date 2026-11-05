@@ -43,7 +43,7 @@ else
   say "  ✗ WSJT-X is missing - install it from https://wsjt.sourceforge.io (or your package manager)"; missing+=(wsjtx); ok=0
 fi
 
-if have rigctld || have rigctld-wsjtx; then
+if have rigctld || have rigctld-wsjtx || have rigctld-ws; then
   say "  ✓ Hamlib rigctld (radio control)"
 else
   say "  ! Hamlib rigctld not found - only needed for radio control (CAT/PTT)"; missing+=("$P_HAMLIB")

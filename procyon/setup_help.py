@@ -2,19 +2,31 @@
 importing settings from an existing WSJT-X installation."""
 
 import configparser
-import functools
 import os
 import re
 import subprocess
 import sys
 
-from .system import NO_WINDOW, find_tool
+from .system import NO_WINDOW, find_tool, RIGCTL
 
 
-@functools.lru_cache(maxsize=1)
+_rigs: list = []
+
+
 def hamlib_rigs():
-    """[{model, mfg, name}] for every radio `rigctl -l` knows."""
-    exe = find_tool("rigctl", "rigctl-wsjtx")
+    """[{model, mfg, name}] for every radio `rigctl -l` knows. Kept once found;
+    an empty answer (no WSJT-X yet) is asked again next time."""
+    global _rigs
+    if not _rigs:
+        _rigs = _read_rigs()
+    return _rigs
+
+
+hamlib_rigs.cache_clear = lambda: globals().update(_rigs=[])   # after installing WSJT-X
+
+
+def _read_rigs():
+    exe = find_tool(*RIGCTL)
     if not exe:
         return []
     lines = subprocess.run([exe, "-l"], capture_output=True, text=True, timeout=10, **NO_WINDOW).stdout.splitlines()

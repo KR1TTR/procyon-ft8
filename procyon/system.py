@@ -41,15 +41,32 @@ def wsjtx_dirs() -> list[str]:
                 dirs.append(os.path.join(root, name, "bin"))
             dirs += glob.glob(os.path.join(root, "wsjtx*", "bin"))
     elif IS_MAC:
-        # WSJT-X and its variants (e.g. "wsjtx-improved"). Only the Applications folders
-        # are looked at directly: poking at Desktop or Downloads would make macOS ask
-        # the user for permission. Anywhere else, Spotlight finds it without asking.
-        for root in ("/Applications", os.path.expanduser("~/Applications")):
-            dirs += sorted(glob.glob(os.path.join(root, "[wW][sS][jJ][tT]*.app", "Contents", "MacOS")))
-            dirs += sorted(glob.glob(os.path.join(root, "JTDX*.app", "Contents", "MacOS")))
+        # WSJT-X and its variants. Only the Applications folders are looked at
+        # directly: poking at Desktop or Downloads would make macOS ask the user for
+        # permission. Anywhere else, Spotlight finds it without asking.
+        dirs += _mac_app_dirs()
         if not any(os.path.isfile(os.path.join(d, "jt9")) for d in dirs):
             dirs += _spotlight_wsjtx()
     return [d for d in dict.fromkeys(dirs) if d and os.path.isdir(d)]
+
+
+MAC_APP_ROOTS = ("/Applications", "~/Applications")
+
+
+def _mac_app_dirs() -> list[str]:
+    """Programs folders (Contents/MacOS) of apps in Applications - straight in it
+    or one folder down - that hold WSJT-X's decoder jt9, whatever their name
+    (WSJT-X Improved is "ws.app"). WSJT-X, WSJT-X Improved and JTDX first."""
+    found = []
+    for root in MAC_APP_ROOTS:
+        root = os.path.expanduser(root)
+        for pattern in ("*.app", os.path.join("*", "*.app")):
+            for app in glob.glob(os.path.join(root, pattern)):
+                d = os.path.join(app, "Contents", "MacOS")
+                if os.path.isfile(os.path.join(d, "jt9")):
+                    found.append(d)
+    known = lambda d: re.match(r"(wsjt|jtdx|ws\.app$)", os.path.basename(d[:-len("/Contents/MacOS")]), re.I)
+    return sorted(found, key=lambda d: (not known(d), d.lower()))
 
 
 _spot: tuple[float, list[str]] = (0.0, [])
@@ -65,13 +82,19 @@ def spotlight(*args: str) -> list[str]:
 
 
 def _spotlight_wsjtx() -> list[str]:
-    """wsjtx*.app folders anywhere on this Mac, remembered for a minute."""
+    """wsjt*.app / ws.app / jtdx*.app folders anywhere on this Mac, remembered for a minute."""
     global _spot
     if time.time() - _spot[0] > 60:
         apps = spotlight("kMDItemContentType == 'com.apple.application-bundle' && "
-                         "(kMDItemFSName == 'wsjtx*.app'c || kMDItemFSName == 'jtdx*.app'c)")
+                         "(kMDItemFSName == 'wsjt*.app'c || kMDItemFSName == 'ws.app'c || kMDItemFSName == 'jtdx*.app'c)")
         _spot = (time.time(), [os.path.join(a, "Contents", "MacOS") for a in apps])
     return _spot[1]
+
+
+# Hamlib's programs under every name they come with: plain (Hamlib itself),
+# "-wsjtx" (WSJT-X on Windows and Mac), "-ws" (WSJT-X Improved's ws.app on Mac).
+RIGCTL = ("rigctl", "rigctl-wsjtx", "rigctl-ws")
+RIGCTLD = ("rigctld", "rigctld-wsjtx", "rigctld-ws")
 
 
 def find_tool(*names: str) -> str | None:
@@ -93,9 +116,8 @@ def tools() -> dict:
     return {
         "jt9": find_tool("jt9"),
         "ft8code": find_tool("ft8code"),
-        # WSJT-X ships Hamlib as rigctld-wsjtx on Windows
-        "rigctld": find_tool("rigctld", "rigctld-wsjtx"),
-        "rigctl": find_tool("rigctl", "rigctl-wsjtx"),
+        "rigctld": find_tool(*RIGCTLD),
+        "rigctl": find_tool(*RIGCTL),
     }
 
 

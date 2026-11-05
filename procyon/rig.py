@@ -5,7 +5,7 @@ import logging
 import re
 import time
 
-from .system import NO_WINDOW, find_tool, serial_access_problem
+from .system import NO_WINDOW, find_tool, serial_access_problem, RIGCTLD
 
 log = logging.getLogger("procyon.rig")
 
@@ -47,7 +47,7 @@ class Rig:
         model = str(s.get("rig_model") or "").strip()
         self.device = s.get("rig_device") or ""
         if self.enabled and model and s.get("rig_spawn"):
-            exe = find_tool("rigctld", "rigctld-wsjtx")
+            exe = find_tool(*RIGCTLD)
             if not exe:
                 self.error = "rigctld not found"
                 return

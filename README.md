@@ -278,6 +278,16 @@ across automatically on first start.)
 
 ## Changes
 
+0.9.62: on a Mac, Procyon now finds WSJT-X Improved (its app is called
+"ws.app", with its radio control named rigctl-ws) and WSJT-X apps with other
+names or inside a folder in Applications.
+
+0.9.61: the Radio box in Settings is more forgiving: "ftdx10" now finds the
+Yaesu FTDX-10 (spaces, hyphens and slashes don't matter). When the list of
+radios is empty because WSJT-X isn't installed or found, it says so instead of
+"no radio by that name", and the list fills in once WSJT-X is there (reopen
+Settings - no restart needed).
+
 0.9.60: LoTW upload taken out (for now). It needed ARRL's TQSL program and
 certificate, which is too much setup for the easy start Procyon aims for. QRZ
 upload is unchanged; QSOs already marked as sent to LoTW keep their tag.

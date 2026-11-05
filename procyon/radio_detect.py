@@ -13,7 +13,7 @@ import re
 import subprocess
 
 from .setup_help import hamlib_rigs
-from .system import IS_WINDOWS, NO_WINDOW, find_tool, serial_access_problem, serial_ports
+from .system import IS_WINDOWS, NO_WINDOW, find_tool, serial_access_problem, serial_ports, RIGCTL
 
 try:
     import fcntl
@@ -224,7 +224,7 @@ def blocked_ports() -> str:
 
 def test_rig(model: str, device: str, baud: str = "") -> dict:
     """Read frequency, mode and PTT state once through Hamlib. Never keys the radio."""
-    exe = find_tool("rigctl", "rigctl-wsjtx")
+    exe = find_tool(*RIGCTL)
     if not exe:
         return {"ok": False, "error": "Hamlib (part of WSJT-X) wasn't found."}
     args = [exe, "-m", str(model)]
