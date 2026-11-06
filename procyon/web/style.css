@@ -325,6 +325,7 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--border2)
 .msg .t-me { color: var(--on-me); background: var(--me); padding: 0 4px; border-radius: 4px; font-weight: 700; }
 .msg .t-grid { color: var(--info); }
 .msg .t-rpt { color: var(--rpt); }
+.msg .t-dev { color: var(--on-me); background: var(--cq); padding: 0 4px; border-radius: 4px; font-weight: 700; }
 .msg .t-tester { color: var(--on-me); background: var(--rpt); padding: 0 4px; border-radius: 4px; font-weight: 700; }
 .msg .t-end { color: var(--cq); }
 .msg .t-free { color: var(--muted); font-style: italic; }

@@ -687,20 +687,20 @@ $("#chipClock").addEventListener("click", () => {
 
 // Procyon's team. Every copy knows these calls and puts a small raccoon (the
 // developer) or star (testers - added only with their consent) next to them,
-// and testers' calls get a purple pill. Shown only on this screen, nothing
+// and a coloured pill: green for the developer, purple for testers. Shown only on this screen, nothing
 // extra is transmitted.
 const TEAM = {
-  KR1TTR: { role: "Procyon developer", icon: "icon.svg" },
-  KE4BFI: { role: "Procyon tester", icon: "star.svg", pill: true },   // Andy Lamb
-  KE8EON: { role: "Procyon tester", icon: "star.svg", pill: true },   // Jim Curley
-  KE8SAU: { role: "Procyon tester", icon: "star.svg", pill: true },   // Scott McCrory
+  KR1TTR: { role: "Procyon developer", icon: "icon.svg", pill: "t-dev" },
+  KE4BFI: { role: "Procyon tester", icon: "star.svg", pill: "t-tester" },   // Andy Lamb
+  KE8EON: { role: "Procyon tester", icon: "star.svg", pill: "t-tester" },   // Jim Curley
+  KE8SAU: { role: "Procyon tester", icon: "star.svg", pill: "t-tester" },   // Scott McCrory
 };
 const teamMember = (call) => (S && S.settings.team_badges === false ? null
   : TEAM[String(call || "").replace(/[<>]/g, "").split("/")[0].toUpperCase()] || null);
 const teamOf = (call) => (teamMember(call) || {}).role || "";
 const badge = (call) => {
   const t = teamMember(call);
-  return t ? `<img class="team-badge${t.pill ? " star" : ""}" src="/static/${t.icon}" alt="" title="${esc(t.role)}">` : "";
+  return t ? `<img class="team-badge${t.icon === "star.svg" ? " star" : ""}" src="/static/${t.icon}" alt="" title="${esc(t.role)}">` : "";
 };
 
 function fmtMsg(d, terms = []) {
@@ -711,14 +711,14 @@ function fmtMsg(d, terms = []) {
     let c = "";
     if (t === "CQ") c = "t-cq";
     else if (my && bare === my) c = "t-me";
-    else if (teamMember(bare)?.pill) c = "t-tester";
+    else if (teamMember(bare)?.pill) c = teamMember(bare).pill;
     else if (bare === p.from) c = "t-from";
     else if (bare === p.to || bare === p.other) c = "t-to";
     else if (/^[A-R]{2}\d{2}$/.test(t) && t !== "RR73") c = "t-grid";
     else if (/^R?[+-]\d\d$/.test(t)) c = "t-rpt";
     else if (["RR73", "RRR", "73"].includes(bare)) c = "t-end";
     if (terms.length && tokenHits(t, terms)) c += " t-hit";
-    const call = /\bt-(me|tester|from|to)\b/.test(c) && lookupable(bare) ? ` data-call="${esc(bare)}"` : "";
+    const call = /\bt-(me|tester|dev|from|to)\b/.test(c) && lookupable(bare) ? ` data-call="${esc(bare)}"` : "";
     return `<span class="${c}"${call}>${esc(t)}</span>${badge(bare)}`;
   }).join(" ");
 }
