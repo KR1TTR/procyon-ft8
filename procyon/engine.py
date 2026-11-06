@@ -74,6 +74,7 @@ OWN_COMMANDS = ("pota_", "mode")   # changed by their own commands, not the Sett
 # by our clock. One station's clock may be off, but the median over many is a
 # good stand-in for "the band's time" - so it shows how far off ours is,
 # without internet or GPS.
+DECODE_LOG_SEC = 600      # how often the decode timing goes into procyon.log
 CLOCK_WINDOW_SEC = 120     # stations heard in the last two minutes
 CLOCK_MIN_STATIONS = 8     # fewer than this: not enough to judge
 CLOCK_MAX_DT = 2.0         # ignore wild values (a station whose clock is way off)
@@ -129,6 +130,7 @@ class Engine:
         self._ever_connected = False   # a tab has been open at least once
         self._alone_task = None
         self.history = collections.deque(maxlen=80)   # recent decode batches
+        self._dec_times, self._dec_logged = [], time.monotonic()   # see _note_decode_time
         self.tmp = tempfile.mkdtemp(prefix="procyon-")
         self.long_calls = collections.OrderedDict()   # heard in full, newest last
         self.clock_dts = {}         # band clock check: sender -> (time heard, DT by the computer's clock)
@@ -497,49 +499,101 @@ class Engine:
                 args += ["-x", self.qso.dxcall]
             self._remember_call(self.s["mycall"], ours=True)
             self._remember_call(self.qso.dxcall, ours=True)
+            # jt9 prints each message the moment it finds one: the strong ones
+            # within a fraction of a second, the weak ones over the next second
+            # or two of deeper passes. Each handful goes out as soon as it's in,
+            # so Band activity fills in and a reply to us is acted on before the
+            # next cycle starts, instead of everything landing at the very end.
+            # With long calls to remind jt9 of, two copies run side by side: the
+            # reminder recording costs about a second before jt9 even starts on
+            # this cycle, so a plain copy (own scratch folder) delivers everything
+            # straight away, and the reminded copy supplies the long calls a plain
+            # run can only show as "<...>".
+            # The plain copy starts first: (re)making the reminder recording
+            # after learning a new long call takes a moment of its own.
+            async def start(run):
+                return await asyncio.create_subprocess_exec(
+                    *run, cwd=run[run.index("-a") + 1], stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL, **NO_WINDOW)
+
+            procs = []
+            if self.long_calls:
+                plain = os.path.join(self.tmp, "plain")
+                os.makedirs(plain, exist_ok=True)
+                procs.append(await start([a if a != self.tmp else plain for a in args] + [path]))
             primer = await self._primer_wav(mode)
-            if primer:
-                args.append(primer)
-            args.append(path)
-            proc = await asyncio.create_subprocess_exec(
-                *args, cwd=self.tmp, stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL, **NO_WINDOW)
-            out, _ = await asyncio.wait_for(proc.communicate(), 12)
+            procs.append(await start(args + ([primer] if primer else []) + [path]))
+            reminded = len(procs) - 1        # the copy whose "<...>" are final
+            batch = {"type": "decodes", "period": p, "time": hhmmss, "items": [],
+                     "band": band_of(self.dial), "dial": self.dial, "more": True}
+            self.history.append(batch)   # a page opened meanwhile gets it, still open
+            seen, held, first_at = set(), [], None
+
+            async def emit(chunk):
+                nonlocal first_at
+                if first_at is None:
+                    first_at = self.band_time() - t_start
+                chunk.sort(key=lambda d: d["freq"])
+                batch["items"].extend(chunk)
+                await self.broadcast({**batch, "items": chunk, "more": True})
+                for d in chunk:
+                    self.udp.decode(p * mode.PERIOD, d["snr"], d["dt"], d["freq"], d["msg"], mode.UDP_MODE,
+                                    low_confidence=bool(d.get("uncertain")))
+                self.qso.on_decodes(chunk, p)
+                await self.push_state()
+
+            queue = asyncio.Queue()
+            readers = [asyncio.create_task(self._jt9_reader(pr, i, queue)) for i, pr in enumerate(procs)]
+            deadline = time.monotonic() + 12
+            try:
+                running = len(procs)
+                while running:
+                    lines = await self._jt9_lines(queue, deadline)
+                    if mode is not self.m:
+                        return   # the mode was switched while decoding: these belong to the old one
+                    chunk = []
+                    for src, raw in lines:
+                        if raw is None:
+                            running -= 1
+                            continue
+                        d = self._parse_decode(raw, p, hhmmss)
+                        if not d or d["msg"] in seen:
+                            continue
+                        if "<...>" in d["msg"] and src != reminded:
+                            held.append(d)    # the reminded copy may name this call
+                            continue
+                        seen.add(d["msg"])
+                        chunk.append(d)
+                    if chunk:
+                        await emit(chunk)
+                # Unresolved calls the reminded copy didn't name either.
+                taken = {(d["freq"], d["dt"]) for d in batch["items"]}
+                rest = [d for d in held if d["msg"] not in seen
+                        and not any(abs(d["freq"] - f) <= 3 and abs(d["dt"] - t) <= 0.2 for f, t in taken)]
+                rest = list({d["msg"]: d for d in rest}.values())
+                if rest:
+                    await emit(rest)
+            finally:
+                for task in readers:
+                    task.cancel()
+                for pr in procs:
+                    if pr.returncode is None:
+                        pr.kill()
+                        await pr.wait()
             if mode is not self.m:
-                return   # the mode was switched while decoding: these belong to the old one
+                return
             os.unlink(path)
-            decodes, seen = [], set()
-            for line in out.decode(errors="replace").splitlines():
-                m = LINE_RE.match(line)
-                if not m or line.startswith(PRIMER_TIME):
-                    continue
-                # jt9 ends a line with "a1".."a7" when it filled part of the message
-                # in by guessing (a priori decoding: "CQ ???", "MYCALL ???"...), or
-                # "?" when unsure. Such guesses now and then turn noise into a
-                # station calling you that doesn't exist, so keep them marked.
-                tag = re.search(r"\s+(\?|a\d+)$", m.group(4))
-                msg = m.group(4)[:tag.start()].strip() if tag else m.group(4).strip()
-                if msg in seen:
-                    continue
-                seen.add(msg)
-                d = self._annotate(p, hhmmss, int(m.group(1)), float(m.group(2)), int(m.group(3)), msg)
-                if tag:
-                    d["uncertain"] = tag.group(1)
-                decodes.append(d)
+            decodes = batch["items"]
             decodes.sort(key=lambda d: d["freq"])
+            self._note_decode_time(first_at, self.band_time() - t_start, len(decodes))
+            batch["more"] = False
+            await self.broadcast({**batch, "items": []})
+            self.qso.decodes_done(decodes, p)
             self._remember_calls(decodes)
             with_grid = {d["p"]["from"] for d in decodes if d["p"]["from"] and d["p"]["grid"]}
             if with_grid:
                 self._backfill_log_grids(with_grid)
             self._save_grids()
-            batch = {"type": "decodes", "period": p, "time": hhmmss, "items": decodes,
-                     "band": band_of(self.dial), "dial": self.dial}
-            self.history.append(batch)
-            await self.broadcast(batch)
-            for d in decodes:
-                self.udp.decode(p * mode.PERIOD, d["snr"], d["dt"], d["freq"], d["msg"], mode.UDP_MODE,
-                                low_confidence=bool(d.get("uncertain")))
-            self.qso.on_decodes(decodes, p)
             self._note_clock(decodes, off)
             await self.push_state()
         except Exception as e:  # noqa: BLE001
@@ -547,6 +601,63 @@ class Engine:
             self.toast(f"Decoder error: {e}", "bad")
         finally:
             self.decoding = False
+
+    @staticmethod
+    async def _jt9_reader(proc, src, queue):
+        """Pass a jt9 copy's output lines on as (src, line); (src, None) at the end."""
+        while True:
+            line = await proc.stdout.readline()
+            await queue.put((src, line or None))
+            if not line:
+                return
+
+    @staticmethod
+    async def _jt9_lines(queue, deadline):
+        """The next handful of lines from the jt9 copies: one, plus any that
+        follow within 50 ms (jt9 often prints several together)."""
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise asyncio.TimeoutError
+        lines = [await asyncio.wait_for(queue.get(), left)]
+        while True:
+            try:
+                lines.append(await asyncio.wait_for(queue.get(), 0.05))
+            except asyncio.TimeoutError:
+                return lines
+
+    def _parse_decode(self, raw, p, hhmmss):
+        """One line of jt9's output as a decode for `p`, or None (other lines,
+        the reminder recording's own decodes)."""
+        line = raw.decode(errors="replace").rstrip("\r\n")
+        m = LINE_RE.match(line)
+        if not m or line.startswith(PRIMER_TIME):
+            return None
+        # jt9 ends a line with "a1".."a7" when it filled part of the message
+        # in by guessing (a priori decoding: "CQ ???", "MYCALL ???"...), or
+        # "?" when unsure. Such guesses now and then turn noise into a
+        # station calling you that doesn't exist, so keep them marked.
+        tag = re.search(r"\s+(\?|a\d+)$", m.group(4))
+        msg = m.group(4)[:tag.start()].strip() if tag else m.group(4).strip()
+        d = self._annotate(p, hhmmss, int(m.group(1)), float(m.group(2)), int(m.group(3)), msg)
+        if tag:
+            d["uncertain"] = tag.group(1)
+        return d
+
+    def _note_decode_time(self, first, done, n):
+        """Every 10 minutes, log how long decoding takes on this computer -
+        seconds into the cycle for the first message and for the end. Past the
+        cycle length, replies can miss our next transmission."""
+        if first is not None:
+            self._dec_times.append((first, done, n))
+        if time.monotonic() - self._dec_logged < DECODE_LOG_SEC or not self._dec_times:
+            return
+        firsts = sorted(t[0] for t in self._dec_times)
+        dones = sorted(t[1] for t in self._dec_times)
+        log.info("decoding: first messages at %.1f s, finished at %.1f s (median; slowest %.1f s) "
+                 "into the %g s cycle, %d cycles, up to %d stations",
+                 firsts[len(firsts) // 2], dones[len(dones) // 2], dones[-1], self.m.PERIOD,
+                 len(dones), max(t[2] for t in self._dec_times))
+        self._dec_times, self._dec_logged = [], time.monotonic()
 
     def band_time(self):
         """Now, by the band's clock (the computer's, with any band sync applied)."""

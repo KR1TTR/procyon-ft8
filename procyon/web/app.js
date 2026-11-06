@@ -522,14 +522,29 @@ function onLevel(db) {
 
 // --------------------------------------------------------------- decodes
 
+// A cycle's decodes arrive a few at a time while the decoder works (more:
+// true), then a closing message (more: false). They're gathered into one
+// batch per cycle; only the newly arrived rows fade in.
 function onDecodes(b, live) {
-  batches.push(b);
-  if (batches.length > MAX_PERIODS) batches.shift();
-  if (live) {
-    noteCallers(b);
-    renderDecodes(b.period);
-    wfLabels(b.items);
+  const last = batches[batches.length - 1];
+  let batch = b;
+  if (last && last.period === b.period && last.time === b.time && last.open) {
+    batch = last;
+    batch.items.push(...b.items);
+  } else {
+    batch = { ...b, items: [...b.items] };
+    batches.push(batch);
+    if (batches.length > MAX_PERIODS) batches.shift();
   }
+  batch.open = !!b.more;
+  if (!live) return;
+  if (b.items.length) {
+    noteCallers({ ...b, items: b.items });
+    renderDecodes(new Set(b.items));
+  } else renderDecodes();
+  // Call signs go onto the waterfall once the cycle is complete, so the lanes
+  // are worked out for all of them together.
+  if (!b.more) wfLabels(batch.items);
 }
 
 // ------------------------------------------------- stations calling you
@@ -678,6 +693,7 @@ const TEAM = {
   KR1TTR: { role: "Procyon developer", icon: "icon.svg" },
   KE4BFI: { role: "Procyon tester", icon: "star.svg", pill: true },   // Andy Lamb
   KE8EON: { role: "Procyon tester", icon: "star.svg", pill: true },   // Jim Curley
+  KE8SAU: { role: "Procyon tester", icon: "star.svg", pill: true },   // Scott McCrory
 };
 const teamMember = (call) => (S && S.settings.team_badges === false ? null
   : TEAM[String(call || "").replace(/[<>]/g, "").split("/")[0].toUpperCase()] || null);
@@ -773,7 +789,7 @@ $("#cfClear").addEventListener("click", () => {
   $("#cfText").focus();
 });
 
-function renderDecodes(freshPeriod) {
+function renderDecodes(fresh) {   // fresh: a Set of decodes that just arrived
   const list = $("#decodes");
   const dx = S ? S.qso.dxcall : "";
   const rx = S ? S.settings.rx_freq : 0;
@@ -805,7 +821,7 @@ function renderDecodes(freshPeriod) {
       const cls = ["row", d.p.kind === "cq" && "cq", d.to_me && !d.uncertain && "to-me",
         d.uncertain && "uncertain", d.from_me && "from-me",
         dx && sameStation(d.p.from, dx) && !d.to_me && "is-dx", Math.abs(d.freq - rx) < 60 && "near-rx",
-        b.period === freshPeriod && "fresh", otherBand && "other-band"].filter(Boolean).join(" ");
+        fresh && fresh.has(d) && "fresh", otherBand && "other-band"].filter(Boolean).join(" ");
       const canAnswer = d.p.from && !d.from_me;
       const meta = [d.uncertain ? `<span class="badge unsure" title="Uncertain: the decoder filled in part of this message by guessing (WSJT-X tags it ${esc(d.uncertain)}). Now and then that turns noise into a call that was never sent. Wait for a clean decode before replying.">?</span>` : "",
         d.p.cq_tag === "POTA" ? `<span class="badge pota" title="Activating a park (Parks on the Air)">POTA</span>` : "",
@@ -826,7 +842,7 @@ function renderDecodes(freshPeriod) {
   if (!total) {
     list.innerHTML = batches.length && (filter !== "all" || terms.length)
       ? `<div class="empty"><p>Nothing matches this filter yet.</p></div>`
-      : `<div class="empty"><div class="pulse-ring"></div><p><b>Listening…</b><br>Decodes appear here at the end of each ${period()}-second cycle.</p></div>`;
+      : `<div class="empty"><div class="pulse-ring"></div><p><b>Listening…</b><br>Decodes appear here near the end of each ${period()}-second cycle.</p></div>`;
     return;
   }
   list.innerHTML = html;

@@ -130,14 +130,18 @@ class Qso:
         return self.report_sent or ft8.fmt_report(self.snr)
 
     def _note_heard(self, decodes, period):
-        """Log what the DX station sent this cycle - or that we heard nothing
-        right after transmitting to them."""
-        from_dx = [d for d in decodes if ft8.same_station(d["p"]["from"], self.dxcall)]
-        for d in from_dx:
-            to = d["p"]["to"]
-            self._note("rx", period, d["msg"], d["snr"],
-                       busy=bool(to) and not ft8.same_station(to, self.mycall))
-        if not from_dx and self.last_tx_period == period - 1 and self.stage < 4:
+        """Log what the DX station sent (decodes arrive a few at a time)."""
+        for d in decodes:
+            if ft8.same_station(d["p"]["from"], self.dxcall):
+                to = d["p"]["to"]
+                self._note("rx", period, d["msg"], d["snr"],
+                           busy=bool(to) and not ft8.same_station(to, self.mycall))
+
+    def decodes_done(self, decodes, period):
+        """The cycle's decoding has finished (`decodes` = all of it): note it if
+        we heard nothing from the DX station right after transmitting to them."""
+        if (self.mycall and self.dxcall and self.last_tx_period == period - 1 and self.stage < 4
+                and not any(ft8.same_station(d["p"]["from"], self.dxcall) for d in decodes)):
             self.thread.append({"dir": "rx", "period": period, "silent": True})
 
     # ------------------------------------------------------- user actions
@@ -183,6 +187,8 @@ class Qso:
     # ------------------------------------------------------------ automation
 
     def on_decodes(self, decodes, period):
+        """Some of this cycle's decodes - called several times per cycle as
+        they come in, then decodes_done() once at the end."""
         if not self.mycall:
             return
         if self.dxcall:

@@ -278,6 +278,15 @@ across automatically on first start.)
 
 ## Changes
 
+0.9.63: decodes show up as soon as the decoder finds them, like in WSJT-X:
+Band activity fills in over a second or so instead of all at once, and a
+reply to you is acted on in time for your next transmission (before, on a
+busy band the decodes could land just after the next cycle had started, and
+Procyon answered a cycle late). Procyon's reminder of long and portable calls
+(e.g. P4/WE9V) now runs alongside instead of first, which saved about a
+second per cycle. procyon.log notes every 10 minutes how long decoding takes.
+Scott, KE8SAU, gets the tester badge.
+
 0.9.62: on a Mac, Procyon now finds WSJT-X Improved (its app is called
 "ws.app", with its radio control named rigctl-ws) and WSJT-X apps with other
 names or inside a folder in Applications.
@@ -374,8 +383,8 @@ lives in your browser and its Quit button closes it; if it can't start it says
 why in a message box. The zip is still there for running without installing.
 **Restart reminder:** when a newer Procyon is installed while it's running,
 a bar asks you to quit and start it again (it keeps running the old version
-until then). **Tester badges:** Procyon's testers Andy KE4BFI and Jim KE8EON
-get a star next to their calls and a purple pill around them (on this screen
+until then). **Tester badges:** Procyon's testers Andy KE4BFI, Jim KE8EON and Scott
+KE8SAU get a star next to their calls and a purple pill around them (on this screen
 only; *Settings → Display* switches team badges off).
 
 0.9.44: **background textures** for the palettes (*Settings → Experimental*):
