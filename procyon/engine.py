@@ -155,6 +155,7 @@ class Engine:
         self.last_decoded = 0
         self.decoding = False
         self.tx_periods = set()
+        self._band = band_of(int(self.s["dial_hz"]))   # the band last seen (see _new_band)
         self.tx_task = None
         self.tx_info = None
         self.newer = None             # {"version", "url"} when a newer release is out
@@ -467,6 +468,7 @@ class Engine:
                         if self.rig.up and not was[0]:
                             await self._apply_rig_mode()   # just connected
                         if was != (self.rig.up, self.rig.freq, self.rig.error):
+                            await self._new_band(band_of(self.dial))   # tuned on the radio itself
                             await self.push_state()
             except Exception:  # noqa: BLE001
                 log.exception("scheduler")
@@ -1177,6 +1179,26 @@ class Engine:
         """The band's usual dial frequency for the mode in use."""
         return band[4] if self.m is ft4 and band[4] else band[3]
 
+    async def _new_band(self, band: str):
+        """On a band change (Procyon's band menu or the radio's own dial),
+        transmitting stops and the QSO is cleared: a station on the old band
+        can't hear us on the new one."""
+        if band == self._band:
+            return
+        old, self._band = self._band, band
+        q = self.qso
+        busy = q.tx_enabled or self.tx_task or self.tune_task or q.dxcall
+        await self.halt()
+        tasks = [t for t in (self.tx_task, self.tune_task) if t]
+        if tasks:
+            await asyncio.wait(tasks, timeout=3)
+        q.reset()
+        q.regen()
+        q.next = 5
+        log.info("band changed %s -> %s: transmit off, QSO cleared", old or "?", band or "?")
+        if busy:
+            self.toast(f"Band changed to {band or 'outside the ham bands'}: transmit off, QSO cleared", "warn")
+
     async def _set_mode(self, mode: str):
         """Switch between FT8 and FT4. Transmitting stops, the QSO and Band
         activity start fresh (their cycle numbers belong to the old mode), and
@@ -1744,6 +1766,7 @@ class Engine:
         elif t == "mode":
             await self._set_mode(str(m.get("mode", "")).upper())
         elif t == "band":
+            await self._new_band(band_of(int(m["hz"])))   # before retuning: never mid-transmission
             self.s["dial_hz"] = int(m["hz"])
             self.save()
             if self.rig.enabled:
