@@ -80,6 +80,7 @@ function connect() {
     else if (m.type === "rig_test") onRigTest(m);
     else if (m.type === "qrz_check") onQrzCheck(m);
     else if (m.type === "log_import") importMsg(m);
+    else if (m.type === "cty_update") ctyMsg(m);
     else if (m.type === "export_marked") { $("#exportMsg").textContent = m.text; $("#exportMsg").classList.add("ok"); }
     else if (m.type === "pota") onPota(m);
     else if (m.type === "install") onInstall(m);
@@ -363,6 +364,7 @@ let shownBadges = null, shownMiles = null;
 function onState(m) {
   const first = !S;
   S = m;
+  if (!first && dlg.open) showCty();   // country data line follows an update
   // A new waterfall range: start a fresh picture with the new scale.
   const range = `${wfLo()}-${wfHi()}-${T().mode}`;
   if (range !== shownRange) {
@@ -1669,6 +1671,10 @@ function openSettings(welcome) {
   // Logbook import: on the computer running Procyon only.
   $("#importLocal").hidden = !isLocal;
   $("#importRemote").hidden = isLocal;
+  $("#ctyLocal").hidden = !isLocal;
+  $("#ctyRemote").hidden = isLocal;
+  if (!S.cty.updating) $("#ctyMsg").textContent = "";
+  showCty();
   showOnlineLogbooks();
   form.elements.remote_pin.placeholder = S.remote.pin_set ? "PIN is set - type a new one to change it" : "Choose a PIN";
   $("#remoteUrls").innerHTML = S.remote.urls.length
@@ -1948,6 +1954,34 @@ function importMsg(m) {
   el.classList.toggle("ok", !!m.ok);
   $("#qrzImport").disabled = $("#adifImportBtn").disabled = !!m.busy;
 }
+// Country data (Settings → Advanced): which Big CTY is in use, and the update button.
+function showCty() {
+  const c = S.cty || {};
+  const el = $("#ctyNow");
+  $("#ctyUpdate").disabled = !!c.updating;
+  if (!c.found) {
+    el.textContent = "No country file found - countries and NEW-country tags are missing. Press Update to download one.";
+    return;
+  }
+  const where = { own: "downloaded with the button below", bundled: "the copy that came with Procyon" }[c.source]
+    || "the copy that came with WSJT-X";
+  if (!c.version) { el.textContent = `In use: ${where} (its date isn't recorded in the file).`; return; }
+  const d = new Date(c.version + "T12:00:00Z");
+  const date = d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+  const months = Math.floor((Date.now() - d) / (30.44 * 86400e3));
+  const age = months >= 3 ? ` - about ${months} months old, worth updating` : "";
+  el.textContent = `In use: Big CTY of ${date}, ${where}${age}.`;
+}
+function ctyMsg(m) {
+  const el = $("#ctyMsg");
+  el.textContent = m.busy ? m.text : (m.ok ? "✓ " : "✗ ") + m.text;
+  el.classList.toggle("ok", !!m.ok);
+  $("#ctyUpdate").disabled = !!m.busy;
+}
+$("#ctyUpdate").addEventListener("click", () => {
+  ctyMsg({ busy: true, text: "Asking country-files.com…" });
+  send({ type: "cty_update" });
+});
 $("#qrzImport").addEventListener("click", () => {
   importMsg({ busy: true, text: "Asking QRZ for your logbook…" });
   send({ type: "qrz_import" });

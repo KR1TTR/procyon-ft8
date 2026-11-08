@@ -7,7 +7,7 @@ import re
 import shutil
 
 from . import __version__
-from .system import find_cty
+from .system import cty_version, find_cty
 
 
 DEMO_MARK = "Procyon demo mode - simulated QSO"
@@ -28,6 +28,8 @@ class Cty:
         self.prefixes = {}
         self.exact = {}
         path = path or find_cty()
+        self.path = path or ""
+        self.version = cty_version(path) if path else ""   # 'yyyy-mm-dd' or ''
         if path:
             self._load(path)
 

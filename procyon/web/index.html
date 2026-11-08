@@ -488,6 +488,21 @@
         </fieldset>
 
         <fieldset>
+          <legend>Country data</legend>
+          <p class="hint" id="ctyNow"></p>
+          <div class="radio-tools" id="ctyLocal">
+            <button type="button" class="btn ghost small" id="ctyUpdate">Update country data</button>
+            <span class="hint" id="ctyMsg"></span>
+          </div>
+          <p class="hint" id="ctyRemote" hidden>Updating can only be done on the computer running Procyon.</p>
+          <p class="hint">Procyon tells which country a callsign belongs to (and roughly how far away it is, when there's no grid) from
+            Big CTY, a file made by Jim Reisert AD1C and published at country-files.com. A copy comes with Procyon, but it's only
+            as new as your version of Procyon - new DXpeditions and special-event calls are added every few weeks. The button downloads
+            the latest into Procyon's own folder (WSJT-X's copy isn't touched), and Procyon always uses the newest copy it has. Nothing
+            about you is sent. Big CTY © Jim Reisert AD1C, MIT licence.</p>
+        </fieldset>
+
+        <fieldset>
           <legend>Radio control connection (rigctld)</legend>
           <label class="toggle"><input type="checkbox" name="rig_spawn"><span></span>Start rigctld for me (recommended)</label>
           <div class="grid2">
@@ -609,7 +624,7 @@
       <ul>
         <li><b>WSJT-X</b> by Joe Taylor K1JT, Steve Franke K9AN and the WSJT Development Group: the FT8 decoder (<code>jt9</code>) and message encoder (<code>ft8code</code>)</li>
         <li><b>Hamlib</b>: radio control</li>
-        <li><b>cty.dat</b> by Jim Reisert AD1C: country lookups</li>
+        <li><b>Big CTY</b> (cty.dat) by Jim Reisert AD1C, country-files.com: country lookups</li>
       </ul>
     </div>
     <p class="about-licence">Free software under the GNU General Public License v3.<br>Only transmit with a valid amateur radio <span data-uk="licence">license</span>.</p>

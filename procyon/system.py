@@ -121,10 +121,32 @@ def tools() -> dict:
     }
 
 
-def find_cty() -> str | None:
-    """The country file. WSJT-X keeps an updated copy in its user data folder."""
+CTY_VERSION_RE = re.compile(rb"=VER(\d{8})")
+BUNDLED_CTY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cty", "cty.dat")
+
+
+def cty_version(path: str) -> str:
+    """The release date AD1C writes into a cty.dat (as the pseudo-callsign
+    '=VERyyyymmdd'), as 'yyyy-mm-dd' - or '' if the file has none."""
+    try:
+        with open(path, "rb") as f:
+            m = CTY_VERSION_RE.search(f.read())
+    except OSError:
+        return ""
+    if not m:
+        return ""
+    d = m.group(1).decode()
+    return f"{d[:4]}-{d[4:6]}-{d[6:]}"
+
+
+def find_cty(own_dir: str | None = None) -> str | None:
+    """The country file: the NEWEST of Procyon's own downloaded copy (in
+    own_dir, from Settings → Advanced → Update country data) and the ones
+    WSJT-X and friends install, plus the copy shipped inside Procyon
+    (BUNDLED_CTY). On a tie the downloaded copy wins, then the shipped one."""
     home = os.path.expanduser("~")
-    cands = []
+    cands = [os.path.join(own_dir, "cty.dat")] if own_dir else []
+    cands.append(BUNDLED_CTY)
     if IS_WINDOWS:
         cands.append(os.path.join(os.environ.get("LOCALAPPDATA", ""), "WSJT-X", "cty.dat"))
         for d in wsjtx_dirs():
@@ -138,7 +160,11 @@ def find_cty() -> str | None:
         cands += [os.path.join(home, ".local", "share", "WSJT-X", "cty.dat"),
                   "/usr/share/wsjtx/cty.dat", "/usr/local/share/wsjtx/cty.dat",
                   "/usr/share/hamradio-files/cty.dat", "/usr/share/jtdx/cty.dat"]
-    return next((os.path.normpath(p) for p in cands if p and os.path.isfile(p)), None)
+    found = [os.path.normpath(p) for p in cands if p and os.path.isfile(p)]
+    if not found:
+        return None
+    # max() keeps the first of equals, so the list order breaks ties.
+    return max(found, key=cty_version)
 
 
 def serial_access_problem(path: str) -> str:

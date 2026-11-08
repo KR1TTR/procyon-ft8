@@ -23,10 +23,10 @@ from .demo import DemoBand
 from .geo import (BANDS, DEMO_MARK, DEMO_MARKS, Cty, Logbook, band_of, distance_bearing, grid_to_latlon,
                   strip_demo_mark, utc_now)
 from .qso import Qso
-from . import logimport, newversion, pota, uploads, wsjtx_install
+from . import countryfiles, logimport, newversion, pota, uploads, wsjtx_install
 from .radio_detect import blocked_ports, detect_radios, test_rig
 from .setup_help import hamlib_rigs, import_wsjtx
-from .system import NO_WINDOW, find_tool, serial_ports, tools
+from .system import BUNDLED_CTY, NO_WINDOW, find_cty, find_tool, serial_ports, tools
 from .udp import WsjtxUdp
 from .rig import Rig
 
@@ -113,7 +113,8 @@ class Engine:
         self.on_remote_change = None   # set by the server: start/stop listening on the network
         self.on_quit = None            # set by the server: stop Procyon (the Quit button)
         self.udp = WsjtxUdp(on_reply=self._udp_reply, on_halt=self._udp_halt)
-        self.cty = Cty()
+        self.cty = Cty(find_cty(data_dir))
+        self.cty_updating = False       # "Update country data" is running
         self._migrate_demo_qsos()
         self.logbook = self._open_logbook()
         self.grids_path = os.path.join(data_dir, "grids.json")
@@ -265,6 +266,8 @@ class Engine:
             "update": self._updated_to(),
             "newer": self.newer if self.s["update_check"] else None,
             "clock": self._clock_status(),
+            "cty": {"version": self.cty.version, "found": bool(self.cty.path),
+                    "source": self._cty_source(), "updating": self.cty_updating},
         }
 
     async def _watch_releases(self):
@@ -1672,6 +1675,46 @@ class Engine:
         await self.broadcast(reply)
         await self.push_state()
 
+    def _cty_source(self) -> str:
+        """Where the country file in use came from: "own" (downloaded with the
+        button), "bundled" (shipped with Procyon) or "other" (WSJT-X's etc.)."""
+        p = os.path.normcase(os.path.normpath(self.cty.path)) if self.cty.path else ""
+        if not p:
+            return ""
+        if os.path.dirname(p) == os.path.normcase(os.path.normpath(self.data_dir)):
+            return "own"
+        if p == os.path.normcase(os.path.normpath(BUNDLED_CTY)):
+            return "bundled"
+        return "other"
+
+    def _start_cty_update(self) -> dict:
+        if self.cty_updating:
+            return {"type": "cty_update", "busy": True, "text": "Already downloading…"}
+        self.cty_updating = True
+        asyncio.get_event_loop().create_task(self._cty_update())
+        return {"type": "cty_update", "busy": True, "text": "Asking country-files.com for the latest Big CTY…"}
+
+    async def _cty_update(self):
+        try:
+            r = await countryfiles.update(self.data_dir, self.cty.version)
+            if r["changed"]:
+                self.cty = Cty(find_cty(self.data_dir))
+                reply = {"type": "cty_update", "ok": True,
+                         "text": "Updated - the newest Big CTY is now in use."}
+            else:
+                reply = {"type": "cty_update", "ok": True,
+                         "text": "Already up to date - you have the newest Big CTY."}
+        except countryfiles.CtyError as e:
+            reply = {"type": "cty_update", "ok": False, "text": str(e)}
+        except Exception:  # noqa: BLE001 - never leave the button stuck
+            log.exception("country data update")
+            reply = {"type": "cty_update", "ok": False,
+                     "text": "The update failed unexpectedly - your country data wasn't changed."}
+        finally:
+            self.cty_updating = False
+        await self.broadcast(reply)
+        await self.push_state()
+
     # ------------------------------------------------------------- commands
 
     async def command(self, m: dict, local: bool = True):
@@ -1805,6 +1848,11 @@ class Engine:
                 return {"type": "log_import", "ok": False,
                         "text": "That can only be done on the computer running Procyon."}
             return self._start_qrz_import()
+        elif t == "cty_update":
+            if not local:
+                return {"type": "cty_update", "ok": False,
+                        "text": "That can only be done on the computer running Procyon."}
+            return self._start_cty_update()
         elif t == "qrz_check":
             if not local:
                 self.toast("That can only be done on the computer running Procyon", "warn")
