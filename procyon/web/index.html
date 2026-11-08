@@ -86,8 +86,8 @@
 </div>
 
 <div class="tool-warn" id="toolWarn" hidden>
-  <b>WSJT-X wasn't found.</b> Procyon uses WSJT-X's decoder and encoder, so it can't decode or
-  transmit without it.
+  <b>WSJT-X wasn't found.</b> Procyon uses WSJT-X's decoder (jt9), so it can't decode signals
+  without it.
   <span id="toolHowto">Install WSJT-X from <span class="mono">wsjt.sourceforge.io</span>, then restart Procyon.</span>
   <span id="toolMissing"></span>
   <div class="tool-install" id="toolInstall" hidden>
@@ -622,7 +622,7 @@
     <div class="about-thanks">
       <h3>Built on</h3>
       <ul>
-        <li><b>WSJT-X</b> by Joe Taylor K1JT, Steve Franke K9AN and the WSJT Development Group: the FT8 decoder (<code>jt9</code>) and message encoder (<code>ft8code</code>)</li>
+        <li><b>WSJT-X</b> by Joe Taylor K1JT, Steve Franke K9AN and the WSJT Development Group: the FT8/FT4 decoder (<code>jt9</code>), and the 77-bit message formats Procyon's own encoder follows</li>
         <li><b>Hamlib</b>: radio control</li>
         <li><b>Big CTY</b> (cty.dat) by Jim Reisert AD1C, country-files.com: country lookups</li>
       </ul>

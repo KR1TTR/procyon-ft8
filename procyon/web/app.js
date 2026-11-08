@@ -456,7 +456,7 @@ function onState(m) {
     $("#newVersionNotes").hidden = !nv.url;
   }
 
-  const missing = Object.entries(m.tools || {}).filter(([k, ok]) => !ok && ["jt9", "ft8code"].includes(k)).map(([k]) => k);
+  const missing = Object.entries(m.tools || {}).filter(([k, ok]) => !ok && k === "jt9").map(([k]) => k);
   $("#toolWarn").hidden = !missing.length;
   $("#toolInstall").hidden = !(missing.length && m.can_install_wsjtx);
   $("#toolHowto").hidden = !!m.can_install_wsjtx;

@@ -906,7 +906,15 @@ class Engine:
                 q.tx_enabled = False
                 self.toast("Set your callsign in Settings before transmitting", "warn")
                 return
-            tones, decoded = m.encode(text)
+            try:
+                tones, decoded = m.encode(text)
+            except ValueError:
+                # No FT8/FT4 message format can carry it (WSJT-X would call it a
+                # "bad message"). Nothing is keyed.
+                q.tx_enabled = False
+                self.toast(f"Not sent: {m.NAME} has no way to send “{text}”. "
+                           f"Edit the message and enable TX again.", "bad")
+                return
             if len(decoded) < len(text):
                 # FT8/FT4 would cut this message short (e.g. a callsign it can't
                 # encode falling back to 13 characters of free text). Never put

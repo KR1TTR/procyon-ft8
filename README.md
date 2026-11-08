@@ -2,12 +2,13 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 0.9.67** · 7 November 2026
+**Version 0.9.68** · 7 November 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
 A simpler, friendlier FT8 station (FT4 too, as a beta). Procyon uses WSJT-X's
-own decoder (`jt9`) and message encoder (`ft8code`), so decoding performance
-matches WSJT-X, and puts a clean, modern interface on top.
+own decoder (`jt9`), so decoding performance matches WSJT-X, and puts a clean,
+modern interface on top. Messages are encoded by Procyon itself, bit for bit
+the way WSJT-X does it.
 
 ## Install
 
@@ -16,11 +17,11 @@ the Hamlib copy it includes): https://wsjt.sourceforge.io
 
 | System | Download | How |
 |---|---|---|
-| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.67_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.67_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
-| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.67-arch.tar.gz` | `tar xf procyon-0.9.67-arch.tar.gz`, `cd procyon-0.9.67-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
-| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.67-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
-| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.67-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
-| Windows 10/11 (64-bit) | `Procyon-0.9.67-windows-setup.exe` | Double-click it (no administrator password needed), then start **Procyon** from the Start menu. Python is included. To update, run the newer setup the same way. Or, without installing: `Procyon-0.9.67-windows.zip` - right-click → **Extract All**, then double-click **Procyon.bat** in the extracted folder. |
+| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.68_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.68_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
+| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.68-arch.tar.gz` | `tar xf procyon-0.9.68-arch.tar.gz`, `cd procyon-0.9.68-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
+| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.68-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
+| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.68-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
+| Windows 10/11 (64-bit) | `Procyon-0.9.68-windows-setup.exe` | Double-click it (no administrator password needed), then start **Procyon** from the Start menu. Python is included. To update, run the newer setup the same way. Or, without installing: `Procyon-0.9.68-windows.zip` - right-click → **Extract All**, then double-click **Procyon.bat** in the extracted folder. |
 
 Add `--demo` (or use **Procyon DEMO ONLY - no radio** in the Windows Start menu, or
 *Settings → Advanced → Demo band*) to try it with a simulated band: nothing is
@@ -228,7 +229,9 @@ Good to know:
 | Where WSJT-X, cty.dat, data and serial ports live on each OS | `procyon/system.py` |
 | Radio auto-detect and test (serial ID, Hamlib read-only test) | `procyon/radio_detect.py` |
 | Finds or installs WSJT-X (macOS: right build for the CPU, no admin needed) | `procyon/wsjtx_install.py` |
-| FT8 GFSK waveform (port of WSJT-X `gen_ft8wave`), message parsing | `procyon/ft8.py` |
+| Message packing: text <-> 77 bits, all WSJT-X message types | `procyon/pack77.py` |
+| CRC and LDPC(174,91) parity, shared by FT8 and FT4 | `procyon/fec.py` |
+| FT8 tones and GFSK waveform (port of WSJT-X `gen_ft8wave`), message parsing | `procyon/ft8.py` |
 | FT4 encoder and waveform (ports of WSJT-X `genft4` / `gen_ft4wave`) | `procyon/ft4.py` |
 | QSO auto-sequencer | `procyon/qso.py` |
 | Country lookup (`cty.dat`), distance/bearing, ADIF log | `procyon/geo.py` |
@@ -244,10 +247,13 @@ Good to know:
 
 Each 15-second cycle, audio is buffered at 12 kHz. At 13.4 s the cycle is
 written to a WAV and decoded with `jt9 -8`. In FT4 the cycle is 7.5 s,
-decoded at 6.2 s with `jt9 -5`. WSJT-X has no stand-alone FT4 encoder, so
-`ft8code` packs the message (FT4 packs it the same way) and `ft4.py` does the
-rest: scrambling, CRC, LDPC parity, tones and audio - checked bit for bit
-against WSJT-X and by decoding with `jt9`. Transmit audio is synthesized at
+decoded at 6.2 s with `jt9 -5`. To transmit, `pack77.py` packs the message
+into 77 bits (FT8 and FT4 pack the same way), `fec.py` adds the CRC and LDPC
+parity, and `ft8.py` / `ft4.py` make the tones and audio - all checked bit
+for bit against WSJT-X's `ft8code` (`tests/test_pack77.py`) and by decoding
+with `jt9`. While the packer is new, `ft8code` (when installed) packs each
+message too as a second opinion; a difference is logged and `ft8code`'s
+answer is used. Transmit audio is synthesized at
 the sound card's own rate and starts 0.5 s into the cycle (up to 1.5 s late if
 needed). Procyon only plays transmit audio after the radio confirms it is
 transmitting.
@@ -261,9 +267,9 @@ across automatically on first start.)
 
 ## Known limitations
 
-- **WSJT-X must be installed.** Procyon uses its decoder (`jt9`) and message
-  encoder (`ft8code`); the WSJT-X program itself never runs. (The country
-  list comes with Procyon since 0.9.67.) Radio control uses Hamlib (included with WSJT-X on Windows and
+- **WSJT-X must be installed.** Procyon uses its decoder (`jt9`); the WSJT-X
+  program itself never runs. (The country list comes with Procyon since
+  0.9.67, the message encoder since 0.9.68.) Radio control uses Hamlib (included with WSJT-X on Windows and
   macOS; the `hamlib` package on Linux).
 - **Online logbooks:** upload to QRZ.com only (needs your QRZ Logbook API key).
   For LoTW, eQSL or Club Log, use *Export ADIF* with their own tools.
@@ -280,6 +286,15 @@ across automatically on first start.)
 - **FT8 and FT4 only** for now; other modes are on the roadmap.
 
 ## Changes
+
+0.9.68: **Procyon's own message encoder.** Turning a message into the 77
+bits FT8 and FT4 send is now done by Procyon itself instead of WSJT-X's
+`ft8code` - every message type, matched bit for bit against `ft8code` on
+well over 100,000 test messages (including every call in a real logbook).
+Nothing changes on the air. While it's new, `ft8code` still double-checks
+each message when WSJT-X is installed, and its answer wins if they ever
+differ (written to procyon.log). A message no FT8/FT4 format can carry is
+now refused before keying up, with a plain explanation.
 
 0.9.67: **country data comes with Procyon.** A copy of Big CTY now ships
 inside Procyon, so a new install knows every country without WSJT-X's copy,
@@ -699,10 +714,9 @@ Next:
 7. **Standing on its own:** Procyon's own decoder and encoder, so WSJT-X no
    longer has to be installed. Other programs would only be used for
    importing settings while setting up a station (e.g. *Import settings from
-   WSJT-X*). Today Procyon borrows WSJT-X's `jt9` (decoder), `ft8code`
-   (message packing; Procyon already makes the tones and the FT4 coding
-   itself). The country list (`cty.dat`) no longer comes from WSJT-X:
-   Procyon ships its own copy of Big CTY (0.9.67).
+   WSJT-X*). Today Procyon borrows only WSJT-X's `jt9` (decoder). The
+   country list (Big CTY, 0.9.67) and the message encoder (0.9.68) are
+   Procyon's own.
    The decoder is the big part: JTDX (GPLv3, like Procyon) has a stronger
    FT8 decoder for crowded bands, but its decoder program only works inside
    JTDX, so it would have to be built into a program of Procyon's own.
@@ -721,8 +735,9 @@ macOS port and testing by Dewey A. "Andy" Lamb, KE4BFI (see `docs/macos-port.md`
 
 Procyon builds on:
 - **WSJT-X** by Joe Taylor K1JT, Steve Franke K9AN and the WSJT Development Group:
-  the FT8 decoder (`jt9`) and message encoder (`ft8code`). Procyon's transmit
-  waveform code is a port of WSJT-X's `gen_ft8wave`.
+  the FT8/FT4 decoder (`jt9`). Procyon's message packing follows WSJT-X's
+  77-bit message formats (`packjt77`) and its transmit waveform code is a
+  port of WSJT-X's `gen_ft8wave`.
 - **Hamlib**, for radio control.
 - **Big CTY** (`cty.dat`) by Jim Reisert AD1C, https://www.country-files.com/,
   for country lookups (MIT licence). A copy ships with Procyon in

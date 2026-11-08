@@ -1,14 +1,20 @@
-"""FT8 protocol helpers: message encoding (via WSJT-X's ft8code), GFSK
-waveform synthesis (port of WSJT-X gen_ft8wave.f90), and message parsing."""
+"""FT8 protocol helpers: message encoding (Procyon's own packer, pack77.py,
+plus the shared error correction in fec.py), GFSK waveform synthesis (port
+of WSJT-X gen_ft8wave.f90), and message parsing."""
 
 import functools
+import logging
 import re
 import subprocess
 from math import erf, log, pi, sqrt
 
 import numpy as np
 
+from . import pack77
+from .fec import codeword
 from .system import NO_WINDOW
+
+_log = logging.getLogger("procyon")   # not "log": math.log is used below
 
 PERIOD = 15.0          # seconds per T/R cycle
 SYMBOL_SEC = 0.16      # 1920 samples @ 12 kHz
@@ -74,8 +80,8 @@ def same_station(a: str, b: str) -> bool:
 
 
 def fits(msg: str):
-    """True if ft8code sends `msg` exactly as written, False if it would be
-    cut or rejected, None if that can't be checked (no WSJT-X tools)."""
+    """True if `msg` goes out exactly as written, False if it would be cut or
+    can't be sent at all, None if that can't be checked."""
     try:
         return encode(msg)[1] == normalize(msg)
     except ValueError:
@@ -93,40 +99,82 @@ def first_fit(candidates: list[str]) -> str:
     return candidates[0]
 
 
-def _ft8code():
+def normalize(msg: str) -> str:
+    return " ".join(msg.upper().split())[:37]
+
+
+COSTAS = (3, 1, 4, 0, 6, 5, 2)
+GRAYMAP = (0, 1, 3, 2, 5, 6, 4, 7)
+
+# While Procyon's own packer is new, WSJT-X's ft8code (when installed) packs
+# every message too. If they ever disagree, ft8code's answer is used and the
+# difference goes in the log - so what goes on the air can't change because
+# of the new packer. Set to False once it has proven itself.
+CROSS_CHECK = True
+
+
+def _ft8code_bits(msg: str):
+    """(77 bits as a '0'/'1' string, decoded_text) from WSJT-X's ft8code, or
+    None when it isn't installed (or gives no answer)."""
     from .system import find_tool  # noqa: PLC0415
     exe = find_tool("ft8code")
     if not exe:
-        raise RuntimeError("WSJT-X's encoder (ft8code) wasn't found - is WSJT-X installed?")
-    return exe
+        return None
+    try:
+        out = subprocess.run([exe, msg], capture_output=True, text=True,
+                             timeout=10, **NO_WINDOW).stdout.splitlines()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    decoded, bits = "", None
+    for i, line in enumerate(out):
+        if line.startswith(" 1.") and not decoded:
+            decoded = line[42:79].strip()
+        if line.startswith("Source-encoded message") and i + 1 < len(out):
+            bits = out[i + 1].strip()
+    if not bits or len(bits) != 77:
+        return None
+    return bits, decoded
 
 
-def normalize(msg: str) -> str:
-    return " ".join(msg.upper().split())[:37]
+@functools.lru_cache(maxsize=512)
+def message_bits(msg: str):
+    """(77 bits as a list, decoded_text) for `msg`. decoded_text is how a
+    receiver will read it: it differs from `msg` if the message can't be sent
+    as written (e.g. cut to 13 characters of free text)."""
+    msg = normalize(msg)
+    try:
+        ours = pack77.encode(msg)
+    except pack77.BadMessage:
+        ours = None
+    if CROSS_CHECK:
+        ref = _ft8code_bits(msg)
+        if ref is not None:
+            if ours is None and ref[1] == "*** bad message ***":
+                raise ValueError(f"{msg!r} can't be sent")
+            if ours != ref:
+                _log.warning("message packer: Procyon and ft8code differ for %r - using ft8code's "
+                            "(Procyon %s %r, ft8code %s %r)", msg, *(ours or ("-", "")), *ref)
+                ours = ref
+    if ours is None or ours[1] == "*** bad message ***":
+        raise ValueError(f"{msg!r} can't be sent")
+    bits, decoded = ours
+    return [int(c) for c in bits], decoded
+
+
+def tones_from_bits(bits77) -> tuple:
+    """79 FT8 tones (0-7) for 77 message bits: CRC + LDPC parity, three bits
+    per tone (Gray coded), three 7x7 Costas sync arrays."""
+    cw = codeword(bits77)
+    data = tuple(GRAYMAP[4 * cw[3 * i] + 2 * cw[3 * i + 1] + cw[3 * i + 2]] for i in range(58))
+    return COSTAS + data[:29] + COSTAS + data[29:] + COSTAS
 
 
 @functools.lru_cache(maxsize=512)
 def encode(msg: str):
     """Return (tones, decoded_text). decoded_text is how a receiver will see
     the message - it differs from `msg` if the message can't be encoded."""
-    msg = normalize(msg)
-    out = subprocess.run([_ft8code(), msg], capture_output=True, text=True,
-                         timeout=10, **NO_WINDOW).stdout
-    decoded = None
-    tones = None
-    lines = out.splitlines()
-    for i, line in enumerate(lines):
-        if line.startswith(" 1.") and decoded is None:
-            decoded = line[42:79].strip()
-        if line.startswith("Channel symbols"):
-            for cand in lines[i + 1:i + 4]:
-                digits = cand.replace(" ", "")
-                if len(digits) == NSYM and digits.isdigit():
-                    tones = tuple(int(c) for c in digits)
-                    break
-    if tones is None:
-        raise ValueError(f"ft8code could not encode {msg!r}")
-    return tones, decoded or ""
+    bits, decoded = message_bits(msg)
+    return tones_from_bits(bits), decoded
 
 
 def _gfsk_pulse(bt: float, t: np.ndarray) -> np.ndarray:

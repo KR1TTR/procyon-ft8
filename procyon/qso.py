@@ -70,7 +70,7 @@ class Qso:
         # FT8 can't carry both in full with a grid or report. The usual way:
         # full calls when calling and at the end (no grid), reports with the
         # sender's base call - "<P4/WE9V> CT2JWF R-02". Each candidate is
-        # checked with ft8code; the first that goes out intact is used.
+        # packed and read back; the first that goes out intact is used.
         MB, H = ft8.msg_call(ft8.base_call(my)), f"<{dx}>"
         full = lambda tail: [f"{H} {my} {tail}".strip(), f"{dx} <{my}> {tail}".strip()]  # noqa: E731
         self.msgs[:5] = [
