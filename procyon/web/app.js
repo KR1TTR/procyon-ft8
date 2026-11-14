@@ -98,7 +98,7 @@ let lastPeriodMark = -1;
 let rowsSinceMark = -1;      // waterfall rows since the current cycle started
 const LABEL_ROWS = 16;       // 2 s at 8 rows/s: room to write the label above the line
 
-// Waterfall colour schemes (Settings → Experimental; chosen per device). Each is
+// Waterfall colour schemes (Settings → Themes; chosen per device). Each is
 // a ramp of [position 0-1, R, G, B] stops from the noise floor up to the
 // strongest signals.
 const WF_SCHEMES = {
@@ -110,6 +110,8 @@ const WF_SCHEMES = {
               [.72, 206, 148, 46], [.86, 250, 204, 104], [1, 255, 242, 204]],
   ember:     [[0, 8, 4, 3], [.25, 26, 9, 4], [.42, 62, 18, 5], [.58, 128, 40, 6],
               [.72, 205, 82, 14], [.86, 255, 150, 48], [1, 255, 226, 170]],
+  surf:      [[0, 2, 14, 26], [.25, 4, 30, 52], [.42, 6, 70, 100], [.56, 0, 130, 170],
+              [.7, 30, 190, 210], [.84, 120, 235, 230], [.95, 230, 255, 250], [1, 255, 255, 255]],
 };
 let wfScheme = "lightning";
 try { wfScheme = localStorage.getItem("procyon.wfScheme") || wfScheme; } catch { /* default */ }
@@ -142,9 +144,9 @@ function setWfScheme(name) {
 }
 document.documentElement.dataset.wf = wfScheme;
 
-// Colour palettes (Settings → Experimental; per device): <html data-palette>
+// Colour palettes (Settings → Themes; per device): <html data-palette>
 // switches the CSS variables in style.css. "night" is the standard look.
-const PALETTES = ["night", "classic", "radio", "campfire"];
+const PALETTES = ["night", "classic", "radio", "campfire", "beach", "sunset"];
 let palette = "night";
 try { palette = localStorage.getItem("procyon.palette") || palette; } catch { /* default */ }
 if (!PALETTES.includes(palette)) palette = "night";
@@ -456,7 +458,8 @@ function onState(m) {
     $("#newVersionNotes").hidden = !nv.url;
   }
 
-  const missing = Object.entries(m.tools || {}).filter(([k, ok]) => !ok && k === "jt9").map(([k]) => k);
+  // Only matters when Settings asks for WSJT-X's decoder: Procyon decodes by itself.
+  const missing = Object.entries(m.tools || {}).filter(([k, ok]) => !ok && k === "jt9" && st.decoder === "jt9").map(([k]) => k);
   $("#toolWarn").hidden = !missing.length;
   $("#toolInstall").hidden = !(missing.length && m.can_install_wsjtx);
   $("#toolHowto").hidden = !!m.can_install_wsjtx;
@@ -825,7 +828,7 @@ function renderDecodes(fresh) {   // fresh: a Set of decodes that just arrived
         dx && sameStation(d.p.from, dx) && !d.to_me && "is-dx", Math.abs(d.freq - rx) < 60 && "near-rx",
         fresh && fresh.has(d) && "fresh", otherBand && "other-band"].filter(Boolean).join(" ");
       const canAnswer = d.p.from && !d.from_me;
-      const meta = [d.uncertain ? `<span class="badge unsure" title="Uncertain: the decoder filled in part of this message by guessing (WSJT-X tags it ${esc(d.uncertain)}). Now and then that turns noise into a call that was never sent. Wait for a clean decode before replying.">?</span>` : "",
+      const meta = [d.uncertain ? `<span class="badge unsure" title="Uncertain: the decoder filled in part of this message by guessing (tagged ${esc(d.uncertain)}). Now and then that turns noise into a call that was never sent. Wait for a clean decode before replying.">?</span>` : "",
         d.p.cq_tag === "POTA" ? `<span class="badge pota" title="Activating a park (Parks on the Air)">POTA</span>` : "",
         d.new ? `<span class="badge new">NEW</span>` : d.new_band ? `<span class="badge newband">NEW BAND</span>` : "",
         d.country ? `<span class="country" title="${esc(d.country)}">${esc(d.country)}</span>` : "",
@@ -1648,6 +1651,10 @@ form.addEventListener("invalid", (e) => {
   if (pane && pane.hidden) showSetTab(pane.dataset.tab);
 }, true);
 
+function showDepth() {   // jt9's depth only means something with jt9
+  $("#depthRow").hidden = form.elements.decoder.value !== "jt9";
+}
+
 function openSettings(welcome) {
   let tab = "station";
   try { tab = localStorage.getItem("procyon.settingsTab") || tab; } catch { /* default */ }
@@ -1658,9 +1665,14 @@ function openSettings(welcome) {
   for (const el of form.elements) {
     if (!el.name || !(el.name in st)) continue;
     if (el.type === "checkbox") el.checked = !!st[el.name];
-    else if (el.tagName !== "SELECT" || ["ptt", "depth", "rig_mode", "units", "clock_sync"].includes(el.name)) el.value = st[el.name];
+    else if (el.tagName !== "SELECT" || ["ptt", "depth", "rig_mode", "units", "clock_sync", "decoder"].includes(el.name)) el.value = st[el.name];
     else if (el.name === "rig_baud") setSelect(el, st.rig_baud);
   }
+  // Decoder: WSJT-X's jt9 only offered when it's installed.
+  const hasJt9 = !!(S.tools && S.tools.jt9);
+  $("#decoderJt9").hidden = !hasJt9 && st.decoder !== "jt9";
+  $("#decoderJt9").disabled = !hasJt9;
+  showDepth();
   // Remote access: only editable on the computer running Procyon.
   $("#remoteLocal").hidden = !isLocal;
   $("#remoteRemote").hidden = isLocal;
@@ -1751,6 +1763,7 @@ function rigPicked(fromUser) {
   }
 }
 for (const ev of ["input", "change"]) form.elements.rig_pick.addEventListener(ev, () => rigPicked(true));
+form.elements.decoder.addEventListener("change", showDepth);
 
 $("#importWsjtx").addEventListener("click", () => send({ type: "wsjtx_import" }));
 

@@ -25,7 +25,7 @@ transparent background).
 | Lettering on dark | `#E7ECF6` (near-white) |
 | Lettering on light | `#0B1020` (near-black) |
 | Tagline | `#3DD6C4` (teal) on dark, `#0A8F84` (deeper teal) on light |
-| Raccoon head | `#C9D3E6`, ears `#AAB6CC`, inner ears `#141B2E`, forehead `#7F8BA3` |
+| Raccoon head | `#C9D3E6`, ears `#AAB6CC`, inner ears `#141B2E` |
 | Mask and nose | `#0B1020` |
 | Muzzle | `#EEF2F8` |
 | Star eyes | `#FFF4C2` |

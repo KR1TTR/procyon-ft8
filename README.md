@@ -2,18 +2,22 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 0.9.68** · 7 November 2026
+**Version 0.9.70** · 13 November 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
-A simpler, friendlier FT8 station (FT4 too, as a beta). Procyon uses WSJT-X's
-own decoder (`jt9`), so decoding performance matches WSJT-X, and puts a clean,
-modern interface on top. Messages are encoded by Procyon itself, bit for bit
-the way WSJT-X does it.
+A simpler, friendlier FT8 station (FT4 too, as a beta), with a clean, modern
+interface. Since 0.9.69 Procyon decodes FT8 and FT4 with its own decoder, tpdec (on
+recordings from busy bands it finds about 95-97% of what WSJT-X's `jt9` finds,
+plus a few hundred jt9 misses); WSJT-X's `jt9` can still be chosen in
+Settings → Advanced. Messages are encoded by Procyon itself, bit for bit the
+way WSJT-X does it.
 
 ## Install
 
-You need **WSJT-X** installed (Procyon uses its FT8 decoder and encoder, and
-the Hamlib copy it includes): https://wsjt.sourceforge.io
+For radio control Procyon uses **Hamlib**: on Linux the `hamlib` package (or
+`libhamlib-utils`); on Windows and macOS the copy that comes with **WSJT-X**
+(https://wsjt.sourceforge.io), so install WSJT-X there. WSJT-X is no longer
+needed for decoding.
 
 | System | Download | How |
 |---|---|---|
@@ -246,8 +250,20 @@ Good to know:
 | Release packages | `packaging/` |
 
 Each 15-second cycle, audio is buffered at 12 kHz. At 13.4 s the cycle is
-written to a WAV and decoded with `jt9 -8`. In FT4 the cycle is 7.5 s,
-decoded at 6.2 s with `jt9 -5`. To transmit, `pack77.py` packs the message
+decoded by tpdec, Procyon's own decoder (`procyon/decoder/`, see below); in FT4 the
+cycle is 7.5 s, decoded at 6.2 s. With *WSJT-X's jt9* chosen in Settings, the
+cycle is written to a WAV and decoded with `jt9 -8` (FT4: `jt9 -5`) instead.
+
+tpdec (`decoder/ft8search.py`, `ft4search.py`, with `ft8decode.py`,
+`ft8subtract.py`, `decpool.py`) works in passes: find candidate signals by
+their Costas sync patterns, read each one (soft bits, LDPC belief
+propagation, OSD as a fallback, CRC), subtract what was decoded and look
+again. Failed candidates next to a subtracted signal are read again at once
+(JTDX's idea). Stations heard in the last 3 minutes are looked for again at
+their last spot; a priori guesses (CQ, your call, your QSO partner's
+messages) are marked uncertain like jt9's. Each pass's decodes are shown as
+soon as they're in. The per-signal work is shared between helper processes,
+one per CPU core (up to 8). To transmit, `pack77.py` packs the message
 into 77 bits (FT8 and FT4 pack the same way), `fec.py` adds the CRC and LDPC
 parity, and `ft8.py` / `ft4.py` make the tones and audio - all checked bit
 for bit against WSJT-X's `ft8code` (`tests/test_pack77.py`) and by decoding
@@ -258,6 +274,18 @@ the sound card's own rate and starts 0.5 s into the cycle (up to 1.5 s late if
 needed). Procyon only plays transmit audio after the radio confirms it is
 transmitting.
 
+### Tests
+
+`python3 tests/run_tests.py` runs Procyon's checks in a few seconds and
+prints PASS or FAIL for each: the QSO sequencer (full QSOs both ways,
+guessed decodes never answered or logged, long and portable calls), POTA
+(parks, the 10-QSO count, the demo band's practice activation kept apart),
+the logbook (ADIF, edits, imports), band changes, the message packer, and
+the decoder (synthetic FT8 and FT4 signals decoded word for word; pure
+noise gives nothing). They need no radio, sound card, internet or WSJT-X.
+`packaging/build.sh` runs them first and won't build a package if one fails.
+Bugs that are fixed get a test, so they can't quietly come back.
+
 ## The name
 
 The name: *Procyon lotor* is the raccoon, and Procyon is also a binary star,
@@ -267,10 +295,15 @@ across automatically on first start.)
 
 ## Known limitations
 
-- **WSJT-X must be installed.** Procyon uses its decoder (`jt9`); the WSJT-X
-  program itself never runs. (The country list comes with Procyon since
-  0.9.67, the message encoder since 0.9.68.) Radio control uses Hamlib (included with WSJT-X on Windows and
-  macOS; the `hamlib` package on Linux).
+- **Hamlib for radio control.** Included with WSJT-X on Windows and macOS
+  (so install WSJT-X there); the `hamlib` package on Linux. Decoding (since
+  0.9.69), encoding (0.9.68) and the country list (0.9.67) are Procyon's own.
+  When WSJT-X is installed, its `ft8code` still double-checks each message
+  Procyon packs.
+- **The decoder, tpdec, is new** (0.9.69). It needs a reasonably modern computer: on
+  a slow 8-core laptop a busy FT8 cycle takes about 3 s (the first decodes
+  appear after about 0.5 s). WSJT-X's `jt9` can be chosen in Settings →
+  Advanced as a fallback.
 - **Online logbooks:** upload to QRZ.com only (needs your QRZ Logbook API key).
   For LoTW, eQSL or Club Log, use *Export ADIF* with their own tools.
 - **FT4 is new** (since 0.9.37). It works on the air, but has had far less use
@@ -286,6 +319,36 @@ across automatically on first start.)
 - **FT8 and FT4 only** for now; other modes are on the roadmap.
 
 ## Changes
+
+1.0 (in testing; the test builds are numbered 0.9.69 and up):
+
+- **tpdec, Procyon's own decoder.** FT8 and FT4 are now decoded by Procyon
+  itself instead of WSJT-X's `jt9`, so WSJT-X is no longer needed to decode
+  or transmit. Tested on hours of recordings from the air and from web
+  receivers in Europe, the US, Brazil, Thailand and Australia: it finds
+  about 95-97% of what `jt9` finds plus hundreds `jt9` misses, with no false
+  decodes in pure noise. Decodes still appear pass by pass as they're found.
+  Partly guessed decodes show faint with a "?" (no alert, never answered
+  from a CQ), as before. Signal reports (SNR) are measured against the
+  band's background noise, as WSJT-X does, and match jt9's within a dB or
+  two. *Settings → Advanced → Decoder* can switch back to `jt9` when WSJT-X
+  is installed. The re-read of signals next to a decoded one is an idea
+  from JTDX.
+- **Themes:** the Experimental tab in Settings is now called *Themes*, with
+  two new palettes: **Beach day** (a sandy page with shell-white panels and
+  a sea-blue title bar) and **Mountain sunset** (dusky violet panels, a sky
+  from indigo to gold, and mountain ridges along the bottom of the window).
+  The new **Surf** waterfall shows signals as turquoise waves on a tropical
+  teal sea, with white crests on the strongest. Suggested pairs: Beach day
+  with Surf, Mountain sunset with Tube glow.
+- **Fix:** a POTA activation started on the demo band no longer carries
+  over to real operating. The demo band keeps its own practice activation,
+  so real QSOs are never tagged with a practice park.
+- **Automated tests** in `tests/`: one command checks the QSO sequencer,
+  POTA, the logbook, band changes, the message packer and the decoder.
+  Every package build runs them first, and so does GitHub on every push.
+- The **About card** is shorter and thanks Procyon's testers.
+- The raccoon icon lost the stripe on its forehead.
 
 0.9.68: **Procyon's own message encoder.** Turning a message into the 77
 bits FT8 and FT4 send is now done by Procyon itself instead of WSJT-X's
@@ -711,16 +774,13 @@ Next:
 6. Smaller ideas: custom frequencies and per-band memory in the band menu, dim
    the waterfall during your own transmissions, live S-meter and output power
    from the radio.
-7. **Standing on its own:** Procyon's own decoder and encoder, so WSJT-X no
-   longer has to be installed. Other programs would only be used for
-   importing settings while setting up a station (e.g. *Import settings from
-   WSJT-X*). Today Procyon borrows only WSJT-X's `jt9` (decoder). The
-   country list (Big CTY, 0.9.67) and the message encoder (0.9.68) are
-   Procyon's own.
-   The decoder is the big part: JTDX (GPLv3, like Procyon) has a stronger
-   FT8 decoder for crowded bands, but its decoder program only works inside
-   JTDX, so it would have to be built into a program of Procyon's own.
-   Radio control stays with Hamlib, as in most ham programs.
+7. **Standing on its own:** mostly done. The country list (Big CTY, 0.9.67),
+   the message encoder (0.9.68) and the decoder (tpdec, 0.9.69) are
+   Procyon's own, so WSJT-X is no longer needed to decode or transmit.
+   Other programs are only used for importing settings while setting up a
+   station (e.g. *Import settings from WSJT-X*). Radio control stays with
+   Hamlib, as in most ham programs; on Windows and the Mac, Hamlib's tools
+   still come from the WSJT-X installation.
 
 Only transmit with a valid amateur licence, and keep your PC clock synced
 (NTP) - FT8 needs it to be within about a second. In the field without
@@ -731,7 +791,9 @@ the stations you hear instead.
 
 Created by Justin Stapleton, KR1TTR, with Claude Code (Claude Opus 5.5).
 
-macOS port and testing by Dewey A. "Andy" Lamb, KE4BFI (see `docs/macos-port.md`).
+Thanks to Procyon's testers: Dewey A. "Andy" Lamb, KE4BFI (who also made the
+macOS port, see `docs/macos-port.md`), Jim Curley, KE8EON, and Scott
+McCrory, KE8SAU.
 
 Procyon builds on:
 - **WSJT-X** by Joe Taylor K1JT, Steve Franke K9AN and the WSJT Development Group:
@@ -744,6 +806,10 @@ Procyon builds on:
   `procyon/cty/`, with its licence notice in `cty-copyright.txt`.
 
 Procyon is free software under the GNU General Public License v3.
+
+The About card quotes Proverbs 22:29 from the New American Standard Bible®
+(NASB), Copyright © 1960, 1971, 1977, 1995 by The Lockman Foundation. Used by
+permission. All rights reserved. lockman.org
 
 ### Use at your own risk
 

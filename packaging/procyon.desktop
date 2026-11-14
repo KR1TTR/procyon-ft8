@@ -2,7 +2,7 @@
 Type=Application
 Name=Procyon
 GenericName=FT8 station (amateur radio)
-Comment=A friendly FT8 station built on the WSJT-X decoder
+Comment=A friendly FT8 and FT4 station
 Exec=procyon
 Icon=procyon
 Terminal=false

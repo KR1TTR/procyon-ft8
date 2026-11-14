@@ -3,3 +3,4 @@ __pycache__/
 build/
 dist/
 packaging/cache/
+build.tests.log

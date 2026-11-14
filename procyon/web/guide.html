@@ -79,7 +79,7 @@ without warranty: use it at your own risk.</div>
     </ul></li>
   <li><b>Radio control (CAT)</b>, recommended: a USB or serial cable so Procyon can set the frequency and key the transmitter.
       Without it, Procyon can still work using the radio's VOX.</li>
-  <li><b>WSJT-X</b> installed (free). Procyon uses its FT8 decoder and encoder, and the Hamlib radio-control tools that come with it.
+  <li><b>WSJT-X</b> installed (free). Procyon decodes and encodes by itself, but on Windows and Mac it uses the Hamlib radio-control tools that come with WSJT-X (on Linux, the <code>hamlib</code> package does that job), and WSJT-X's decoder can be chosen as a fallback.
       You don't need to run WSJT-X; in fact, close it while Procyon runs, since they can't share the radio and sound card.</li>
   <li><b>An accurate clock</b>: FT8 needs your computer's time within about a second (see step 3).</li>
 </ul>

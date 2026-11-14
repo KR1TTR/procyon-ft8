@@ -1,0 +1,8 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 400' preserveAspectRatio='none'>
+<defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>
+<stop offset='0' stop-color='#ff9a55' stop-opacity='0'/><stop offset='.55' stop-color='#f08a58' stop-opacity='.30'/><stop offset='.8' stop-color='#d0607a' stop-opacity='.22'/><stop offset='1' stop-color='#d0607a' stop-opacity='0'/></linearGradient></defs>
+<rect y='60' width='1600' height='220' fill='url(#g)'/>
+<path fill='#4a3263' d='M0 230 L90 190 L170 215 L260 150 L330 185 L420 120 L500 170 L580 140 L660 185 L760 110 L850 160 L930 135 L1010 180 L1110 95 L1200 155 L1290 130 L1380 175 L1470 125 L1540 160 L1600 140 L1600 400 L0 400Z'/>
+<path fill='#33234a' d='M0 280 L110 230 L210 265 L300 215 L400 255 L520 195 L610 245 L700 220 L800 262 L900 205 L1000 250 L1100 225 L1190 265 L1300 200 L1400 248 L1500 222 L1600 255 L1600 400 L0 400Z'/>
+<path fill='#1f1631' d='M0 330 L140 290 L260 320 L380 280 L500 318 L640 285 L760 325 L900 292 L1040 330 L1180 290 L1320 322 L1460 295 L1600 320 L1600 400 L0 400Z'/>
+</svg>

@@ -196,7 +196,11 @@ class Qso:
         mine = [d for d in decodes if d["p"]["kind"] == "std" and ft8.same_station(d["p"]["to"], self.mycall)]
         if not mine:
             return
-        hits = [d for d in mine if ft8.same_station(d["p"]["from"], self.dxcall)] if self.dxcall else []
+        # A "k3" guess (Procyon's decoder: the whole message assumed from what
+        # that station sent before) only says "same as last time" - it never
+        # moves the QSO on by itself.
+        hits = [d for d in mine if ft8.same_station(d["p"]["from"], self.dxcall)
+                and not str(d.get("uncertain", "")).startswith("k3")] if self.dxcall else []
         sure = [d for d in mine if not d.get("uncertain")]
         if not hits and sure and self.next == 5 and self.tx_enabled:
             # Someone answered our CQ - pick the strongest caller. Never a

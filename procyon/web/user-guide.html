@@ -73,7 +73,7 @@ your radio and setting the audio levels. This guide picks up from there.</p>
 <h2 id="glance">1. The screen at a glance</h2>
 <ul>
   <li><b>Top bar:</b> frequency and band, FT8/FT4, the clock and cycle timer, the QSO progress, and status lights.</li>
-  <li><b>Waterfall:</b> the audio from your radio, as a picture. Each signal is a stripe; decoded call signs are labelled on it.</li>
+  <li><b>Waterfall:</b> the visual representation of your radio's audio. Heard signals are displayed as vertical stripes; decoded signals show a callsign label.</li>
   <li><b>Band activity:</b> every message decoded, cycle by cycle. Click a station to work it.</li>
   <li><b>QSO:</b> the contact in progress, what Procyon will send next, and the transmit buttons.</li>
   <li><b>Logbook:</b> your QSOs, logged automatically.</li>
@@ -87,9 +87,8 @@ your radio and setting the audio levels. This guide picks up from there.</p>
 <tr><td>Frequency button</td><td>Shows the dial frequency and band. Click it to pick a band; Procyon tunes the radio
   (with radio control on) to that band's FT8 or FT4 frequency. Changing band, here or on the radio's dial,
   turns transmit off and clears the QSO.</td></tr>
-<tr><td>FT8 / FT4</td><td>Picks the mode. <b>FT8</b> uses 15-second cycles and is where most stations are. <b>FT4</b> uses
-  7.5-second cycles for quicker QSOs, popular in contests. Switching in the middle of a QSO asks first, since it ends that QSO.</td></tr>
-<tr><td>UTC time</td><td>The time FT8 runs on (and the log uses).</td></tr>
+<tr><td>FT8 / FT4</td><td>Selects the mode. <b>FT8</b> uses 15-second cycles and is the most popular. <b>FT4</b> uses 7.5-second cycles and is popular with contesters.</td></tr>
+<tr><td>UTC time</td><td>Coordinated Universal Time. The primary regulated time standard used globally.</td></tr>
 <tr><td>Clock light</td><td>Compares your clock with the stations you hear. Green is fine, amber is drifting, red means your
   clock needs setting. With <i>band sync</i> on (Settings → Advanced → Clock) it shows how much Procyon is correcting,
   e.g. "Synced +0.8 s". In the "when I click" setting, click it to sync.</td></tr>
@@ -106,7 +105,7 @@ your radio and setting the audio levels. This guide picks up from there.</p>
 <tr><td>Power button</td><td>Quit: stops Procyon cleanly, making sure the radio isn't left transmitting. Only on the computer running Procyon.</td></tr>
 </table>
 <p>Bars can appear under the top bar: when a new version is out, when an update has been installed and
-Procyon needs restarting, or when WSJT-X can't be found.</p>
+Procyon needs restarting, or when Settings asks for WSJT-X's decoder but WSJT-X can't be found.</p>
 
 <h2 id="waterfall">3. Waterfall</h2>
 <ul>
@@ -115,7 +114,7 @@ Procyon needs restarting, or when WSJT-X can't be found.</p>
       marker). A clear spot away from other signals gets you heard best.</li>
   <li>Decoded call signs are labelled on their stripes: stations calling CQ first, then anyone calling you, then the rest.</li>
   <li>The faint lines across it mark the start of each cycle, with its time.</li>
-  <li>The range shown (e.g. 300 to 3300 Hz) is set in Settings → Display → Waterfall. Its colors are in Settings → Experimental.</li>
+  <li>The range shown (e.g. 300 to 3300 Hz) is set in Settings → Display → Waterfall. Its colors are in Settings → Themes.</li>
 </ul>
 
 <h2 id="activity">4. Band activity</h2>
@@ -126,7 +125,7 @@ order of frequency, with messages to you at the top. Each row shows:</p>
 <tr><td>Signal report</td><td>How strong the station is, in dB. Colored from weak to strong. -10 is a good signal, -20 is weak, -24 is about as low as FT8 goes.</td></tr>
 <tr><td>DT</td><td>How far off the station's timing is, in seconds. Near 0 is normal.</td></tr>
 <tr><td>Frequency</td><td>Where in the audio the station is, in Hz.</td></tr>
-<tr><td>Message</td><td>What was sent. Your own call is shown as an orange pill; Procyon's developer and testers get a small badge.</td></tr>
+<tr><td>Message</td><td>What was sent. Your own call is shown in an orange pill.</td></tr>
 <tr><td>Tags</td><td><b>NEW</b> (a station not in your log yet), <b>NEW BAND</b> (worked before, but not on this band),
   <b>POTA</b> (activating a park), <b>?</b> (an uncertain decode - see below), then the country and distance.</td></tr>
 </table>
@@ -142,8 +141,10 @@ order of frequency, with messages to you at the top. Each row shows:</p>
       or a continent (<code>EU</code>); separate several with commas. The funnel button turns it off without erasing it.</li>
   <li><b>Calling you:</b> when a new station calls you, a box appears above the list with a <b>Reply</b> button, a chime plays,
       and the browser tab's title changes, so you notice even in another window. <b>✕</b> dismisses it.</li>
-  <li><b>Uncertain decodes (?)</b> look faint. The decoder partly guessed them, and now and then it turns noise into a call that was
-      never sent. Procyon never alerts you for one or answers it by itself; wait for a clean decode.</li>
+  <li><b>Uncertain decodes (?)</b> look faint. The decoder partly guessed them - for example "a CQ from someone", "a call to you",
+      or "the same message your QSO partner sent last time" - and now and then a guess turns noise into a call that was never sent.
+      Hover over the <b>?</b> to see its tag (a1-a6, k1-k3). Procyon never alerts you for one, never answers a CQ from one, and a
+      guessed repeat of your partner's last message doesn't move the QSO on; wait for a clean decode.</li>
   <li>After a band change, older cycles stay below a "Changed to ..." line, dimmed and tagged with their band.</li>
   <li><b>Clear</b> empties the list (on every connected device).</li>
 </ul>
@@ -226,11 +227,11 @@ every Procyon tab. <b>Halt</b> or <kbd>Esc</kbd> always stops it straight away.<
 <tr><td>Network</td><td>Sending decodes and QSOs to GridTracker, JTAlert and loggers, and whether they may control Procyon.
   Remote access from other devices, with a PIN.</td></tr>
 <tr><td>Advanced</td><td>Demo band. Clock: follow the computer, or sync to the band automatically or when you click the Clock light.
-  Decoding depth. Stop Procyon when its page is closed. New-version messages. Exporting only new QSOs.
+  Decoder: tpdec (Procyon's built-in decoder), or WSJT-X's jt9 when WSJT-X is installed (with its decoding depth). Stop Procyon when its page is closed. New-version messages. Exporting only new QSOs.
   Importing QSOs from QRZ or an ADIF file. Country data: the date of the country list in use, and a button to download
   the latest from country-files.com. Radio control connection details.</td></tr>
-<tr><td>Experimental</td><td>Things being tried out: color palettes (Night sky, Classic, Antique radio, Campfire),
-  background textures, and waterfall colors (Lightning, Classic, Tube glow, Ember). Each device remembers its own choice.</td></tr>
+<tr><td>Themes</td><td>How Procyon looks: color palettes (Night sky, Classic, Antique radio, Campfire, Beach day, Mountain sunset),
+  background textures, and waterfall colors (Lightning, Classic, Tube glow, Ember, Surf). Each device remembers its own choice.</td></tr>
 </table>
 <p class="note"><b>About Procyon</b>, at the bottom of Settings, shows the version and credits.</p>
 

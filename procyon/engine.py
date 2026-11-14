@@ -10,12 +10,13 @@ import os
 import re
 import shutil
 import tempfile
+import threading
 import time
 import wave
 
 import numpy as np
 
-from . import ft4, ft8
+from . import ft4, ft8, pack77
 from . import AUTHORS, RELEASE_DATE, __version__
 from .audio import choose_backend
 from .auth import PIN_RE, Auth, lan_addresses
@@ -43,7 +44,7 @@ WF_BINS = int(4000 / (FS / FFT_N))   # 0 - 4000 Hz; the UI shows the range the u
 
 DEFAULTS = {
     "mycall": "", "mygrid": "", "audio_in": "", "audio_out": "",
-    "tx_level": 35, "tx_watts": "", "depth": 2, "demo": False, "ptt": "cat",
+    "tx_level": 35, "tx_watts": "", "depth": 2, "decoder": "procyon", "demo": False, "ptt": "cat",
     "rig_enabled": False, "rig_host": "127.0.0.1", "rig_port": 4532,
     "rig_spawn": False, "rig_model": "", "rig_device": "", "rig_baud": "",
     "mode": "FT8",                   # FT8 or FT4 (the switch next to the band)
@@ -68,6 +69,7 @@ DEFAULTS = {
 }
 SECRETS = ("remote_pin_hash", "qrz_key")   # never sent to the browser
 LOCAL_ONLY = ("remote_", "qrz_key", "lotw_")  # only the computer running Procyon changes these
+POTA_KEYS = ("pota_active", "pota_parks", "pota_grid", "pota_state", "pota_start", "pota_end")
 OWN_COMMANDS = ("pota_", "mode")   # changed by their own commands, not the Settings form
 
 # Band clock check: each decode's DT says how early/late that station arrived
@@ -87,6 +89,10 @@ LINE_RE = re.compile(r"^\d{4,6}\s+(-?\d+)\s+(-?\d+\.\d)\s+(\d+)\s+[~+]\s+(.+?)\s
 # <...> unless the decoder has heard the full call. jt9 forgets between runs, so
 # each run first decodes a "reminder" recording of the ones heard so far.
 LONG_CALLS_MAX = 40
+# Procyon's own decoder: stations heard lately are looked for again (their
+# last spot and message), for KNOWN_MAX_AGE seconds; same band and mode only.
+KNOWN_MAX_AGE = 180
+HASHES_MAX = 5000         # callsigns kept for showing hashed <CALL>s
 PRIMER_TIME = "000003"    # the reminder's time: never a cycle start (FT8 or FT4), so easy to drop
 
 
@@ -106,6 +112,15 @@ class Engine:
         # The demo band never carries over: every launch starts live, unless
         # started with --demo (e.g. the Windows "DEMO ONLY" launcher).
         self.s["demo"] = bool(force_demo)
+        # A POTA activation belongs to the band it was started on: the demo
+        # band's practice activation is kept apart (saved under "pota_demo")
+        # and never tags real QSOs. self._pota_other holds the side not in use.
+        demo_pota = self.s.pop("pota_demo", None)
+        self._pota_other = {k: DEFAULTS[k] for k in POTA_KEYS}
+        if isinstance(demo_pota, dict):
+            self._pota_other.update({k: v for k, v in demo_pota.items() if k in POTA_KEYS})
+        if self.s["demo"]:
+            self._swap_pota()
         if self.s["mode"] not in MODES:
             self.s["mode"] = "FT8"
         self.auth = Auth(data_dir)
@@ -134,6 +149,9 @@ class Engine:
         self._dec_times, self._dec_logged = [], time.monotonic()   # see _note_decode_time
         self.tmp = tempfile.mkdtemp(prefix="procyon-")
         self.long_calls = collections.OrderedDict()   # heard in full, newest last
+        self.known = {}                 # own decoder: call -> where/what we last heard it
+        self.hashes = pack77.Hashes()   # own decoder: full calls behind hashed <CALL>s
+        self._jt9_missing_logged = False
         self.clock_dts = {}         # band clock check: sender -> (time heard, DT by the computer's clock)
         # Band sync: how far the computer's clock is ahead of the band's.
         # Procyon's own timing (cycles, decoding, transmit) runs on
@@ -173,6 +191,8 @@ class Engine:
         await self._configure_udp()
         asyncio.create_task(self._scheduler())
         asyncio.create_task(self._watch_releases())
+        if self._decoder() == "procyon":
+            self.start_decoder()
 
     def _guess_devices(self):
         """Default to the first USB codec - usually the radio interface."""
@@ -198,9 +218,20 @@ class Engine:
                 demo.add(q)
             log.info("moved %d demo QSO(s) to the demo logbook", len(moved))
 
+    def _swap_pota(self):
+        """Switch between the real and the demo band's POTA activation."""
+        mine = {k: self.s[k] for k in POTA_KEYS}
+        self.s.update(self._pota_other)
+        self._pota_other = mine
+
     def save(self):
+        out = dict(self.s)
+        here = {k: self.s[k] for k in POTA_KEYS}
+        live, demo = (self._pota_other, here) if self.s["demo"] else (here, self._pota_other)
+        out.update(live)            # the real activation keeps the old setting names
+        out["pota_demo"] = demo
         with open(self.settings_path, "w") as f:
-            json.dump(self.s, f, indent=2)
+            json.dump(out, f, indent=2)
 
     async def broadcast(self, obj):
         msg = json.dumps(obj)
@@ -486,54 +517,14 @@ class Engine:
             off = self.clock_offset   # the cycle by the band's time, on the computer's clock
             audio = self.samples(t_start + off, t_start + off + mode.PERIOD)
             hhmmss = time.strftime("%H%M%S", time.gmtime(t_start))
-            path = os.path.join(self.tmp, f"{time.strftime('%y%m%d', time.gmtime(t_start))}_{hhmmss}.wav")
-            with wave.open(path, "wb") as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)
-                wf.setframerate(FS)
-                wf.writeframes(audio.tobytes())
-            jt9 = find_tool("jt9")
-            if not jt9:
-                raise RuntimeError("WSJT-X's decoder (jt9) wasn't found - is WSJT-X installed?")
-            args = [jt9, mode.JT9_MODE, "-d", str(self.s["depth"]), "-a", self.tmp, "-t", self.tmp]
-            if self.s["mycall"]:
-                args += ["-c", self.s["mycall"].upper()]
-            if self.s["mygrid"]:
-                args += ["-G", self._grid()[:4].upper()]
-            if self.qso.dxcall:
-                args += ["-x", self.qso.dxcall]
-            self._remember_call(self.s["mycall"], ours=True)
-            self._remember_call(self.qso.dxcall, ours=True)
-            # jt9 prints each message the moment it finds one: the strong ones
-            # within a fraction of a second, the weak ones over the next second
-            # or two of deeper passes. Each handful goes out as soon as it's in,
-            # so Band activity fills in and a reply to us is acted on before the
-            # next cycle starts, instead of everything landing at the very end.
-            # With long calls to remind jt9 of, two copies run side by side: the
-            # reminder recording costs about a second before jt9 even starts on
-            # this cycle, so a plain copy (own scratch folder) delivers everything
-            # straight away, and the reminded copy supplies the long calls a plain
-            # run can only show as "<...>".
-            # The plain copy starts first: (re)making the reminder recording
-            # after learning a new long call takes a moment of its own.
-            async def start(run):
-                return await asyncio.create_subprocess_exec(
-                    *run, cwd=run[run.index("-a") + 1], stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.DEVNULL, **NO_WINDOW)
-
-            procs = []
-            if self.long_calls:
-                plain = os.path.join(self.tmp, "plain")
-                os.makedirs(plain, exist_ok=True)
-                procs.append(await start([a if a != self.tmp else plain for a in args] + [path]))
-            primer = await self._primer_wav(mode)
-            procs.append(await start(args + ([primer] if primer else []) + [path]))
-            reminded = len(procs) - 1        # the copy whose "<...>" are final
             batch = {"type": "decodes", "period": p, "time": hhmmss, "items": [],
                      "band": band_of(self.dial), "dial": self.dial, "more": True}
             self.history.append(batch)   # a page opened meanwhile gets it, still open
-            seen, held, first_at = set(), [], None
+            first_at = None
 
+            # Each handful of decodes goes out the moment it's in, so Band
+            # activity fills in and a reply to us is acted on before the next
+            # cycle starts, instead of everything landing at the very end.
             async def emit(chunk):
                 nonlocal first_at
                 if first_at is None:
@@ -547,47 +538,12 @@ class Engine:
                 self.qso.on_decodes(chunk, p)
                 await self.push_state()
 
-            queue = asyncio.Queue()
-            readers = [asyncio.create_task(self._jt9_reader(pr, i, queue)) for i, pr in enumerate(procs)]
-            deadline = time.monotonic() + 12
-            try:
-                running = len(procs)
-                while running:
-                    lines = await self._jt9_lines(queue, deadline)
-                    if mode is not self.m:
-                        return   # the mode was switched while decoding: these belong to the old one
-                    chunk = []
-                    for src, raw in lines:
-                        if raw is None:
-                            running -= 1
-                            continue
-                        d = self._parse_decode(raw, p, hhmmss)
-                        if not d or d["msg"] in seen:
-                            continue
-                        if "<...>" in d["msg"] and src != reminded:
-                            held.append(d)    # the reminded copy may name this call
-                            continue
-                        seen.add(d["msg"])
-                        chunk.append(d)
-                    if chunk:
-                        await emit(chunk)
-                # Unresolved calls the reminded copy didn't name either.
-                taken = {(d["freq"], d["dt"]) for d in batch["items"]}
-                rest = [d for d in held if d["msg"] not in seen
-                        and not any(abs(d["freq"] - f) <= 3 and abs(d["dt"] - t) <= 0.2 for f, t in taken)]
-                rest = list({d["msg"]: d for d in rest}.values())
-                if rest:
-                    await emit(rest)
-            finally:
-                for task in readers:
-                    task.cancel()
-                for pr in procs:
-                    if pr.returncode is None:
-                        pr.kill()
-                        await pr.wait()
-            if mode is not self.m:
-                return
-            os.unlink(path)
+            if self._decoder() == "jt9":
+                done = await self._decode_jt9(p, mode, audio, hhmmss, emit)
+            else:
+                done = await self._decode_own(p, mode, audio, hhmmss, emit)
+            if not done or mode is not self.m:
+                return   # the mode was switched while decoding: these belong to the old one
             decodes = batch["items"]
             decodes.sort(key=lambda d: d["freq"])
             self._note_decode_time(first_at, self.band_time() - t_start, len(decodes))
@@ -606,6 +562,187 @@ class Engine:
             self.toast(f"Decoder error: {e}", "bad")
         finally:
             self.decoding = False
+
+    def _decoder(self):
+        """Which decoder runs: Procyon's own (the default), or WSJT-X's jt9 if
+        chosen in Settings and installed."""
+        if self.s["decoder"] == "jt9":
+            if find_tool("jt9"):
+                return "jt9"
+            if not self._jt9_missing_logged:
+                self._jt9_missing_logged = True
+                log.warning("decoder: jt9 chosen but not found - using tpdec, Procyon's own decoder")
+        return "procyon"
+
+    # ---- Procyon's own decoder
+
+    def _decoder_mod(self, mode):
+        from .decoder import ft4search, ft8search
+        ft8search._cty = self.cty        # the same country data as the rest of Procyon
+        return ft4search if mode is ft4 else ft8search
+
+    def start_decoder(self):
+        """Start the decoder's helper processes in the background, so the
+        first cycle doesn't wait for them."""
+        def warm():
+            try:
+                from .decoder import decpool
+                pool = decpool.default()
+                log.info("decoder: tpdec (Procyon's own), %d helper processes", pool.n)
+            except Exception:  # noqa: BLE001
+                log.exception("decoder: helper processes didn't start")
+        threading.Thread(target=warm, daemon=True).start()
+
+    def _known_for(self, p, mode):
+        """The stations heard lately in this cycle's half (even/odd), for the
+        decoder to look for again; older than KNOWN_MAX_AGE are dropped."""
+        now = time.time()
+        for c in [c for c, k in self.known.items() if now - k["t"] > KNOWN_MAX_AGE or k["mode"] != mode.NAME]:
+            del self.known[c]
+        return [k for k in self.known.values() if k["par"] == p % 2]
+
+    async def _decode_own(self, p, mode, audio, hhmmss, emit):
+        dec = self._decoder_mod(mode)
+        from .decoder.ft8search import sender
+        mycall = self.s["mycall"].upper()
+        dxcall = (self.qso.dxcall or "").upper()
+        for c in (mycall, dxcall):
+            if c:
+                self.hashes.add(c)
+        if len(self.hashes.h22) > HASHES_MAX:     # days of running: start the memory afresh
+            self.hashes = pack77.Hashes()
+        ap = {"mycall": mycall, "dxcall": dxcall, "dxfreq": self.s["rx_freq"] if dxcall else None}
+        known = self._known_for(p, mode)
+        loop = asyncio.get_running_loop()
+        queue = asyncio.Queue()
+
+        def handful(items):   # in the decoder's thread: hand each batch to the event loop
+            loop.call_soon_threadsafe(queue.put_nowait, list(items))
+
+        def run():
+            try:
+                res, _ = dec.decode_cycle(audio, hashes=self.hashes, ap=ap, known=known, on_decodes=handful)
+                return res
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+
+        job = asyncio.ensure_future(asyncio.to_thread(run))
+        while True:
+            items = await queue.get()
+            if items is None:
+                break
+            if mode is not self.m:
+                continue
+            chunk = []
+            for r in items:
+                d = self._annotate(p, hhmmss, int(r["snr"]), float(r["dt"]), int(r["freq"]),
+                                   " ".join(r["text"].split()))
+                if r.get("ap"):
+                    d["uncertain"] = r["ap"]   # a1-a6, k1-k3: partly guessed, like jt9's tags
+                chunk.append(d)
+            if chunk:
+                await emit(chunk)
+        res = await job
+        if mode is not self.m:
+            return False
+        now = time.time()
+        for r in res:   # remember who we heard, for the next cycles (never from a guess)
+            frm = sender(r["text"])
+            if frm and not r.get("ap"):
+                self.known[frm] = {"call": frm, "freq": r["fx"], "dt": r["dtx"], "msg": r["text"],
+                                   "par": p % 2, "t": now, "mode": mode.NAME}
+        return True
+
+    # ---- WSJT-X's jt9
+
+    async def _decode_jt9(self, p, mode, audio, hhmmss, emit):
+        t_start = p * mode.PERIOD
+        path = os.path.join(self.tmp, f"{time.strftime('%y%m%d', time.gmtime(t_start))}_{hhmmss}.wav")
+        with wave.open(path, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(FS)
+            wf.writeframes(audio.tobytes())
+        jt9 = find_tool("jt9")
+        if not jt9:
+            raise RuntimeError("WSJT-X's decoder (jt9) wasn't found - is WSJT-X installed?")
+        args = [jt9, mode.JT9_MODE, "-d", str(self.s["depth"]), "-a", self.tmp, "-t", self.tmp]
+        if self.s["mycall"]:
+            args += ["-c", self.s["mycall"].upper()]
+        if self.s["mygrid"]:
+            args += ["-G", self._grid()[:4].upper()]
+        if self.qso.dxcall:
+            args += ["-x", self.qso.dxcall]
+        self._remember_call(self.s["mycall"], ours=True)
+        self._remember_call(self.qso.dxcall, ours=True)
+        # jt9 prints each message the moment it finds one: the strong ones
+        # within a fraction of a second, the weak ones over the next second
+        # or two of deeper passes.
+        # With long calls to remind jt9 of, two copies run side by side: the
+        # reminder recording costs about a second before jt9 even starts on
+        # this cycle, so a plain copy (own scratch folder) delivers everything
+        # straight away, and the reminded copy supplies the long calls a plain
+        # run can only show as "<...>".
+        # The plain copy starts first: (re)making the reminder recording
+        # after learning a new long call takes a moment of its own.
+        async def start(run):
+            return await asyncio.create_subprocess_exec(
+                *run, cwd=run[run.index("-a") + 1], stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL, **NO_WINDOW)
+
+        procs = []
+        if self.long_calls:
+            plain = os.path.join(self.tmp, "plain")
+            os.makedirs(plain, exist_ok=True)
+            procs.append(await start([a if a != self.tmp else plain for a in args] + [path]))
+        primer = await self._primer_wav(mode)
+        procs.append(await start(args + ([primer] if primer else []) + [path]))
+        reminded = len(procs) - 1        # the copy whose "<...>" are final
+        seen, held, sent = set(), [], []
+
+        queue = asyncio.Queue()
+        readers = [asyncio.create_task(self._jt9_reader(pr, i, queue)) for i, pr in enumerate(procs)]
+        deadline = time.monotonic() + 12
+        try:
+            running = len(procs)
+            while running:
+                lines = await self._jt9_lines(queue, deadline)
+                if mode is not self.m:
+                    return False
+                chunk = []
+                for src, raw in lines:
+                    if raw is None:
+                        running -= 1
+                        continue
+                    d = self._parse_decode(raw, p, hhmmss)
+                    if not d or d["msg"] in seen:
+                        continue
+                    if "<...>" in d["msg"] and src != reminded:
+                        held.append(d)    # the reminded copy may name this call
+                        continue
+                    seen.add(d["msg"])
+                    chunk.append(d)
+                if chunk:
+                    sent.extend(chunk)
+                    await emit(chunk)
+            # Unresolved calls the reminded copy didn't name either.
+            taken = {(d["freq"], d["dt"]) for d in sent}
+            rest = [d for d in held if d["msg"] not in seen
+                    and not any(abs(d["freq"] - f) <= 3 and abs(d["dt"] - t) <= 0.2 for f, t in taken)]
+            rest = list({d["msg"]: d for d in rest}.values())
+            if rest:
+                await emit(rest)
+        finally:
+            for task in readers:
+                task.cancel()
+            for pr in procs:
+                if pr.returncode is None:
+                    pr.kill()
+                    await pr.wait()
+        if mode is not self.m:
+            return False
+        os.unlink(path)
+        return True
 
     @staticmethod
     async def _jt9_reader(proc, src, queue):
@@ -1087,6 +1224,9 @@ class Engine:
                     log.warning("shutdown: the radio didn't confirm receive")
             except Exception:  # noqa: BLE001
                 log.exception("shutdown: couldn't set the radio to receive")
+        from .decoder import decpool
+        if decpool._default is not None:   # the decoder's helper processes
+            decpool._default.close()
 
     async def tune(self, on: bool):
         if not on:
@@ -1206,6 +1346,7 @@ class Engine:
         q.reset()
         q.regen()
         q.next = 5
+        self.known.clear()   # those stations were on the old band
         log.info("band changed %s -> %s: transmit off, QSO cleared", old or "?", band or "?")
         if busy:
             self.toast(f"Band changed to {band or 'outside the ham bands'}: transmit off, QSO cleared", "warn")
@@ -1230,6 +1371,7 @@ class Engine:
         self.qso.next = 5
         self.history.clear()
         self.clock_dts.clear()
+        self.known.clear()
         await self.broadcast({"type": "history", "batches": []})
         self.udp.clear()
         self.demo = DemoBand(self.m)
@@ -1733,6 +1875,9 @@ class Engine:
             for k in DEFAULTS:
                 if k in m["settings"] and not k.startswith(LOCAL_ONLY + OWN_COMMANDS):
                     self.s[k] = m["settings"][k]
+            self.s["demo"] = bool(self.s["demo"])
+            if old["demo"] != self.s["demo"]:
+                self._swap_pota()   # the demo band has its own (practice) activation
             if local:   # only the computer running Procyon may change remote access and logbook keys
                 self._remote_settings(m["settings"])
                 self._logbook_settings(m["settings"])
@@ -1741,6 +1886,8 @@ class Engine:
             self.s["mygrid"] = self.s["mygrid"][:4].upper() + self.s["mygrid"][4:].lower()
             if self.s["units"] not in ("auto", "km", "mi"):
                 self.s["units"] = "auto"
+            if self.s["decoder"] not in ("procyon", "jt9"):
+                self.s["decoder"] = "procyon"
             if self.s["clock_sync"] not in CLOCK_SYNC_MODES:
                 self.s["clock_sync"] = "computer"
             if self.s["clock_sync"] == "computer":

@@ -4,7 +4,7 @@
 pkgname=procyon
 pkgver=@VERSION@
 pkgrel=1
-pkgdesc="Friendly FT8 station built on the WSJT-X decoder"
+pkgdesc="Friendly FT8 and FT4 station software"
 arch=('any')
 url='https://www.qrz.com/db/KR1TTR'
 license=('GPL-3.0-or-later')

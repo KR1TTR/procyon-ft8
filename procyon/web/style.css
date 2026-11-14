@@ -603,9 +603,16 @@ dialog.about form { padding: 26px 30px 24px; position: relative; }
 .about-thanks ul { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--text2); }
 .about-thanks li { margin: 4px 0; }
 .about-thanks code { font-size: 11.5px; }
+.about-thanks h3.about-testers { margin-top: 10px; }
+.about-thanks p.about-testers { margin: 0; font-size: 12.5px; color: var(--text2); }
+.about-testers span { white-space: nowrap; }   /* a name never breaks across lines */
 .about-licence { margin: 14px 0 0; font-size: 11.5px; color: var(--faint); }
 .about-link { margin-right: auto; }
-.about img.about-ohio { margin: 16px auto 0; }
+.about-faith { margin: 16px auto 0; color: var(--muted); }
+.about-ichthys { display: block; margin: 0 auto 6px; }
+.about-verse { margin: 0 auto; max-width: 340px; font-size: 11.5px; font-style: italic; line-height: 1.45; }
+.about-verse span { font-style: normal; color: var(--faint); }
+.about img.about-ohio { margin: 12px auto 0; }
 dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(3px); }
 dialog form { padding: 18px 22px 20px; }
 .dlg-head { display: flex; align-items: center; justify-content: space-between; }
@@ -744,7 +751,7 @@ dialog.pota-dlg { width: min(520px, calc(100vw - 32px)); }
 .lrow .park { margin-left: 8px; font-size: 10px; color: var(--pota); }
 
 /* ------------------------------------------------------- colour palettes */
-/* Settings → Experimental, chosen per device (<html data-palette>). The default
+/* Settings → Themes (its tab is still "experimental" inside), chosen per device (<html data-palette>). The default
    "night sky" look is :root above; each palette only overrides variables. The
    waterfall has its own colour schemes, so any palette works with any scheme. */
 
@@ -832,7 +839,73 @@ dialog.pota-dlg { width: min(520px, calc(100vw - 32px)); }
 /* inside the panels and dialogs: bakelite, not wood */
 :root[data-palette="radio"] .card, :root[data-palette="radio"] dialog { --bg: #120b07; --bg2: #150d08; }
 
-/* Plain backgrounds (Settings → Experimental, per device): no texture */
+/* Beach day: dry sand page (sand grains drawn in tex/sand.svg), sun-bleached shell panels, a sea-blue title bar.
+   Signal colours at ink strength so they read on the light sand. */
+:root[data-palette="beach"],
+:root[data-palette="beach"] .top .menu {
+  color-scheme: light;
+  --texture: url(/static/tex/sand.svg);
+  --bg: #e6d5b0; --bg2: #dccaa2;
+  --surface: #f6efdf; --surface2: #ede3cc;
+  --border: #cdb88c; --border2: #ad9667;
+  --text: #2a2318; --muted: #6a5b42; --faint: #8d7d60;
+  --rx: #00707a; --tx: #c2272d; --cq: #1b7a31; --me: #b35000; --info: #1f55a8;
+  --pota: #4b7a10; --rpt: #7a33b0; --text2: #3d3424;
+  --me-soft: #6f3a00; --rx-soft: #004a52; --tx-soft: #8a1219;
+  --on-accent: #ffffff; --on-me: #ffffff; --on-tx-dark: #ffffff;
+  --snr1: #1b7a31; --snr2: #4c7a00; --snr3: #946500; --snr4: #b23c18;
+  --glow1: #fff8e070; --glow2: #ffffff40;
+  --wf-bg: #03121c;
+  --hover-bg: #e8dcc1; --hover-border: #8f7a50;
+  --line: #00000010; --ghost-bg: #0000000a; --ghost-border: #00000040;
+  --overlay: #e6d5b0cc; --backdrop: #2a3a40aa;
+}
+:root[data-palette="beach"] .card, :root[data-palette="beach"] dialog { --bg: #fffaf0; --bg2: #f4ebd8; }
+/* text that sits right on the sand: darker ink and a soft sand-coloured halo */
+:root[data-palette="beach"] .wf-card { --muted: #3d3424; --faint: #4d4230; --border2: #6a5838; }
+:root[data-palette="beach"] .wf-scale, :root[data-palette="beach"] .wf-hint {
+  text-shadow: 0 0 2px #ecdcba, 0 0 4px #ecdcba, 0 0 7px #ecdcba; }
+:root[data-palette="beach"] .top {
+  --header-bg: linear-gradient(90deg, #0a5f7a, #1f9aa6 70%, #4cc2bd);
+  --text: #ffffff; --muted: #d6f0f0; --faint: #a9d8da;
+  --surface: #ffffff1f; --surface2: #ffffff30; --border: #ffffff45; --border2: #ffffff66;
+  --hover-bg: #ffffff2c; --hover-border: #ffffff88;
+  --rx: #a6fff4; --tx: #ff8f8f; --cq: #a6f5b4; --me: #ffd27a; --info: #c4dcff;
+  --pota: #d0f29c; --on-accent: #04121a; --on-me: #1a1200;
+  border-bottom-color: #e9f6f2;   /* a line of surf */
+}
+:root[data-palette="beach"] .top,
+:root[data-palette="beach"] .top .menu { color: var(--text); }
+
+/* Mountain sunset: dusky violet ridges under a sky going from indigo to rose
+   and gold; the sun-gold "calling you" fits right in. */
+:root[data-palette="sunset"] {
+  --texture: url(/static/tex/stars-far.svg), url(/static/tex/ridges.svg);
+  --bg: #140f24; --bg2: #1a1430;
+  --surface: #221a36; --surface2: #2a2142;
+  --border: #3a2e55; --border2: #4e3f6e;
+  --text: #f3eef7; --muted: #ab9fc2; --faint: #7b6f94;
+  --rx: #62dcd2; --tx: #ff6b7a; --cq: #7fe39a; --me: #ffb547; --info: #9db4ff;
+  --pota: #b3e37f; --rpt: #e2b6ff; --text2: #d8cfe4;
+  --me-soft: #f4dcb0; --rx-soft: #c9f4ef; --tx-soft: #ffc6cc;
+  --on-accent: #0e0a1a; --on-me: #1a1200;
+  --snr1: #7fe39a; --snr2: #b6e36b; --snr3: #ffd166; --snr4: #ff8f6b;
+  --header-bg: linear-gradient(90deg, #1b1838 0%, #3d2758 40%, #8e3f62 72%, #d9784f 100%);
+  --glow1: #6a3a8a30; --glow2: #ff9a5a26;
+  --wf-bg: #0a0818;
+  --hover-bg: #33284c; --hover-border: #6a5690;
+  --line: #ffffff08; --ghost-bg: #ffffff10; --ghost-border: #ffffff40;
+  --overlay: #140f24cc; --backdrop: #07050ecc;
+}
+/* the ridges sit along the bottom of the window, the stars repeat above */
+:root[data-palette="sunset"]:not([data-plain]) body {
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+  background-position: 0 0, center bottom, 0 0, 0 0;
+  background-size: auto, 100% 42vh, auto, auto;
+  background-attachment: fixed;
+}
+
+/* Plain backgrounds (Settings → Themes, per device): no texture */
 :root[data-plain] { --texture: none !important; }
 
 /* About card: "Procyon" and the tagline, coloured by the palette (masks

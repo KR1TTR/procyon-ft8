@@ -62,9 +62,9 @@ Installed-Size: $size
 Depends: python3 (>= 3.10), python3-numpy, python3-aiohttp, pulseaudio-utils
 Recommends: wsjtx, libhamlib-utils
 Maintainer: $MAINTAINER
-Description: friendly FT8 station built on the WSJT-X decoder
- Procyon puts a clean, modern web interface on WSJT-X's own FT8 decoder
- and encoder: waterfall, band activity with filters, automatic QSO
+Description: friendly FT8 and FT4 station software
+ Procyon is FT8/FT4 station software with its own decoder and encoder
+ and a clean, modern web interface: waterfall, band activity with filters, automatic QSO
  sequencing, logbook, radio control through Hamlib, GridTracker support,
  and PIN-protected use from a tablet on your home network.
  Created by Justin Stapleton, KR1TTR, with Claude Code (Claude Opus 5.5).
@@ -147,6 +147,17 @@ build_windows_installer() {
 }
 
 echo "Procyon $VERSION ($DATE)"
+# The tests run first: a package is only built if every one passes.
+# (SKIP_TESTS=1 packaging/build.sh ... to build anyway, e.g. while debugging.)
+if [ "${SKIP_TESTS:-0}" != 1 ]; then
+  if ! python3 tests/run_tests.py > "$BUILD.tests.log" 2>&1; then
+    tail -n 25 "$BUILD.tests.log"
+    echo "  NOT BUILT: a test failed (full output in build.tests.log)" >&2
+    exit 1
+  fi
+  echo "  tests: $(tail -n 1 "$BUILD.tests.log" | sed 's/^ *//')"
+  rm -f "$BUILD.tests.log"
+fi
 for t in "${targets[@]}"; do
   case "$t" in
     deb) build_deb ;;
