@@ -22,6 +22,26 @@ from procyon import ft8  # noqa: E402
 # check Procyon's own packer, and must give the same answer on every computer.
 ft8.CROSS_CHECK = False
 
+# No sound card: the engine gets a stand-in that knows no devices, so the
+# tests never look at this computer's audio (and run on machines with no
+# sound system at all, like GitHub's).
+class NoSound:
+    name = "none"
+
+    def guess(self, kind):
+        return ""
+
+    def inputs(self):
+        return []
+
+    def outputs(self):
+        return []
+
+
+from procyon import engine as _engine  # noqa: E402
+
+_engine.choose_backend = NoSound
+
 # Keep the output to PASS/FAIL lines (the engine logs what it does).
 logging.disable(logging.INFO)
 
