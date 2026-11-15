@@ -2,7 +2,7 @@ cty.dat is Big CTY by Jim Reisert AD1C, from https://www.country-files.com/ (MIT
 [Added by Procyon: the copyright holder is Jim Reisert AD1C - the notice
  below comes from his zip, where the name after the year is left blank.]
 
-BIG cty.dat was released on 07 November 2026.
+BIG cty.dat was released on 14 November 2026.
 
    Copyright © 1994-
 

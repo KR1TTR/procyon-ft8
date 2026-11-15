@@ -55,7 +55,7 @@
 <div class="toc"><b>Contents</b>
 <ol>
   <li><a href="#need">What you need</a></li>
-  <li><a href="#install">Install Procyon and WSJT-X</a></li>
+  <li><a href="#install">Install Procyon</a></li>
   <li><a href="#clock">Set your clock</a></li>
   <li><a href="#settings">First start: Settings</a></li>
   <li><a href="#radios">Common radio setups</a></li>
@@ -79,19 +79,19 @@ without warranty: use it at your own risk.</div>
     </ul></li>
   <li><b>Radio control (CAT)</b>, recommended: a USB or serial cable so Procyon can set the frequency and key the transmitter.
       Without it, Procyon can still work using the radio's VOX.</li>
-  <li><b>WSJT-X</b> installed (free). Procyon decodes and encodes by itself, but on Windows and Mac it uses the Hamlib radio-control tools that come with WSJT-X (on Linux, the <code>hamlib</code> package does that job), and WSJT-X's decoder can be chosen as a fallback.
-      You don't need to run WSJT-X; in fact, close it while Procyon runs, since they can't share the radio and sound card.</li>
+  <li><b>On a Mac: WSJT-X</b> installed (free). Procyon decodes and encodes by itself, but on a Mac it uses the Hamlib radio-control tools that come with WSJT-X.
+      On Windows, Hamlib comes with Procyon; on Linux, the <code>hamlib</code> package does that job. WSJT-X is optional there (its decoder can be chosen as a fallback).
+      If you have WSJT-X, close it while Procyon runs, since they can't share the radio and sound card.</li>
   <li><b>An accurate clock</b>: FT8 needs your computer's time within about a second (see step 3).</li>
 </ul>
 
-<h2 id="install">2. Install Procyon and WSJT-X</h2>
+<h2 id="install">2. Install Procyon</h2>
 
 <h3>Linux Mint, Ubuntu, Debian, Raspberry Pi OS</h3>
 <ol>
-  <li>Install WSJT-X: from your software manager, or the <code>.deb</code> from the WSJT-X website
-      (<a href="https://wsjt.sourceforge.io">wsjt.sourceforge.io</a>).</li>
   <li>Install Procyon: double-click <code>procyon_X.Y.Z_all.deb</code>, or in a terminal:
-<pre>sudo apt install ./procyon_X.Y.Z_all.deb</pre></li>
+<pre>sudo apt install ./procyon_X.Y.Z_all.deb</pre>
+      This brings Hamlib (radio control) along.</li>
   <li><b>Allow yourself to use serial ports</b> (needed for radio control on a fresh Linux install):
 <pre>sudo usermod -aG dialout $USER</pre>
       then <b>log out and back in</b> (or restart). You only do this once per computer.</li>
@@ -100,7 +100,6 @@ without warranty: use it at your own risk.</div>
 
 <h3>Windows 10/11</h3>
 <ol>
-  <li>Install WSJT-X with its Windows installer from <a href="https://wsjt.sourceforge.io">wsjt.sourceforge.io</a>.</li>
   <li>Double-click <code>Procyon-X.Y.Z-windows-setup.exe</code>. If Windows says "Windows protected your PC", click
       <b>More info</b> then <b>Run anyway</b>. No administrator password is needed.</li>
   <li>Start <b>Procyon</b> from the Start menu. It opens in your web browser; there's no window of its own.
@@ -118,11 +117,11 @@ while Procyon runs; closing it stops Procyon.</p>
   <li>Open <code>Procyon-X.Y.Z-macos.dmg</code> and drag <b>Procyon</b> to Applications (or double-click the <code>.pkg</code>).</li>
   <li>The first time, macOS blocks it because it isn't signed yet: open <b>System Settings → Privacy &amp; Security</b>,
       scroll down and click <b>Open Anyway</b>.</li>
-  <li>If WSJT-X is missing, Procyon offers to install it for you.</li>
+  <li>Procyon needs WSJT-X on a Mac for radio control (Hamlib). If it's missing, Procyon offers to install it for you.</li>
 </ol>
 
 <h3>Arch Linux and other Linux</h3>
-<p>Arch: unpack the <code>-arch.tar.gz</code> and run <code>makepkg -si</code> in its folder; install <code>wsjtx</code> and <code>hamlib</code> too.
+<p>Arch: unpack the <code>-arch.tar.gz</code> and run <code>makepkg -si</code> in its folder; install <code>hamlib</code> too.
 Other distributions: unzip the <code>-linux.zip</code> and run <code>./setup.sh</code>, which checks what's missing and adds a menu entry.
 On both, add yourself to the serial-port group as above (<code>dialout</code>; on Arch it's <code>uucp</code>).</p>
 

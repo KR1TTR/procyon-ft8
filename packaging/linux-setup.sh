@@ -37,10 +37,12 @@ else
   say "  ✗ No audio tools: install the PulseAudio tools (or: pip install sounddevice)"; missing+=("$P_PULSE"); ok=0
 fi
 
-if have jt9 && have ft8code; then
-  say "  ✓ WSJT-X (jt9 and ft8code)"
+# WSJT-X is optional: Procyon decodes and encodes by itself. Its jt9 can be
+# chosen as the decoder in Settings, and its ft8code double-checks messages.
+if have jt9; then
+  say "  ✓ WSJT-X (optional)"
 else
-  say "  ✗ WSJT-X is missing - install it from https://wsjt.sourceforge.io (or your package manager)"; missing+=(wsjtx); ok=0
+  say "  - WSJT-X not found - that's fine, Procyon decodes by itself"
 fi
 
 if have rigctld || have rigctld-wsjtx || have rigctld-ws; then

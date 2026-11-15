@@ -59,3 +59,19 @@ def test_demo_qsos_go_to_the_practice_log():
     assert e.logbook.path.endswith("procyon_demo_log.adi")
     e2, _ = _engine(demo=False)
     assert e2.logbook.path.endswith("procyon_log.adi")
+
+
+def test_procyon_s_own_hamlib_comes_first():
+    """The Windows build ships Hamlib in hamlib/bin; Procyon uses that copy
+    before any other (WSJT-X's or one on the PATH)."""
+    from procyon import system
+    folder = scratch_dir("hamlib")
+    exe = os.path.join(folder, "rigctld" + system.EXE)
+    open(exe, "w").close()
+    old = system.BUNDLED_HAMLIB
+    system.BUNDLED_HAMLIB = folder
+    try:
+        assert system.find_tool(*system.RIGCTLD) == exe
+        assert system.find_tool("no-such-program-here") is None
+    finally:
+        system.BUNDLED_HAMLIB = old

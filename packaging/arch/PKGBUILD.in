@@ -9,8 +9,8 @@ arch=('any')
 url='https://www.qrz.com/db/KR1TTR'
 license=('GPL-3.0-or-later')
 depends=('python' 'python-numpy' 'python-aiohttp' 'libpulse')
-optdepends=('wsjtx: FT8 decoder and encoder (Procyon needs it to run)'
-            'hamlib: radio control (rigctld)'
+optdepends=('hamlib: radio control (rigctld)'
+            'wsjtx: optional second decoder (jt9), chosen in Settings'
             'gridtracker: map and logging through the WSJT-X UDP link')
 source=("procyon-$pkgver-linux.zip")
 sha256sums=('@SHA256@')

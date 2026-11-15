@@ -18,6 +18,7 @@ DIST="$ROOT/dist"
 BUILD="$ROOT/build"
 CACHE="$PKG/cache"           # downloads for the Windows build, reused between builds
 PY_WIN="3.12.10"             # embeddable Python for Windows (python.org)
+HAMLIB_WIN="4.7.2"           # Hamlib for Windows (radio control), from Hamlib's GitHub releases
 mkdir -p "$DIST" "$CACHE"
 targets=("${@:-deb linux windows arch}")
 [ $# -eq 0 ] && targets=(deb linux windows arch)
@@ -60,7 +61,8 @@ Priority: optional
 Architecture: all
 Installed-Size: $size
 Depends: python3 (>= 3.10), python3-numpy, python3-aiohttp, pulseaudio-utils
-Recommends: wsjtx, libhamlib-utils
+Recommends: libhamlib-utils
+Suggests: wsjtx
 Maintainer: $MAINTAINER
 Description: friendly FT8 and FT4 station software
  Procyon is FT8/FT4 station software with its own decoder and encoder
@@ -126,10 +128,49 @@ build_windows_zip() {
   cp "$PKG/Procyon.bat" "$PKG/Procyon DEMO ONLY - no radio.bat" "$ROOT/LICENSE" "$d/$top/"
   sed "s/{VERSION}/$VERSION/; s/{DATE}/$DATE/" "$PKG/README-Windows.txt" > "$d/$top/README.txt"
   crlf "$d/$top/Procyon.bat" "$d/$top/Procyon DEMO ONLY - no radio.bat" "$d/$top/README.txt" "$d/$top/LICENSE"
+  # 4. Hamlib (rigctld/rigctl for radio control), so Windows needs no WSJT-X
+  add_hamlib_windows "$d/$top/hamlib"
   rm -f "$DIST/$top.zip"
   (cd "$d" && zip -qr "$DIST/$top.zip" "$top")
   echo "  built dist/$top.zip ($(du -h "$DIST/$top.zip" | cut -f1))"
   build_windows_installer "$d/$top"
+}
+
+# Hamlib's official 64-bit Windows build: only the two programs Procyon runs,
+# the DLLs they need, and Hamlib's licence files. The download is checked
+# against Hamlib's own SHA256SUM file. Hamlib is GPL/LGPL, so its source
+# code goes into dist/ too, to be attached to the release next to the build.
+add_hamlib_windows() {
+  local out="$1" v="$HAMLIB_WIN" c="$CACHE/hamlib-$HAMLIB_WIN"
+  local url="https://github.com/Hamlib/Hamlib/releases/download/$v"
+  mkdir -p "$c"
+  for f in "hamlib-w64-$v.zip" "SHA256SUM-w64-$v" "hamlib-$v.tar.gz" "SHA256SUM-$v"; do
+    [ -f "$c/$f" ] || curl -fsSL -o "$c/$f" "$url/$f"
+  done
+  (cd "$c" && grep " hamlib-w64-$v.zip\$" "SHA256SUM-w64-$v" | sha256sum -c --quiet - \
+           && sha256sum -c --quiet "SHA256SUM-$v") \
+    || { echo "  Hamlib download doesn't match its checksum - NOT BUILT" >&2; exit 1; }
+  local tmp="$BUILD/hamlib-w64"
+  rm -rf "$tmp" "$out"; mkdir -p "$tmp" "$out/bin"
+  unzip -q "$c/hamlib-w64-$v.zip" -d "$tmp"
+  local src="$tmp/hamlib-w64-$v"
+  cp "$src"/bin/{rigctld.exe,rigctl.exe,libhamlib-4.dll,libusb-1.0.dll,libgcc_s_seh-1.dll,libwinpthread-1.dll} "$out/bin/"
+  cp "$src"/{COPYING.txt,COPYING.LIB.txt,AUTHORS.txt,THANKS.txt} "$out/"
+  cat > "$out/README.txt" <<EOT
+Hamlib $v - radio control for Procyon (rigctld.exe and rigctl.exe)
+
+These are the official 64-bit Windows programs from the Hamlib project
+(https://hamlib.github.io), unchanged. Hamlib is free software: the programs
+are under the GNU General Public License (COPYING.txt), the library under the
+GNU Lesser General Public License (COPYING.LIB.txt).
+
+Source code: hamlib-$v.tar.gz, attached to the same Procyon release on GitHub
+(https://github.com/KR1TTR/procyon-ft8/releases), or from
+https://github.com/Hamlib/Hamlib/releases/tag/$v
+EOT
+  crlf "$out/README.txt"
+  cp "$c/hamlib-$v.tar.gz" "$DIST/"
+  rm -rf "$tmp"
 }
 
 # The installer packs the same folder as the zip (Start-menu shortcuts run
@@ -170,5 +211,6 @@ done
 
 # Checksums for whatever this version has in dist/ (any targets built so far)
 ( cd "$DIST" && sha256sum $(ls procyon_"$VERSION"_all.deb procyon-"$VERSION"-linux.zip \
-    Procyon-"$VERSION"-windows.zip Procyon-"$VERSION"-windows-setup.exe procyon-"$VERSION"-arch.tar.gz 2>/dev/null) > SHA256SUMS )
+    Procyon-"$VERSION"-windows.zip Procyon-"$VERSION"-windows-setup.exe procyon-"$VERSION"-arch.tar.gz \
+    $( [ -f "Procyon-$VERSION-windows.zip" ] && echo hamlib-"$HAMLIB_WIN".tar.gz ) 2>/dev/null) > SHA256SUMS )
 echo "  wrote dist/SHA256SUMS"

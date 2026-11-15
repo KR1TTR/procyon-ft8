@@ -70,6 +70,7 @@ Section "Procyon" SecMain
   SetOutPath "$INSTDIR"
   !insertmacro MOVE_OLD_PYTHON
   RMDir /r "$INSTDIR\procyon"   ; no leftovers from the version before
+  RMDir /r "$INSTDIR\hamlib"
   File /r "${SRC}\*"
   File "procyon.ico"
   WriteUninstaller "$INSTDIR\Uninstall Procyon.exe"
@@ -114,6 +115,7 @@ FunctionEnd
 Section "Uninstall"
   !insertmacro MOVE_OLD_PYTHON
   RMDir /r "$INSTDIR\procyon"
+  RMDir /r "$INSTDIR\hamlib"
   Delete "$INSTDIR\Procyon.bat"
   Delete "$INSTDIR\Procyon DEMO ONLY - no radio.bat"
   Delete "$INSTDIR\README.txt"

@@ -2,7 +2,7 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 0.9.70** · 13 November 2026
+**Version 1.0.0** · 15 November 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
 A simpler, friendlier FT8 station (FT4 too, as a beta), with a clean, modern
@@ -14,18 +14,21 @@ way WSJT-X does it.
 
 ## Install
 
-For radio control Procyon uses **Hamlib**: on Linux the `hamlib` package (or
-`libhamlib-utils`); on Windows and macOS the copy that comes with **WSJT-X**
+For radio control Procyon uses **Hamlib**: on Windows it comes with Procyon;
+on Linux it's the `hamlib` package (or `libhamlib-utils`, which the `.deb`
+installs); on macOS Procyon uses the copy that comes with **WSJT-X**
 (https://wsjt.sourceforge.io), so install WSJT-X there. WSJT-X is no longer
 needed for decoding.
 
+`<version>` is the release's version number, as shown on the releases page.
+
 | System | Download | How |
 |---|---|---|
-| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_0.9.68_all.deb` | Double-click it, or `sudo apt install ./procyon_0.9.68_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
-| Arch Linux, Manjaro, EndeavourOS | `procyon-0.9.68-arch.tar.gz` | `tar xf procyon-0.9.68-arch.tar.gz`, `cd procyon-0.9.68-arch`, `makepkg -si`. Install WSJT-X too (`wsjtx`, from the repos or the AUR) and `hamlib` for radio control. |
-| Other Linux (Fedora, openSUSE, ...) | `procyon-0.9.68-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
-| macOS 11+ (Apple Silicon and Intel) | `Procyon-0.9.68-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
-| Windows 10/11 (64-bit) | `Procyon-0.9.68-windows-setup.exe` | Double-click it (no administrator password needed), then start **Procyon** from the Start menu. Python is included. To update, run the newer setup the same way. Or, without installing: `Procyon-0.9.68-windows.zip` - right-click → **Extract All**, then double-click **Procyon.bat** in the extracted folder. |
+| Linux Mint, Ubuntu, Debian, Raspberry Pi OS | `procyon_<version>_all.deb` | Double-click it, or `sudo apt install ./procyon_<version>_all.deb`. Then start **Procyon** from your menu, or run `procyon`. |
+| Arch Linux, Manjaro, EndeavourOS | `procyon-<version>-arch.tar.gz` | `tar xf procyon-<version>-arch.tar.gz`, `cd procyon-<version>-arch`, `makepkg -si`. Install `hamlib` too for radio control. |
+| Other Linux (Fedora, openSUSE, ...) | `procyon-<version>-linux.zip` | Unzip, run `./setup.sh` (checks what's needed and adds a menu entry), then start Procyon from the menu or `./run.sh`. |
+| macOS 11+ (Apple Silicon and Intel) | `Procyon-<version>-macos.dmg` (or `.pkg`) | Open the disk image and drag **Procyon** to Applications (or double-click the `.pkg`). The app isn't signed yet, so the first time: System Settings → Privacy & Security → **Open Anyway**. If WSJT-X is missing, Procyon offers to install it for you. |
+| Windows 10/11 (64-bit) | `Procyon-<version>-windows-setup.exe` | Double-click it (no administrator password needed), then start **Procyon** from the Start menu. Python is included. To update, run the newer setup the same way. Or, without installing: `Procyon-<version>-windows.zip` - right-click → **Extract All**, then double-click **Procyon.bat** in the extracted folder. |
 
 Add `--demo` (or use **Procyon DEMO ONLY - no radio** in the Windows Start menu, or
 *Settings → Advanced → Demo band*) to try it with a simulated band: nothing is
@@ -295,8 +298,8 @@ across automatically on first start.)
 
 ## Known limitations
 
-- **Hamlib for radio control.** Included with WSJT-X on Windows and macOS
-  (so install WSJT-X there); the `hamlib` package on Linux. Decoding (since
+- **Hamlib for radio control.** Included with Procyon on Windows; on macOS
+  it comes with WSJT-X (so install WSJT-X there); the `hamlib` package on Linux. Decoding (since
   0.9.69), encoding (0.9.68) and the country list (0.9.67) are Procyon's own.
   When WSJT-X is installed, its `ft8code` still double-checks each message
   Procyon packs.
@@ -320,7 +323,7 @@ across automatically on first start.)
 
 ## Changes
 
-1.0 (in testing; the test builds are numbered 0.9.69 and up):
+1.0 (15 November 2026; test builds 0.9.69 to 0.9.70):
 
 - **tpdec, Procyon's own decoder.** FT8 and FT4 are now decoded by Procyon
   itself instead of WSJT-X's `jt9`, so WSJT-X is no longer needed to decode
@@ -347,6 +350,8 @@ across automatically on first start.)
 - **Automated tests** in `tests/`: one command checks the QSO sequencer,
   POTA, the logbook, band changes, the message packer and the decoder.
   Every package build runs them first, and so does GitHub on every push.
+- **Windows: Hamlib comes with Procyon**, so radio control works without
+  installing WSJT-X. On Windows, Procyon now needs nothing else installed.
 - The **About card** is shorter and thanks Procyon's testers.
 - The raccoon icon lost the stripe on its forehead.
 
@@ -797,10 +802,13 @@ McCrory, KE8SAU.
 
 Procyon builds on:
 - **WSJT-X** by Joe Taylor K1JT, Steve Franke K9AN and the WSJT Development Group:
-  the FT8/FT4 decoder (`jt9`). Procyon's message packing follows WSJT-X's
+  the FT8 and FT4 modes (its `jt9` decoder can be chosen in Settings). Procyon's message packing follows WSJT-X's
   77-bit message formats (`packjt77`) and its transmit waveform code is a
   port of WSJT-X's `gen_ft8wave`.
-- **Hamlib**, for radio control.
+- **Hamlib** (https://hamlib.github.io), for radio control. The Windows
+  build includes Hamlib's official 64-bit programs (`rigctld`, `rigctl`),
+  unchanged, with their GPL/LGPL licence files in the `hamlib` folder; their
+  source code is attached to each release (`hamlib-<version>.tar.gz`).
 - **Big CTY** (`cty.dat`) by Jim Reisert AD1C, https://www.country-files.com/,
   for country lookups (MIT licence). A copy ships with Procyon in
   `procyon/cty/`, with its licence notice in `cty-copyright.txt`.

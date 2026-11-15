@@ -7,9 +7,8 @@ Created by Justin Stapleton, KR1TTR, with Claude Code (Claude Opus 5.5)
 
 BEFORE YOU START
 ----------------
-Install WSJT-X from https://wsjt.sourceforge.io  (Procyon uses its FT8
-decoder and encoder, and the copy of Hamlib it includes for radio control).
-You don't need to install Python - it's included in this folder.
+Nothing else to install: Python and Hamlib (radio control) are included in
+this folder, and Procyon decodes FT8 and FT4 by itself. WSJT-X is optional.
 
 
 STARTING PROCYON

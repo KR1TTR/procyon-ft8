@@ -97,9 +97,19 @@ RIGCTL = ("rigctl", "rigctl-wsjtx", "rigctl-ws")
 RIGCTLD = ("rigctld", "rigctld-wsjtx", "rigctld-ws")
 
 
+# Hamlib shipped with Procyon (Windows build only): <install folder>/hamlib/bin,
+# next to the procyon package folder.
+BUNDLED_HAMLIB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "hamlib", "bin")
+
+
 def find_tool(*names: str) -> str | None:
-    """Find a program by any of its names: on the PATH first, then in the
-    WSJT-X installation (which bundles jt9, ft8code and Hamlib's rigctld)."""
+    """Find a program by any of its names: Procyon's own Hamlib first (Windows
+    build), then the PATH, then the WSJT-X installation (which bundles jt9,
+    ft8code and Hamlib's rigctld)."""
+    for name in names:
+        path = os.path.join(BUNDLED_HAMLIB, name + EXE)
+        if os.path.isfile(path):
+            return path
     for name in names:
         hit = shutil.which(name)
         if hit:
