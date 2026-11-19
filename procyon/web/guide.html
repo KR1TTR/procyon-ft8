@@ -157,7 +157,10 @@ decodes nothing to sync to, so set it roughly by hand first.</p>
   <li><b>Radio mode for FT8:</b> leave it on <b>Data</b> (DATA A on Elecraft, USB-D on Icom).</li>
   <li><b>Transmit (PTT) by:</b> usually <b>CAT command to the radio</b>. See step 5 for interfaces that key the radio themselves.</li>
   <li><b>Audio:</b> choose the radio's sound card for both <b>Input (from radio)</b> and <b>Output (to radio)</b>.
-      It's often called "USB Audio CODEC" (built-in radio audio, SignaLink) or "USB Audio Device" (Digirig).</li>
+      It's often called "USB Audio CODEC" (built-in radio audio, SignaLink) or "USB Audio Device" (Digirig).
+      On Linux the list also has the cards straight from <b>ALSA</b> (marked "ALSA"): use those only if you
+      keep the radio's sound card away from the sound server (turned off in its settings) and set its levels
+      with alsamixer.</li>
   <li>Press <b>Save</b>.</li>
 </ol>
 <p class="note"><b>Demo band</b> (Settings → Advanced) lets you practice with simulated stations: nothing is transmitted,

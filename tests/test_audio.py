@@ -103,6 +103,44 @@ def test_wsjtx_import_removes_qt_quotes():
         s, _ = setup_help.import_wsjtx()
     finally:
         setup_help.wsjtx_ini_path = old
-    assert s["audio_in"] == "plughw:CARD=AUDIO,DEV=0"
+    assert s["audio_in"] == "alsa:plughw:CARD=AUDIO,DEV=0"   # 1.0.2: used through ALSA
     assert s["audio_out"] == 'say "hi", ok'
     assert s["mycall"] == "K1ABC"
+
+
+ARECORD_L = """null
+    Discard all samples (playback) or generate zero samples (capture)
+default
+    Default ALSA Output (currently PipeWire Media Server)
+hw:CARD=AUDIO,DEV=0
+    USB Audio CODEC, USB Audio
+    Direct hardware device without any conversions
+plughw:CARD=AUDIO,DEV=0
+    USB Audio CODEC, USB Audio
+    Hardware device with all software conversions
+"""
+
+
+def test_alsa_devices_are_offered_and_checked():
+    """1.0.2: ALSA devices straight, for cards kept away from the sound server."""
+    from procyon import audio
+
+    class Done:
+        stdout = ARECORD_L
+
+    old = audio.subprocess.run
+    audio.subprocess.run = lambda args, **k: Done() if args[1] == "-L" else old(args, **k)
+    try:
+        names, offer = audio._alsa_list("in")
+        assert offer == [{"name": "alsa:plughw:CARD=AUDIO,DEV=0",
+                          "desc": "ALSA: USB Audio CODEC, USB Audio (plughw:CARD=AUDIO,DEV=0)"}]
+        a = audio.PulseAudio(pulse=False)      # a computer with no sound server
+        assert a.inputs() == offer
+        assert a.resolve("alsa:plughw:CARD=AUDIO,DEV=0", "in") == "alsa:plughw:CARD=AUDIO,DEV=0"
+        assert a.resolve("alsa:hw:CARD=AUDIO,DEV=0", "in") == "alsa:hw:CARD=AUDIO,DEV=0"
+        assert a.resolve("alsa:plughw:CARD=Gone,DEV=0", "in") is None   # unplugged
+        assert a.resolve("", "in") == "alsa:default"
+    finally:
+        audio.subprocess.run = old
+    assert "in use by another program" in audio.alsa_problem(
+        "arecord: main:850: audio open error: Device or resource busy", "plughw:CARD=AUDIO,DEV=0")

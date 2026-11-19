@@ -141,6 +141,10 @@ def import_wsjtx():
     for key, ini in (("audio_in", "SoundInName"), ("audio_out", "SoundOutName")):
         if get(ini):
             s[key] = get(ini)
+            # An ALSA device name ("plughw:CARD=AUDIO,DEV=0" - WSJT-X without the
+            # sound server): use it through ALSA here too (Linux only).
+            if sys.platform.startswith("linux") and re.match(r"^[a-z]+:\S", s[key]):
+                s[key] = "alsa:" + s[key]
     watts = re.match(r"^\s*(\d+(?:\.\d+)?)", cp.get("LogQSO", "TxPower", fallback="") or get("TxPower"))
     if watts:
         s["tx_watts"] = watts.group(1)
