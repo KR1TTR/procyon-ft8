@@ -37,6 +37,10 @@ class NoSound:
     def outputs(self):
         return []
 
+    def resolve(self, name, kind):
+        from procyon.audio import match_device  # noqa: PLC0415
+        return match_device(name, [])
+
 
 from procyon import engine as _engine  # noqa: E402
 

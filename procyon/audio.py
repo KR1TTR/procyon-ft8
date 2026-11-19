@@ -10,6 +10,7 @@ PortAudio backend converts to and from the sound card's own rate."""
 import asyncio
 import logging
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -31,6 +32,22 @@ def _align(pcm: np.ndarray, lead: float, rate: int) -> np.ndarray:
     if lead >= 0:
         return np.concatenate([np.zeros(n, pcm.dtype), pcm])
     return pcm[n:]
+
+
+def match_device(name: str, names) -> str | None:
+    """The device to use for a saved name: "" (system default) stays "", an
+    exact match wins, and PipeWire's numbered copy of a name ("....9") counts
+    as the same device. None = not connected - the sound server would quietly
+    use some other device instead, so callers must not go ahead."""
+    if not name:
+        return ""
+    names = list(names)
+    if name in names:
+        return name
+    base = re.sub(r"\.\d+$", "", name)
+    if base != name and base in names:
+        return base
+    return None
 
 
 def choose_backend():
@@ -67,6 +84,10 @@ class PulseAudio:
 
     def outputs(self):
         return self._list("sinks")
+
+    def resolve(self, name, kind):
+        devs = self.inputs() if kind == "in" else self.outputs()
+        return match_device(name, (d["name"] for d in devs))
 
     def guess(self, kind):
         """The first USB codec - usually the radio interface."""
@@ -208,6 +229,9 @@ class PortAudio:
             except TypeError:   # older sounddevice
                 return None
         return None
+
+    def resolve(self, name, kind):
+        return match_device(name, (d["name"] for _, d in self._devices(kind)))
 
     def _find(self, name, kind):
         for i, d in self._devices(kind):

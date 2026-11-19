@@ -77,6 +77,7 @@ OWN_COMMANDS = ("pota_", "mode")   # changed by their own commands, not the Sett
 # good stand-in for "the band's time" - so it shows how far off ours is,
 # without internet or GPS.
 DECODE_LOG_SEC = 600      # how often the decode timing goes into procyon.log
+AUDIO_RETRY_SEC = 5        # how often to look again for an unplugged audio input
 CLOCK_WINDOW_SEC = 120     # stations heard in the last two minutes
 CLOCK_MIN_STATIONS = 8     # fewer than this: not enough to judge
 CLOCK_MAX_DT = 2.0         # ignore wild values (a station whose clock is way off)
@@ -397,9 +398,32 @@ class Engine:
         else:
             self.rx_task = asyncio.create_task(self._capture())
 
+    def _device(self, kind: str) -> str | None:
+        """The sound device to use for audio_in/audio_out, or None if the saved one
+        isn't connected (the sound server would silently swap in another device,
+        e.g. the computer's speakers or microphone)."""
+        name = self.s["audio_in" if kind == "in" else "audio_out"]
+        try:
+            return self.audio.resolve(name, kind)
+        except Exception:  # noqa: BLE001 - can't list devices: trust the name as before
+            return name
+
     async def _capture(self):
         try:
-            await self.audio.capture(self.s["audio_in"], self._on_audio)
+            # A missing input would quietly record from another device: wait for
+            # it instead (it may just be unplugged), checking every few seconds.
+            while (dev := self._device("in")) is None:
+                msg = (f"The audio input “{self.s['audio_in']}” isn't connected. "
+                       "Plug it in, or pick your radio's audio in Settings → Audio.")
+                if self.audio_error != msg:
+                    self.audio_error = msg
+                    log.warning("audio input not found: %s", self.s["audio_in"])
+                    await self.push_state()
+                await asyncio.sleep(AUDIO_RETRY_SEC)
+            if self.audio_error:
+                self.audio_error = ""
+                await self.push_state()
+            await self.audio.capture(dev, self._on_audio)
         except asyncio.CancelledError:
             raise
         except Exception as e:  # noqa: BLE001
@@ -1094,6 +1118,12 @@ class Engine:
     async def _play(self, make_wave, target: float):
         """Key the radio and play make_wave(rate) - a float waveform at the sound
         card's rate - starting at `target`. PTT is always released afterwards."""
+        out = self._device("out")
+        if out is None:
+            # Checked before keying: never send transmit audio somewhere else.
+            raise RuntimeError(f"the audio output “{self.s['audio_out']}” isn't connected, so "
+                               "Procyon didn't transmit. Plug it in, or pick your radio's "
+                               "audio in Settings → Audio.")
         if self.s["ptt"] != "vox":
             # Never play audio into a radio that isn't actually transmitting.
             if not self.rig.enabled:
@@ -1108,7 +1138,7 @@ class Engine:
         try:
             # Audio drive is read live, so moving the slider mid-transmission (e.g.
             # while watching ALC during Tune) takes effect straight away.
-            await self.audio.play(self.s["audio_out"], make_wave, target, self._halt,
+            await self.audio.play(out, make_wave, target, self._halt,
                                   lambda: 32767 * (self.s["tx_level"] / 100.0) ** 2)
         finally:
             if self.s["ptt"] != "vox":
