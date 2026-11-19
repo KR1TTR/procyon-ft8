@@ -1914,7 +1914,8 @@ document.addEventListener("fullscreenchange", () => {
 
 function openAbout() {
   const a = (S && S.about) || {};
-  $("#aboutVersion").textContent = a.version || "—";
+  // ProcyonEX test builds: "1.1.0~ex1" reads as "1.1.0 EX1"
+  $("#aboutVersion").textContent = (a.version || "—").replace("~ex", " EX");
   $("#aboutDate").textContent = a.date
     ? new Date(`${a.date}T12:00:00Z`).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) : "";
   $("#about").showModal();
