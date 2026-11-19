@@ -379,7 +379,7 @@ function onState(m) {
   if (modePending && T().mode === modePending) {
     modePending = "";
     clearTimeout(modePendingTimer);
-    $("#modeSeg").classList.remove("pending");
+    $("#modePicker").classList.remove("pending");
   }
   if (T().mode !== shownMode) {
     shownMode = T().mode;
@@ -478,10 +478,19 @@ function renderBandMenu() {
     `<button data-hz="${b.hz}" class="${b.name === S.band ? "on" : ""}">${b.name}<small>${(b.hz / 1e6).toFixed(3)}</small></button>`).join("");
 }
 function showModeButtons(mode) {
-  [...$("#modeSeg").children].forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
+  $("#modeName").textContent = mode;
+  [...$("#modeMenu").children].forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
 }
-$("#modeSeg").addEventListener("click", (e) => {
+// The mode drop-down: a list rather than a switch, so more modes fit later.
+$("#modeBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  $("#bandMenu").hidden = true;
+  $("#modeMenu").hidden = !$("#modeMenu").hidden;
+});
+$("#modeMenu").addEventListener("click", (e) => {
+  e.stopPropagation();
   const b = e.target.closest("button");
+  $("#modeMenu").hidden = true;
   if (!b || !S || modePending || b.dataset.mode === T().mode) return;   // one switch at a time
   const q = S.qso, busy = q.tx_enabled || S.tx || (q.dxcall && !q.logged);
   if (!busy) return switchMode(b.dataset.mode);
@@ -502,21 +511,21 @@ function switchMode(mode) {
   // Light the new mode straight away; the engine's answer confirms it.
   modePending = mode;
   showModeButtons(modePending);
-  $("#modeSeg").classList.add("pending");
+  $("#modePicker").classList.add("pending");
   modePendingTimer = setTimeout(() => {   // no answer: show what's really in use
     modePending = "";
-    $("#modeSeg").classList.remove("pending");
+    $("#modePicker").classList.remove("pending");
     showModeButtons(T().mode);
   }, 5000);
   send({ type: "mode", mode });
 }
-$("#bandBtn").addEventListener("click", (e) => { e.stopPropagation(); $("#bandMenu").hidden = !$("#bandMenu").hidden; });
+$("#bandBtn").addEventListener("click", (e) => { e.stopPropagation(); $("#modeMenu").hidden = true; $("#bandMenu").hidden = !$("#bandMenu").hidden; });
 $("#bandMenu").addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (b) send({ type: "band", hz: +b.dataset.hz });
   $("#bandMenu").hidden = true;
 });
-document.addEventListener("click", () => { $("#bandMenu").hidden = true; });
+document.addEventListener("click", () => { $("#bandMenu").hidden = true; $("#modeMenu").hidden = true; });
 
 function onLevel(db) {
   // -60 dBFS .. 0 dBFS; ideal FT8 input sits around -30 dBFS.

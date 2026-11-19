@@ -24,9 +24,15 @@
     <div class="menu" id="bandMenu" hidden></div>
   </div>
 
-  <div class="seg small mode-seg" id="modeSeg" role="group" aria-label="Mode">
-    <button type="button" data-mode="FT8" title="FT8: 15-second cycles, the most popular mode">FT8</button>
-    <button type="button" data-mode="FT4" title="FT4: faster 7.5-second cycles, about 3 dB less sensitive - popular in contests (new in Procyon, beta)">FT4</button>
+  <div class="mode-picker" id="modePicker">
+    <button type="button" id="modeBtn" class="mode-btn" aria-haspopup="true" title="Mode - click to pick another">
+      <span id="modeName">FT8</span>
+      <svg class="chev" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3"/></svg>
+    </button>
+    <div class="menu mode-menu" id="modeMenu" hidden>
+      <button type="button" data-mode="FT8" title="FT8: 15-second cycles, the most popular mode">FT8<small>15 s · most popular</small></button>
+      <button type="button" data-mode="FT4" title="FT4: faster 7.5-second cycles, about 3 dB less sensitive - popular in contests">FT4<small>7.5 s · contests</small></button>
+    </div>
   </div>
 
   <div class="clock">

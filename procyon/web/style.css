@@ -87,13 +87,19 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--border2)
 .band-btn .unit { color: var(--muted); font-size: 12px; }
 .band-btn .band-name { font-size: 12px; font-weight: 600; color: var(--rx); background: color-mix(in srgb, var(--rx) 10%, transparent); padding: 1px 7px; border-radius: 99px; margin-left: 4px; }
 .chev { width: 12px; height: 12px; align-self: center; }
-/* FT8 / FT4 switch, right beside the band */
-.seg.mode-seg { margin-left: -8px; flex-shrink: 0; background: var(--surface); border-color: var(--border); }   /* matches the band button in every palette */
-.mode-seg button { font: 600 12px var(--mono); padding: 5px 10px; }
-/* the mode in use in teal, so it's clear at a glance (".seg" too: outranks the plain .seg style) */
-.seg.mode-seg button.on { color: var(--rx); background: color-mix(in srgb, var(--rx) 16%, transparent); }
-.mode-seg.pending { cursor: progress; }
-.mode-seg.pending button { pointer-events: none; }
+/* Mode drop-down (FT8, FT4 - room for more), right beside the band; looks like the band button */
+.mode-picker { position: relative; margin-left: -8px; flex-shrink: 0; }
+.mode-btn {
+  display: flex; align-items: center; gap: 6px; height: 100%;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 6px 10px; font: 600 13px var(--mono); color: var(--rx);   /* the mode in use in teal */
+}
+.mode-btn:hover { border-color: var(--border2); }
+.menu.mode-menu { min-width: 200px; grid-template-columns: 1fr; left: auto; right: 0; }   /* one column, lined up on the button's right edge so it stays on screen on phones (outranks .menu, which comes later) */
+.mode-menu button { font: 600 13px var(--mono); align-items: baseline; }
+.mode-menu button small { font: 400 11px var(--sans); white-space: nowrap; }
+.mode-picker.pending { cursor: progress; }
+.mode-picker.pending button { pointer-events: none; }
 .chev path { stroke: var(--muted); stroke-width: 1.5; fill: none; }
 .menu {
   position: absolute; top: calc(100% + 6px); left: 0; min-width: 220px;
