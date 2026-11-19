@@ -1,7 +1,10 @@
 """Sound card input and output.
 
 Two interchangeable backends:
-  - PulseAudio / PipeWire (parec/pacat): the default on Linux desktops.
+  - PulseAudio / PipeWire (parec/pacat): the default on Linux desktops. It
+    also offers ALSA devices directly (arecord/aplay, saved as
+    "alsa:plughw:..."), for stations that keep their radio's sound card away
+    from the sound server - and on Linux without PulseAudio at all.
   - PortAudio (the `sounddevice` package): Windows, macOS, and Linux
     systems without PulseAudio.
 Procyon works at 12 kHz internally (what the FT8 decoder wants); the
@@ -10,6 +13,7 @@ PortAudio backend converts to and from the sound card's own rate."""
 import asyncio
 import logging
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -33,11 +37,64 @@ def _align(pcm: np.ndarray, lead: float, rate: int) -> np.ndarray:
     return pcm[n:]
 
 
+def match_device(name: str, names) -> str | None:
+    """The device to use for a saved name: "" (system default) stays "", an
+    exact match wins, and PipeWire's numbered copy of a name ("....9") counts
+    as the same device. None = not connected - the sound server would quietly
+    use some other device instead, so callers must not go ahead."""
+    if not name:
+        return ""
+    names = list(names)
+    if name in names:
+        return name
+    base = re.sub(r"\.\d+$", "", name)
+    if base != name and base in names:
+        return base
+    return None
+
+
 def choose_backend():
     want = os.environ.get("PROCYON_AUDIO", "").lower()
-    if want != "portaudio" and not IS_WINDOWS and shutil.which("parec") and shutil.which("pacat"):
-        return PulseAudio()
+    if want != "portaudio" and not IS_WINDOWS:
+        if shutil.which("parec") and shutil.which("pacat"):
+            return PulseAudio()
+        if shutil.which("arecord") and shutil.which("aplay"):
+            return PulseAudio(pulse=False)   # plain ALSA, no sound server
     return PortAudio()
+
+
+# ------------------------------------------------------------------ ALSA
+
+ALSA = "alsa:"   # saved device names starting with this are ALSA devices
+
+
+def _alsa_list(kind):
+    """ALSA's own device names (arecord -L / aplay -L): every name, and the
+    plughw ones to offer (they convert rate and channels for us)."""
+    tool = "arecord" if kind == "in" else "aplay"
+    try:
+        out = subprocess.run([tool, "-L"], capture_output=True, text=True, timeout=5).stdout
+    except Exception:  # noqa: BLE001 - alsa-utils missing
+        return [], []
+    names, offer, name = [], [], None
+    for line in out.splitlines():
+        if line and not line[0].isspace():
+            name = line.strip()
+            names.append(name)
+        elif name and name.startswith("plughw:") and line.strip():
+            offer.append({"name": ALSA + name, "desc": f"ALSA: {line.strip()} ({name})"})
+            name = None   # the first description line is the card's name
+    return names, offer
+
+
+def alsa_problem(err: str, device: str) -> str:
+    """ALSA's error in plain words."""
+    device = device[len(ALSA):] if device.startswith(ALSA) else device
+    if "busy" in err.lower():
+        return (f"The ALSA device {device} is in use by another program - usually the "
+                "sound server. Turn that card off in the sound settings (e.g. pavucontrol → "
+                "Configuration → Off), or pick it from the normal list instead.")
+    return err
 
 
 # ------------------------------------------------------------ PulseAudio
@@ -45,7 +102,14 @@ def choose_backend():
 class PulseAudio:
     name = "pulse"
 
+    def __init__(self, pulse=True):
+        self.pulse = pulse
+        if not pulse:
+            self.name = "alsa"
+
     def _list(self, kind):
+        if not self.pulse:
+            return []
         try:
             out = subprocess.run(["pactl", "list", kind], capture_output=True, text=True, timeout=5).stdout
         except Exception:  # noqa: BLE001
@@ -63,10 +127,19 @@ class PulseAudio:
         return devs
 
     def inputs(self):
-        return self._list("sources")
+        return self._list("sources") + _alsa_list("in")[1]
 
     def outputs(self):
-        return self._list("sinks")
+        return self._list("sinks") + _alsa_list("out")[1]
+
+    def resolve(self, name, kind):
+        if name.startswith(ALSA):
+            # Any ALSA name counts (hw:, sysdefault:, ... too), not only the offered ones.
+            return name if name[len(ALSA):] in _alsa_list(kind)[0] else None
+        if not name and not self.pulse:
+            return ALSA + "default"
+        return match_device(name, (d["name"] for d in self._list(
+            "sources" if kind == "in" else "sinks")))
 
     def guess(self, kind):
         """The first USB codec - usually the radio interface."""
@@ -77,9 +150,15 @@ class PulseAudio:
         return ""
 
     async def capture(self, device, on_audio):
-        args = ["parec", "--raw", "--format=s16le", f"--rate={FS}", "--channels=1", "--latency-msec=40"]
-        if device:
-            args += ["-d", device]
+        if device.startswith(ALSA):
+            # Small periods, so each block arrives promptly (timestamps = DT).
+            args = ["arecord", "-q", "-D", device[len(ALSA):], "-t", "raw", "-f", "S16_LE",
+                    f"-r{FS}", "-c1", "--period-time=40000", "--buffer-time=400000"]
+        else:
+            args = ["parec", "--raw", "--format=s16le", f"--rate={FS}", "--channels=1",
+                    "--latency-msec=40"]
+            if device:
+                args += ["-d", device]
         proc = await asyncio.create_subprocess_exec(
             *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         try:
@@ -87,7 +166,7 @@ class PulseAudio:
                 data = await proc.stdout.read(2400)
                 if not data:
                     err = (await proc.stderr.read()).decode().strip()
-                    raise RuntimeError(err or "audio input stopped")
+                    raise RuntimeError(alsa_problem(err, device) if err else "audio input stopped")
                 if len(data) % 2:
                     data += await proc.stdout.readexactly(1)
                 await on_audio(np.frombuffer(data, np.int16), time.time())
@@ -102,10 +181,15 @@ class PulseAudio:
         during a transmission takes effect within about a third of a second.
         Returns early if `halt` is set; always stops the audio on the way out."""
         rate = 48000
-        args = ["pacat", "--playback", "--raw", "--format=s16le", f"--rate={rate}",
-                "--channels=1", "--latency-msec=60"]
-        if device:
-            args += ["-d", device]
+        if device.startswith(ALSA):
+            # 60 ms buffer, like pacat's latency below, so the timing is the same.
+            args = ["aplay", "-q", "-D", device[len(ALSA):], "-t", "raw", "-f", "S16_LE",
+                    f"-r{rate}", "-c1", "--buffer-time=60000", "--period-time=15000"]
+        else:
+            args = ["pacat", "--playback", "--raw", "--format=s16le", f"--rate={rate}",
+                    "--channels=1", "--latency-msec=60"]
+            if device:
+                args += ["-d", device]
         proc = await asyncio.create_subprocess_exec(
             *args, stdin=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         try:
@@ -129,7 +213,7 @@ class PulseAudio:
             stop.cancel()
             if proc.returncode not in (None, 0):
                 err = (await proc.stderr.read()).decode().strip()
-                raise RuntimeError(err or "audio output failed")
+                raise RuntimeError(alsa_problem(err, device) if err else "audio output failed")
         finally:
             # Never leave a player running into the radio (Halt, Tune off, errors).
             if proc.returncode is None:
@@ -208,6 +292,9 @@ class PortAudio:
             except TypeError:   # older sounddevice
                 return None
         return None
+
+    def resolve(self, name, kind):
+        return match_device(name, (d["name"] for _, d in self._devices(kind)))
 
     def _find(self, name, kind):
         for i, d in self._devices(kind):

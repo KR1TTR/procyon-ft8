@@ -70,6 +70,16 @@ def _variant(v: str) -> str:
     return m[-1] if m else (v or "")
 
 
+def _qt_value(v: str) -> str:
+    """A value as WSJT-X (Qt) meant it: Qt writes values with commas or other
+    special characters in double quotes, with \\" and \\\\ inside - e.g.
+    SoundInName="plughw:CARD=AUDIO,DEV=0"."""
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] == '"':
+        v = re.sub(r'\\(.)', r"\1", v[1:-1])
+    return v
+
+
 def import_wsjtx():
     """Read WSJT-X's settings and translate them into Procyon settings.
     Returns (settings, notes) - notes explain anything that needs a look."""
@@ -80,7 +90,7 @@ def import_wsjtx():
     cp.optionxform = str
     cp.read(path, encoding="utf-8")
     c = cp["Configuration"] if cp.has_section("Configuration") else {}
-    get = lambda k: (c.get(k, "") or "").strip()  # noqa: E731
+    get = lambda k: _qt_value(c.get(k, "") or "")  # noqa: E731
     s, notes = {}, []
 
     if get("MyCall"):
@@ -131,6 +141,10 @@ def import_wsjtx():
     for key, ini in (("audio_in", "SoundInName"), ("audio_out", "SoundOutName")):
         if get(ini):
             s[key] = get(ini)
+            # An ALSA device name ("plughw:CARD=AUDIO,DEV=0" - WSJT-X without the
+            # sound server): use it through ALSA here too (Linux only).
+            if sys.platform.startswith("linux") and re.match(r"^[a-z]+:\S", s[key]):
+                s[key] = "alsa:" + s[key]
     watts = re.match(r"^\s*(\d+(?:\.\d+)?)", cp.get("LogQSO", "TxPower", fallback="") or get("TxPower"))
     if watts:
         s["tx_watts"] = watts.group(1)

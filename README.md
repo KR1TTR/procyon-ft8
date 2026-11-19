@@ -2,7 +2,7 @@
 
 <img src="procyon/web/icon.svg" alt="" width="96">
 
-**Version 1.0.0** · 15 November 2026
+**Version 1.0.2** · 19 November 2026
 Created by **Justin Stapleton, KR1TTR**, with **Claude Code** (Claude Opus 5.5).
 
 A simpler, friendlier FT8 station (FT4 too, as a beta), with a clean, modern
@@ -322,6 +322,27 @@ across automatically on first start.)
 - **FT8 and FT4 only** for now; other modes are on the roadmap.
 
 ## Changes
+
+1.0.2 (19 November 2026):
+
+- **ALSA sound devices on Linux.** Settings → Audio now also lists the
+  sound cards straight from ALSA (marked "ALSA"), for stations that keep
+  the radio's sound card away from the sound server and set its levels with
+  alsamixer, as many do for WSJT-X. Importing from WSJT-X picks them up
+  too (names like `plughw:CARD=AUDIO,DEV=0`). Procyon also runs on Linux
+  without PulseAudio or PipeWire now. Thanks to Morgan Estes for the idea.
+
+1.0.1 (19 November 2026):
+
+- **Procyon uses the sound device you picked, or none at all.** If the
+  saved input or output wasn't connected, the sound system quietly used
+  another device instead: transmit audio could come out of the computer's
+  speakers. Now Procyon won't transmit (or Tune) when the output isn't
+  there and says so, and the audio light explains a missing input instead
+  of recording from the wrong one. PipeWire's numbered device names (ending
+  in ".9" and the like) still count as the same device.
+- **Import from WSJT-X** no longer keeps WSJT-X's quote marks around device
+  names that contain a comma. Thanks to Morgan Estes for the report.
 
 1.0 (15 November 2026; test builds 0.9.69 to 0.9.70):
 

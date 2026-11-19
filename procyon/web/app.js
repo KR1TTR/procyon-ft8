@@ -1884,10 +1884,14 @@ function fillDevices(m) {
     const sel = form.elements[name];
     sel.innerHTML = `<option value="">System default</option>` +
       devs.map((d) => `<option value="${esc(d.name)}">${esc(d.desc)}</option>`).join("");
-    if (st[name] && !devs.some((d) => d.name === st[name])) {
-      sel.insertAdjacentHTML("beforeend", `<option value="${esc(st[name])}">${esc(st[name])} (not found)</option>`);
+    // Same rule as the engine: PipeWire's numbered copy of a name ("....9")
+    // is the same device, so select the device itself (saving tidies it up).
+    const saved = st[name] || "";
+    const dev = devs.find((d) => d.name === saved) || devs.find((d) => d.name === saved.replace(/\.\d+$/, ""));
+    if (saved && !dev) {
+      sel.insertAdjacentHTML("beforeend", `<option value="${esc(saved)}">${esc(saved)} (not found)</option>`);
     }
-    sel.value = st[name] || "";
+    sel.value = dev ? dev.name : saved;
   }
 }
 
