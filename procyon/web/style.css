@@ -97,6 +97,11 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--border2)
 .mode-btn:hover { border-color: var(--border2); }
 .menu.mode-menu { min-width: 100px; grid-template-columns: 1fr; left: auto; right: 0; }   /* one column, lined up on the button's right edge so it stays on screen on phones (outranks .menu, which comes later) */
 .mode-menu button { font: 600 13px var(--mono); align-items: baseline; }
+/* JS8 view: the chat screen fills the window below the header */
+body.js8 .wf-card, body.js8 main.layout { display: none; }
+.js8-view { flex: 1 0 auto; display: flex; padding: 0; }
+.js8-view[hidden] { display: none; }
+.js8-view iframe { flex: 1; width: 100%; min-height: calc(100vh - 70px); border: 0; background: transparent; }
 .mode-picker.pending { cursor: progress; }
 .mode-picker.pending button { pointer-events: none; }
 .chev path { stroke: var(--muted); stroke-width: 1.5; fill: none; }

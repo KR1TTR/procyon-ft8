@@ -1,0 +1,133 @@
+/* Procyon's colours, copied from procyon/procyon/web/style.css (keep in step).
+   Night sky is :root; other palettes via <html data-palette>. */
+:root {
+  --bg: #080c17;
+  --bg2: #0c1222;
+  --surface: #111829;
+  --surface2: #172036;
+  --border: #212b45;
+  --border2: #2c3858;
+  --text: #e7ecf6;
+  --muted: #8592b0;
+  --faint: #56617f;
+  --rx: #3dd6c4;
+  --tx: #ff5b6e;
+  --cq: #5fe08f;
+  --me: #ffb547;
+  --info: #7ea6ff;
+  --pota: #a6e37f;
+  --rpt: #d6a7ff;
+  --text2: #c9d1e6;
+  --me-soft: #e7d3ae;
+  --rx-soft: #c9f4ee;
+  --tx-soft: #ffc2c9;
+  --on-accent: #04121a;
+  --on-me: #1a1200;
+  --on-tx-dark: #1a0306;
+  --snr1: #5fe08f; --snr2: #9be36b; --snr3: #ffd166; --snr4: #ff8a5b;
+  --header-bg: #0a0f1ccc;
+  /* faint texture behind everything (branding/make_textures.py); "none" for plain */
+  --texture: url(../tex/stars-near.svg), url(../tex/stars-far.svg);
+  --glow1: #13204a55;
+  --glow2: #0f3d4a44;
+  --wf-bg: #050816;
+  --hover-bg: #1c2742;
+  --hover-border: #3a486e;
+  --line: #ffffff08;
+  --ghost-bg: #ffffff10;
+  --ghost-border: #ffffff40;
+  --overlay: #080c17cc;
+  --backdrop: #03060ecc;
+  --radius: 14px;
+  --mono: "JetBrains Mono", "SF Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  --sans: Inter, "SF Pro Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+/* Settings → Experimental, chosen per device (<html data-palette>). The default
+   "night sky" look is :root above; each palette only overrides variables. The
+   waterfall has its own colour schemes, so any palette works with any scheme. */
+
+/* Classic: light grey and white, with a navy title bar - a nod to Windows 95.
+   Signal colours are darkened to ink strength so they read on white. */
+:root[data-palette="classic"],
+:root[data-palette="classic"] .top .menu {
+  color-scheme: light;
+  --texture: none;   /* the calm "focus" palette stays plain */
+  --bg: #eef1f3; --bg2: #e3e7ea;
+  --surface: #cfd6da; --surface2: #bfc8cd;
+  --border: #9aa5ab; --border2: #77838a;
+  --text: #0e1418; --muted: #45515a; --faint: #66727a;
+  --rx: #00737d; --tx: #c4122f; --cq: #17772e; --me: #a65200; --info: #1c45ad;
+  --pota: #4a7a0e; --rpt: #6b2fa6; --text2: #2b353c;
+  --me-soft: #6f3c00; --rx-soft: #004b52; --tx-soft: #8c0c22;
+  --on-accent: #ffffff; --on-me: #ffffff; --on-tx-dark: #ffffff;
+  --snr1: #17772e; --snr2: #4c7a00; --snr3: #946500; --snr4: #b23c18;
+  --glow1: transparent; --glow2: transparent;
+  --wf-bg: #03061a;
+  --hover-bg: #b4bec4; --hover-border: #5f6b72;
+  --line: #00000012; --ghost-bg: #0000000a; --ghost-border: #00000045;
+  --overlay: #eef1f3cc; --backdrop: #2a3640aa;
+}
+:root[data-palette="classic"] .top {
+  --header-bg: linear-gradient(90deg, #0a246a, #3366a8);
+  --text: #ffffff; --muted: #d3def0; --faint: #a7b9d6;
+  --surface: #ffffff1c; --surface2: #ffffff2e; --border: #ffffff3d; --border2: #ffffff5c;
+  --hover-bg: #ffffff2a; --hover-border: #ffffff80;
+  --rx: #7fe6ee; --tx: #ff7a8a; --cq: #8ef0a2; --me: #ffc970; --info: #b7cdff;
+  --pota: #c4ef8f; --on-accent: #04121a; --on-me: #1a1200;
+  border-bottom-color: #061848;
+}
+/* Text inside the title bar (and its drop-down menu) uses their own colours,
+   not the page's dark ink it would otherwise inherit */
+:root[data-palette="classic"] .top,
+:root[data-palette="classic"] .top .menu { color: var(--text); }
+
+/* Campfire: bark-brown panels (dirt-brown fields inside them) on a near-black
+   night, a bright amber for "calling you" - made to go with the Ember
+   waterfall, and dim enough for dark-adapted eyes on a late-night activation. */
+:root[data-palette="campfire"] {
+  --texture: url(../tex/pine.svg);   /* fallen pine needles */
+  --bg: #050a0b; --bg2: #071011;
+  --surface: #1f170f; --surface2: #2a1f15;
+  --border: #3a2b1c; --border2: #52402b;
+  --text: #e4e8de; --muted: #8e9d90; --faint: #5c6b61;
+  --rx: #63c7b2; --tx: #ff5a3c; --cq: #a8e35a; --me: #ffc23d; --info: #7fa6d6;
+  --pota: #b5d96a; --rpt: #c9a6ff; --text2: #c9d2c4;
+  --me-soft: #f0dcae; --rx-soft: #c4ece2; --tx-soft: #ffc4b6;
+  --on-accent: #04110e; --on-me: #1a1200;
+  --snr1: #a8e35a; --snr2: #cde35a; --snr3: #ffc23d; --snr4: #ff8a4a;
+  --header-bg: #050b0bd9; --glow1: #10284a40; --glow2: #3a1a0a2e;
+  --wf-bg: #050302;
+  --hover-bg: #33261a; --hover-border: #6a5238;
+  --line: #ffffff07; --ghost-bg: #ffffff0e; --ghost-border: #ffffff38;
+  --overlay: #050a0bcc; --backdrop: #020504cc;
+}
+:root[data-palette="campfire"] .card, :root[data-palette="campfire"] dialog { --bg: #150f0a; --bg2: #1a130c; }
+
+/* Antique radio: a 1930s tabletop "tombstone" set - stained-maple cabinet framing
+   dark bakelite workspaces, brass accents. Made to go with the Tube glow waterfall. */
+:root[data-palette="radio"] {
+  --texture: url(../tex/maple.svg);  /* maple grain on the cabinet */
+  --bg: #9a5a28; --bg2: #8a4e22;
+  --surface: #1f150e; --surface2: #2b1d13;
+  --border: #5e4024; --border2: #8a6634;
+  --text: #f2e4c8; --muted: #bfa483; --faint: #8f7659;
+  --rx: #d9b25a; --tx: #e8553f; --cq: #a3d46c; --me: #ff9a3d; --info: #93b7dc;
+  --pota: #b9d47c; --rpt: #e0a8d0; --text2: #dccdb2;
+  --me-soft: #f0d2a8; --rx-soft: #f1dfae; --tx-soft: #ffc6bc;
+  --on-accent: #1a1006; --on-me: #1a0d00;
+  --snr1: #a3d46c; --snr2: #c4d36a; --snr3: #f0c060; --snr4: #f08a50;
+  --header-bg: linear-gradient(180deg, #6e3d18, #5a3112);
+  --glow1: #ffd9a028; --glow2: #3a1a0830;
+  --wf-bg: #0b0805;
+  --hover-bg: #3a281a; --hover-border: #a07a40;
+  --line: #fff3dc0a; --ghost-bg: #fff3dc12; --ghost-border: #fff3dc45;
+  --overlay: #9a5a28cc; --backdrop: #1a0f08cc;
+}
+/* text that sits right on the wood */
+:root[data-palette="radio"] .wf-card { --muted: #f8e8c8; --faint: #efd6aa; --border2: #3a2414; }
+:root[data-palette="radio"] .top { --muted: #ecd6b0; --faint: #d8bd92; --border: #3a2414; border-bottom-color: #3a2010; }
+:root[data-palette="radio"] .wf-wrap { border: 2px solid #2b1d13; box-shadow: 0 0 0 1px #c9a25a55; }
+/* inside the panels and dialogs: bakelite, not wood */
+:root[data-palette="radio"] .card, :root[data-palette="radio"] dialog { --bg: #120b07; --bg2: #150d08; }
+

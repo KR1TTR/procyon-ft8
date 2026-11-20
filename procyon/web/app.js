@@ -466,6 +466,11 @@ function onState(m) {
   $("#toolMissing").textContent = missing.length ? `(Missing: ${missing.join(", ")})` : "";
 
   if (first && !st.mycall) openSettings(true);
+  if (first) {                   // JS8 screen open last time on this device?
+    let on = false;
+    try { on = localStorage.getItem("procyon.js8View") === "1"; } catch { /* not stored */ }
+    if (on) showJs8(true);
+  }
   applySpelling(m.home.us_spelling);
   if (first || st.team_badges !== shownBadges || useMiles() !== shownMiles) renderDecodes();
   shownBadges = st.team_badges;
@@ -477,7 +482,25 @@ function renderBandMenu() {
   menu.innerHTML = S.bands.map((b) =>
     `<button data-hz="${b.hz}" class="${b.name === S.band ? "on" : ""}">${b.name}<small>${(b.hz / 1e6).toFixed(3)}</small></button>`).join("");
 }
+// JS8 (experimental): not an engine mode yet - picking it shows the chat
+// screen (a pretend band) in place of the FT8/FT4 screen. Remembered per device.
+let js8On = false;
+function showJs8(on) {
+  js8On = on;
+  document.body.classList.toggle("js8", on);
+  $("#js8View").hidden = !on;
+  const f = $("#js8Frame");
+  if (on && !f.src) {
+    const st = (S && S.settings) || {};
+    const q = new URLSearchParams({ embed: 1, call: st.mycall || "", grid: st.mygrid || "",
+      palette: document.documentElement.dataset.palette || "" });
+    f.src = `/static/js8/index.html?${q}`;
+  }
+  try { localStorage.setItem("procyon.js8View", on ? "1" : ""); } catch { /* not stored */ }
+  showModeButtons(on ? "JS8" : T().mode);
+}
 function showModeButtons(mode) {
+  if (js8On && !modePending) mode = "JS8";
   $("#modeName").textContent = mode;
   [...$("#modeMenu").children].forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
 }
@@ -491,22 +514,33 @@ $("#modeMenu").addEventListener("click", (e) => {
   e.stopPropagation();
   const b = e.target.closest("button");
   $("#modeMenu").hidden = true;
-  if (!b || !S || modePending || b.dataset.mode === T().mode) return;   // one switch at a time
+  if (!b || !S || modePending) return;   // one switch at a time
+  const want = b.dataset.mode;
+  if (want === "JS8" ? js8On : (!js8On && want === T().mode)) return;
   const q = S.qso, busy = q.tx_enabled || S.tx || (q.dxcall && !q.logged);
-  if (!busy) return switchMode(b.dataset.mode);
+  if (want !== "JS8" && js8On && want === T().mode) return showJs8(false);   // back to the FT8/FT4 screen
+  if (!busy) return pickMode(want);
   // Our own dialog, not window.confirm: the browser's pop-up can open behind a
   // full-screen page, which then looks frozen.
-  $("#modeTitle").textContent = `Switch to ${b.dataset.mode}?`;
-  $("#modeText").textContent = "Transmitting stops"
-    + (q.dxcall && !q.logged ? ` and the QSO with ${q.dxcall} ends (not logged).` : ".");
-  $("#modeConfirm").textContent = `Switch to ${b.dataset.mode}`;
+  $("#modeTitle").textContent = `Switch to ${want}?`;
+  $("#modeText").textContent = want === "JS8" ? "FT8/FT4 transmitting stops."
+    : "Transmitting stops" + (q.dxcall && !q.logged ? ` and the QSO with ${q.dxcall} ends (not logged).` : ".");
+  $("#modeConfirm").textContent = `Switch to ${want}`;
   $("#modeDlg").returnValue = "";   // Esc must never count as "Switch"
-  $("#modeDlg").dataset.mode = b.dataset.mode;
+  $("#modeDlg").dataset.mode = want;
   $("#modeDlg").showModal();
 });
 $("#modeDlg").addEventListener("close", () => {
-  if ($("#modeDlg").returnValue === "switch" && !modePending) switchMode($("#modeDlg").dataset.mode);
+  if ($("#modeDlg").returnValue === "switch" && !modePending) pickMode($("#modeDlg").dataset.mode);
 });
+function pickMode(mode) {
+  if (mode === "JS8") {           // stop FT8/FT4 transmitting, then show the chat screen
+    if (S.qso.tx_enabled || S.tx) send({ type: "halt" });
+    return showJs8(true);
+  }
+  if (js8On) showJs8(false);
+  if (mode !== T().mode) switchMode(mode);
+}
 function switchMode(mode) {
   // Light the new mode straight away; the engine's answer confirms it.
   modePending = mode;

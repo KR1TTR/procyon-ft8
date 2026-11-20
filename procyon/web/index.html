@@ -32,6 +32,7 @@
     <div class="menu mode-menu" id="modeMenu" hidden>
       <button type="button" data-mode="FT8" title="FT8: 15-second cycles, the most popular mode">FT8</button>
       <button type="button" data-mode="FT4" title="FT4: faster 7.5-second cycles, about 3 dB less sensitive - popular in contests">FT4</button>
+      <button type="button" data-mode="JS8" title="JS8: keyboard chat - EXPERIMENTAL, a pretend band for now (nothing is received or sent on the radio)">JS8</button>
     </div>
   </div>
 
@@ -235,6 +236,12 @@
     <div class="log-list" id="logList"><div class="muted pad">No QSOs yet.</div></div>
   </section>
 </main>
+
+<!-- JS8 (experimental, ProcyonEX): the chat screen in a frame, in place of the
+     FT8/FT4 waterfall and panels. A pretend band for now - no radio. -->
+<section class="js8-view" id="js8View" hidden>
+  <iframe id="js8Frame" title="JS8 chat"></iframe>
+</section>
 
 <div class="toasts" id="toasts"></div>
 <div class="offline" id="offline" hidden><div>Reconnecting to Procyon…</div></div>

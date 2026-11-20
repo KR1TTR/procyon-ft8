@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Procyon JS8 chat</title>
+<link rel="icon" href="icon.svg">
+<link rel="stylesheet" href="theme.css?v=10">
+<link rel="stylesheet" href="chat.css?v=14">
+</head>
+<body>
+
+<!-- Simulator controls: a pretend band. Nothing here transmits. -->
+<div class="mock-bar sim-bar">
+  <b id="simLabel">SIMULATOR</b> <span class="muted sim-only">pretend band - no radio, nothing transmits</span>
+  <span class="muted live-only" id="liveNote"></span>
+  <label class="tiny">You <input id="myCall" size="7" value=""> <input id="myGrid" size="4" value=""> <input id="myName" size="7" value="" placeholder="name"></label>
+  <label class="tiny sim-only" title="1 s frames instead of real JS8 timing, for quick testing"><input type="checkbox" id="fast"> Fast test</label>
+  <label class="tiny sim-only">Lost <input type="range" id="loss" min="0" max="50" value="0"> <span id="lossV">0%</span></label>
+  <label class="tiny sim-only">Damaged <input type="range" id="garble" min="0" max="50" value="0"> <span id="garbleV">0%</span></label>
+  <button class="btn ghost small" id="layoutReset" title="Put the panels back where they started">Reset layout</button>
+  <button class="btn ghost small sim-only" id="resetBtn" title="Clear everything and start the band again">Restart band</button>
+  <select id="palette" title="Procyon's colour palettes">
+    <option value="">Night sky</option>
+    <option value="classic">Classic</option>
+    <option value="campfire">Campfire</option>
+    <option value="radio">Antique radio</option>
+  </select>
+</div>
+
+<header class="top">
+  <div class="brand"><img src="icon.svg" alt=""> Procyon</div>
+  <button class="band-btn"><span class="freq">7.078</span><span class="unit">MHz</span><span class="band-name">40m</span></button>
+  <span class="seg mode-seg" title="FT8/FT4 live in Procyon itself"><button disabled>FT8</button><button disabled>FT4</button><button class="on">JS8</button></span>
+  <span class="seg small" id="speedSeg" title="JS8 speed: how long each frame (chunk of text) is on the air">
+    <button>Slow</button><button class="on">Normal</button><button>Fast</button><button>Turbo</button>
+  </span>
+  <div class="clock">
+    <div class="utc" id="utc"></div>
+    <div class="cycle"><div class="cycle-bar"><div id="cycleFill"></div></div><span id="cycleLabel"></span></div>
+  </div>
+  <div class="status">
+    <button class="chip" id="hbChip" title="Heartbeats: a short 'I'm here' so others see you in their Heard list. Click to switch automatic heartbeats on or off."><span class="led hb"></span><span id="hbLabel">Heartbeat: off</span></button>
+  </div>
+</header>
+
+<!-- The panels ("tiles"). layout.js arranges them: drag a tile by its ⠿ gripper
+     to move it, drag the gaps between tiles to resize them. -->
+<main id="main" class="dock">
+  <section class="card tile wf-tile" data-tile="wf" data-label="Waterfall">
+    <div class="card-head slim"><span class="grip" title="Drag to move this panel">⠿</span><h2>Waterfall</h2>
+      <span class="tiny">click it to choose where you transmit</span></div>
+    <div class="wf-strip" id="wfStrip" title="Click to choose where you transmit">
+      <canvas id="wf"></canvas>
+      <div class="wf-tx" id="wfTx"><span id="wfTxLabel"></span></div>
+    </div>
+  </section>
+
+  <section class="card tile heard" data-tile="heard" data-label="Heard">
+    <div class="card-head"><span class="grip" title="Drag to move this panel">⠿</span><h2>Heard <span class="count" id="heardCount">0</span></h2>
+      <span class="seg small" id="sortSeg"><button class="on" data-sort="last">Last heard</button><button data-sort="snr">SNR</button></span></div>
+    <div class="list" id="heardList"></div>
+    <div class="groups">
+      <div class="sub">Groups</div>
+      <div id="groupList"></div>
+    </div>
+  </section>
+
+  <!-- Band activity as its own panel: only shown when popped out of the chat's tabs -->
+  <section class="card tile band" data-tile="band" data-label="Band activity">
+    <div class="card-head"><span class="grip" title="Drag to move this panel">⠿</span><h2>Band activity</h2>
+      <button class="btn ghost small clear-view" data-clear="all" title="Empty band activity. The Heard list stays.">Clear</button>
+      <button class="btn ghost small" data-unpop title="Put band activity back as a tab in the chat panel (or drag this panel onto the chat's tabs)"><span class="pop-ico">⧉</span> Back to a tab</button></div>
+    <div class="list band-list" id="bandList"></div>
+  </section>
+
+  <section class="card tile convo" data-tile="convo" data-label="Chat">
+    <div class="tabs-row"><span class="grip" title="Drag to move this panel">⠿</span><div class="tabs" id="tabs"></div>
+      <button class="btn ghost small clear-view" data-clear="view" id="clearView" title="Empty this tab (band activity or this chat). The Heard list stays.">Clear</button></div>
+    <div class="list chat" id="chat"></div>
+
+    <div class="compose">
+      <div class="suggest" id="suggest" hidden></div>
+      <div class="macros" id="macros"></div>
+      <div class="to-row">
+        <label for="toSel">To</label>
+        <select id="toSel"></select>
+        <span class="muted tiny" id="toHint"></span>
+      </div>
+      <textarea id="txt" rows="2" spellcheck="false" placeholder="Type a message… (Enter sends)"></textarea>
+      <div class="send-row">
+        <div class="meter" id="meter"></div>
+        <button class="btn ghost small" id="clearBtn">Clear</button>
+        <button class="btn danger" id="stopTx" hidden title="Stop sending (Esc)">Stop</button>
+        <button class="btn primary" id="sendBtn">Send</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="js8.js?v=20"></script>
+<script src="link.js?v=20"></script>
+<script src="station.js?v=20"></script>
+<script src="bots.js?v=20"></script>
+<script src="layout.js?v=20"></script>
+<script src="app.js?v=20"></script>
+</body>
+</html>
