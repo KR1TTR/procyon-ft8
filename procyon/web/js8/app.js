@@ -460,6 +460,7 @@ const dock = new Dock($('main'), {
   defaults: { dir: 'col', kids: ['wf', { dir: 'row', kids: ['heard', 'convo'], sizes: [1, 3.2] }], sizes: [1.4, 6] },
   optional: ['band'],   // band activity: a tab in the chat, or popped out as its own panel
   tabHome: { band: { into: 'convo', row: '.tabs-row' } },
+  keep: ['heard'],   // the Heard list keeps its width when panels come and go (drag its edge to change it)
 });
 dock.onLayout = () => render();
 dock.onTabbed = () => { current = 'all'; render(); };

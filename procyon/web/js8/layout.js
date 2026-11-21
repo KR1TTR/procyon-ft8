@@ -12,13 +12,16 @@ class Dock {
   // tabHome = an optional tile that can also live as a tab inside another tile:
   // {id: {into: tile id, row: selector of that tile's tab row}}; dropping it there
   // takes the panel away again (onTabbed(id) is told).
-  constructor(root, { key, defaults, optional = [], tabHome = {}, phoneWidth = 700 }) {
+  // keep = tiles whose width only changes when the user drags their gap: when
+  // other panels come, go or move, they keep the width they had.
+  constructor(root, { key, defaults, optional = [], tabHome = {}, keep = [], phoneWidth = 700 }) {
     this.root = root;
     this.key = key;
     this.defaults = defaults;
     this.phoneWidth = phoneWidth;
     this.optional = optional;
     this.tabHome = tabHome;
+    this.keep = keep;
     this.onTabbed = () => {};
     this.tiles = new Map([...root.querySelectorAll('[data-tile]')].map(el => [el.dataset.tile, el]));
     this.tree = this.load() || Dock.copy(defaults);
@@ -75,6 +78,7 @@ class Dock {
     }
     const box = document.createElement('div');
     box.className = `split ${node.dir}`;
+    box.dataset.path = path.join('.');
     box.style.flex = `${weight} 1 0`;
     node.kids.forEach((kid, i) => {
       if (i) {
@@ -145,22 +149,63 @@ class Dock {
   }
 
   // Show an optional tile beside target, or take it away again.
-  add(id, target, zone, r = .38) { this.tree = Dock.insert(Dock.remove(this.tree, id), target, id, zone, r); this.save(); this.render(); }
-  drop(id) { this.tree = Dock.remove(this.tree, id); this.save(); this.render(); }
+  add(id, target, zone, r = .38) { this.relayout(() => { this.tree = Dock.insert(Dock.remove(this.tree, id), target, id, zone, r); }); }
+  drop(id) { this.relayout(() => { this.tree = Dock.remove(this.tree, id); }); }
+
+  // Change the tree, draw it again, and give the "keep" tiles back the width
+  // they had (by setting their share in the nearest side-by-side split).
+  relayout(change) {
+    const before = new Map();
+    if (!this.phone) for (const id of this.keep) if (this.has(id)) before.set(id, this.tiles.get(id).getBoundingClientRect().width);
+    change();
+    this.render();
+    if (!this.phone) {
+      for (const [id, want] of before) if (this.has(id) && want > 0) this.keepWidth(id, want);
+      this.onResize();
+    }
+    this.save();
+  }
+
+  keepWidth(id, want) {
+    let kid = this.tiles.get(id), box = kid.parentElement;
+    while (box && box !== this.root && !(box.classList.contains('split') && box.classList.contains('row'))) {
+      kid = box; box = box.parentElement;
+    }
+    if (!box || box === this.root) return;          // nothing beside it: it has the whole width
+    const node = this.nodeAt(box.dataset.path ? box.dataset.path.split('.').map(Number) : []);
+    const kids = [...box.children].filter(el => !el.classList.contains('gap'));
+    const k = kids.indexOf(kid);
+    if (k < 0 || kids.length !== node.kids.length) return;
+    const total = kids.reduce((a, el) => a + el.getBoundingClientRect().width, 0);
+
+    want = Math.max(220, Math.min(total - 220 * (kids.length - 1), want));
+    if (want <= 0 || want >= total) return;
+    // borders and padding sit outside the shares, so aim, look, and aim again
+    let aim = want;
+    for (let n = 0; n < 4; n++) {
+      const others = node.sizes.reduce((a, w, i) => (i === k ? a : a + w), 0);
+      node.sizes[k] = others * aim / (total - aim);
+      // shares summing to less than 1 would leave the row part empty
+      const sum = node.sizes.reduce((x, y) => x + y, 0);
+      node.sizes = node.sizes.map(x => x * kids.length / sum);
+      kids.forEach((el, i) => { el.style.flexGrow = node.sizes[i]; });
+      const got = kid.getBoundingClientRect().width;
+      if (Math.abs(got - want) < 0.25) break;
+      aim = Math.max(1, Math.min(total - 1, aim + want - got));
+    }
+  }
 
   move(id, target, zone) {
     if (id === target) return;
     if (!this.has(id)) return this.add(id, target, zone === 'middle' ? 'right' : zone);
-    if (zone === 'middle') this.tree = Dock.swap(this.tree, id, target);
-    else {
+    if (zone === 'middle') return this.relayout(() => { this.tree = Dock.swap(this.tree, id, target); });
+    {
       // the moved tile keeps about its own size (between a fifth and half of the target's space)
       const row = zone === 'left' || zone === 'right';
       const a = this.tiles.get(id).getBoundingClientRect(), b = this.tiles.get(target).getBoundingClientRect();
       const r = Math.max(.2, Math.min(.5, row ? a.width / (a.width + b.width) : a.height / (a.height + b.height)));
-      this.tree = Dock.insert(Dock.remove(this.tree, id), target, id, zone, r);
+      this.relayout(() => { this.tree = Dock.insert(Dock.remove(this.tree, id), target, id, zone, r); });
     }
-    this.save();
-    this.render();
   }
 
   // Which part of a tile the pointer is over.
