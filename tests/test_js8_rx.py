@@ -10,7 +10,7 @@ from _common import scratch_dir
 
 from procyon.engine import Engine
 from procyon.js8 import js8msg
-from procyon.js8.rx import Assembler, as_message
+from procyon.js8.rx import Assembler, as_message, message_text
 
 
 async def _noop(*a, **k):
@@ -140,3 +140,24 @@ def test_each_mode_goes_to_its_own_frequency_even_with_a_slow_radio():
         await e._set_mode("FT8")
         assert await settle() == 7_074_000
     asyncio.run(run())
+
+
+def test_a_report_split_by_js8calls_packer_is_joined_back():
+    """Real frames from the air (40 m, 2026-11-21): JS8Call can only pack
+    reports -30..+31, so WA7TFT's -60 went out as "-06" + a frame "0" and
+    N7JFF's -34 as "-03" + "4". Procyon shows the real report."""
+    wa7tft = [("UqY1BHMbxVqP", 1), ("wK++++++++++", 2)]
+    n7jff = [("VlTOQHMafJqS", 1), ("y4++++++++++", 2)]
+    assert " ".join(js8msg.decode_message(wa7tft).split()) == "WA7TFT: KJ5QFP HEARTBEAT SNR -06 0"
+    assert as_message("msg", {"frames": wa7tft, "snr": -5, "hz": 1500})["text"] == "KJ5QFP HEARTBEAT SNR -60"
+    assert as_message("msg", {"frames": n7jff, "snr": -5, "hz": 1500})["text"] == "KJ5MQE HEARTBEAT SNR -34"
+
+
+def test_ordinary_reports_and_text_are_left_alone():
+    def shown(text):
+        return " ".join(message_text(js8msg.build_frames("W9XYZ", "EN52", text)).split())
+    assert shown("K1ABC SNR -06") == "W9XYZ: K1ABC SNR -06"           # one frame, nothing to join
+    assert shown("K1ABC SNR +12") == "W9XYZ: K1ABC SNR +12"
+    assert shown("K1ABC HELLO 5") == "W9XYZ: K1ABC HELLO 5"           # a lone digit after other text
+    long = shown("K1ABC SNR -06 THANKS FOR THE REPORT")               # more text after the report
+    assert long == "W9XYZ: K1ABC SNR -06 THANKS FOR THE REPORT", long

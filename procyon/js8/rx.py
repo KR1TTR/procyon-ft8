@@ -74,10 +74,50 @@ class Assembler:
         return [("msg", m) for m in old]
 
 
+def _report_split(frames):
+    """JS8Call's packer quirk (still in JS8Call 3.0): a directed frame's report
+    holds only -30..+31 and JS8Call reads at most two characters of it, so a
+    report like -60 goes out as "-06" plus one extra frame with just "0"
+    (-34 -> "-03" + "4"). Returns the real report ("-60") when the message is
+    exactly that: an SNR report of the form -0N/+0N whose next frame is the
+    message's last one and holds a single digit. Otherwise None."""
+    if len(frames) < 2:
+        return None
+    a = js8msg.decode_frame(*frames[-2]) or {}
+    b = js8msg.decode_frame(*frames[-1]) or {}
+    if not (frames[-1][1] & js8msg.FLAG_LAST) or b.get("type") != js8msg.FRAME_DATA:
+        return None
+    digit = b.get("text", "").strip()
+    if len(digit) != 1 or not digit.isdigit():
+        return None
+    if a.get("type") == js8msg.FRAME_DIRECTED and js8msg.is_snr_command(a.get("cmd", "")):
+        num = a.get("num", "")
+    elif a.get("type") == js8msg.FRAME_COMPOUND_DIRECTED and " SNR " in a.get("extra", "") + " ":
+        num = a["extra"].split()[-1]
+    else:
+        return None
+    if len(num) != 3 or num[0] not in "+-" or num[1] != "0" or not num[2].isdigit():
+        return None
+    return num, num[0] + num[2] + digit
+
+
+def message_text(frames):
+    """The text JS8Call shows, but with a report split by JS8Call's packer
+    joined back ("HEARTBEAT SNR -06 0" -> "HEARTBEAT SNR -60")."""
+    text = js8msg.decode_message(frames)
+    split = _report_split(frames)
+    if split:
+        shown, real = split
+        head = js8msg.decode_message(frames[:-1]).rstrip()
+        if head.endswith(shown):
+            text = head[:-len(shown)] + real + " "
+    return text
+
+
 def as_message(kind, m):
     """The text the screen gets: sender call apart, the rest starting with
     the call or @group it's for (like the chat screen's station.js expects)."""
-    text = js8msg.decode_message(m["frames"])
+    text = message_text(m["frames"])
     first = js8msg.decode_frame(*m["frames"][0]) or {}
     frm = first.get("from", "")
     if frm and text.startswith(frm + ":"):
