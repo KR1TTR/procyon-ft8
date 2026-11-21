@@ -532,7 +532,11 @@ def subtract(dd, itone, f0, start, S):
 # own unused tones - a strong signal leaks into those, so the old way read
 # strong signals ~10 dB low and weak ones ~6 dB high (measured 2026-11-18).
 SNR_FROM_WF = True
-SNR_CAL = {"normal": -3.0, "fast": -5.0, "turbo": -10.0, "slow": 0.0}   # vs JS8Call on the recordings (turbo 25, slow 14 frames only)
+# Calibrated to the JS8Call PROGRAM (what people see on screen), which reads ~4 dB
+# above its own js8 command-line decoder on the same audio. Normal: 107 frames
+# side by side on the air 2026-11-21 (median 0, 56% within 2 dB); the others from
+# the recordings vs the js8 decoder + the same gap (fast 72, turbo 12, slow 6 frames).
+SNR_CAL = {"normal": 3.0, "fast": -1.0, "turbo": -5.0, "slow": 4.5}
 SNR_MIN = -28                    # JS8Call's floor
 
 
@@ -560,6 +564,36 @@ def _noise_base(s, S):
     pad = np.pad(b, w // 2, mode="edge")
     env = np.percentile(np.lib.stride_tricks.sliding_window_view(pad, w), 20, axis=1)
     return np.maximum(env, 1e-30), live
+
+
+SNR_BASE = "fit"                  # background: "fit" (JS8Call's way: straight scale on a crowded band) or "local"
+FIT_SEG, FIT_PCT, FIT_TERMS = 10, 10, 5
+
+
+def _noise_fit(s, live, S, fmin=200.0, fmax=3000.0):
+    """Background like JS8Call's baselinejs8: the slot's average spectrum in
+    dB, the quietest 10% of cells in each of ten slices of the band, and a
+    smooth 4th-order curve through them (it follows the radio's filter but
+    not the signals, so a crowded stretch of band doesn't lift it)."""
+    cell = S.baud / 2
+    ia, ib = max(1, int(round(fmin / cell))), min(s.shape[0] - 1, int(round(fmax / cell)))
+    avg = 10 * np.log10(np.maximum(s[ia:ib + 1][:, live].mean(1), 1e-30))
+    n = len(avg)
+    seg = n // FIT_SEG
+    xs, ys = [], []
+    for k in range(FIT_SEG):
+        a = avg[k * seg:(k + 1) * seg]
+        if not len(a):
+            continue
+        lim = np.percentile(a, FIT_PCT)
+        j = np.nonzero(a <= lim)[0] + k * seg
+        xs.append(j), ys.append(avg[j])
+    x, y = np.concatenate(xs) - n / 2, np.concatenate(ys)
+    poly = np.polyfit(x / n, y, FIT_TERMS - 1)
+    base_db = np.polyval(poly, (np.arange(s.shape[0]) - ia - n / 2) / n)
+    base_db[:ia] = base_db[ia]
+    base_db[ib + 1:] = base_db[ib]
+    return 10 ** (base_db / 10)
 
 
 def _wf_snr(wf, d, itone, S):
@@ -598,6 +632,8 @@ def decode(audio, speed="normal", fmin=200.0, fmax=3000.0, depth=3, passes=4):
     if SNR_FROM_WF:
         sw = _snr_waterfall(dd, S)
         wf = (sw,) + _noise_base(sw, S)
+        if SNR_BASE == "fit":
+            wf = (sw, _noise_fit(sw, wf[2], S, fmin, fmax), wf[2])
     last = -1
     for p in range(passes):
         if p > 0 and len(found) == last:

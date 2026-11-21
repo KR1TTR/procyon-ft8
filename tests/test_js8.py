@@ -77,10 +77,16 @@ def test_several_stations_in_one_slot():
     assert sorted((d["frame"], d["flags"]) for d in found) == sorted(frames), found
 
 
+# Reports are on the JS8Call program's scale (what people compare with), which
+# reads about 4 dB above the true strength in 2500 Hz - the same at every level.
+APP_SCALE = 4
+
+
 def test_signal_report_about_right():
     frame, flags = js8msg.build_frames("K1ABC", "FN42", "HB FN42")[0]
-    found = js8dec.decode(slot("normal", [(frame, flags, 1000, -10)]), "normal")
-    assert len(found) == 1 and abs(found[0]["snr"] - (-10)) <= 3, found
+    for true in (-16, -10, 0, 10):          # straight: strong signals aren't squeezed
+        found = js8dec.decode(slot("normal", [(frame, flags, 1000, true)]), "normal")
+        assert len(found) == 1 and abs(found[0]["snr"] - (true + APP_SCALE)) <= 2, (true, found)
 
 
 def test_pure_noise_gives_nothing():
