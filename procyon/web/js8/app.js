@@ -485,12 +485,10 @@ start();
 // ---------------------------------------------------------------- the real radio (listen only)
 // When modem/js8live.py serves this page it answers on /ws: the pretend band
 // stops and real decodes come in through the same hear()/hearPart() as the bots'.
-(function connectLive() {
-  if (EMBEDDED || !/^https?:$/.test(location.protocol)) return;
-  let ws;
-  try { ws = new WebSocket(`ws://${location.host}/ws`); } catch { return; }
-  ws.onmessage = e => {
-    const m = JSON.parse(e.data);
+// Inside Procyon the decodes come from Procyon's own engine, passed on by the
+// page around this frame (postMessage, same origin only); the chat screen's
+// commands (the speed buttons) go back the same way.
+function handleLive(m, ws) {
     if (m.type === 'hello') {
       if (!live) goLive(ws);
       liveSince = m.since || null;
@@ -532,7 +530,25 @@ start();
       render();
     }
     else if (m.type === 'wf') wfLive.push(m.v);
-  };
+}
+
+(function connectLive() {
+  if (EMBEDDED) {
+    const bridge = { readyState: 1, send: d => parent.postMessage({ procyonJs8Cmd: JSON.parse(d) }, location.origin) };
+    window.addEventListener('message', e => {
+      if (e.origin !== location.origin || e.source !== parent) return;
+      const d = e.data || {};
+      if (!d.procyonJs8) return;
+      handleLive(d.procyonJs8, bridge);
+      if (d.history) handleLive({ type: 'history', msgs: d.history }, bridge);
+    });
+    parent.postMessage({ procyonJs8Cmd: { type: 'ready' } }, location.origin);   // "catch me up"
+    return;
+  }
+  if (!/^https?:$/.test(location.protocol)) return;
+  let ws;
+  try { ws = new WebSocket(`ws://${location.host}/ws`); } catch { return; }
+  ws.onmessage = e => handleLive(JSON.parse(e.data), ws);
   ws.onclose = () => {
     if (!live) return;          // never was live (a plain web server): stay on the pretend band
     $('liveNote').textContent = 'lost the radio helper (js8live.py stopped?) - reload when it runs again';

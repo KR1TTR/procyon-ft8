@@ -29,6 +29,7 @@ from .radio_detect import blocked_ports, detect_radios, test_rig
 from .setup_help import hamlib_rigs, import_wsjtx
 from .system import BUNDLED_CTY, NO_WINDOW, find_cty, find_tool, serial_ports, tools
 from .udp import WsjtxUdp
+from .js8.rx import JS8_DIALS, Js8Rx
 from .rig import Rig
 
 log = logging.getLogger("procyon")
@@ -182,6 +183,10 @@ class Engine:
         self.tune_task = None
         self._halt = asyncio.Event()
         self._warned = ""
+        # JS8 (ProcyonEX, listen only): a Js8Rx while JS8 is picked, else None.
+        # While it runs, FT8/FT4 decoding pauses and nothing transmits.
+        self.js8 = None
+        self._js8_back = None          # the dial to return to when leaving JS8
 
     # ------------------------------------------------------------ plumbing
 
@@ -298,6 +303,7 @@ class Engine:
             "update": self._updated_to(),
             "newer": self.newer if self.s["update_check"] else None,
             "clock": self._clock_status(),
+            "js8": self.js8 is not None,
             "cty": {"version": self.cty.version, "found": bool(self.cty.path),
                     "source": self._cty_source(), "updating": self.cty_updating},
         }
@@ -501,12 +507,16 @@ class Engine:
             p = int(now // m.PERIOD)
             pos = now - p * m.PERIOD
             try:
-                if pos >= m.DECODE_AT and self.last_decoded < p and self.t0 is not None:
+                if self.js8 is not None:
+                    self.last_decoded = p   # FT8/FT4 decoding pauses while JS8 listens
+                    if self.qso.tx_enabled:   # JS8 is listen only: nothing may transmit
+                        self.qso.tx_enabled = False
+                elif pos >= m.DECODE_AT and self.last_decoded < p and self.t0 is not None:
                     self.last_decoded = p
                     if p not in self.tx_periods:
                         asyncio.create_task(self._decode(p))
                 q = self.qso
-                if (q.tx_enabled and p % 2 == q.parity and p not in self.tx_periods
+                if (q.tx_enabled and self.js8 is None and p % 2 == q.parity and p not in self.tx_periods
                         and self.tx_task is None and self.tune_task is None):
                     if self.decoding and pos < 1.0:
                         continue  # let the previous period's decode finish first
@@ -1245,6 +1255,8 @@ class Engine:
         """Before Procyon exits (Quit or Ctrl-C): end any transmission and make
         sure the radio is back on receive BEFORE the radio connection closes."""
         await self.halt()
+        if self.js8 is not None:
+            await self.js8.stop()
         busy = [t for t in (self.tune_task, self.tx_task) if t]
         if busy:
             await asyncio.wait(busy, timeout=3)   # their own cleanup unkeys the radio
@@ -1263,9 +1275,11 @@ class Engine:
             if self.tune_task:
                 self.tune_task.cancel()
             return
-        if self.tune_task or self.tx_task or self.s["demo"]:
+        if self.tune_task or self.tx_task or self.s["demo"] or self.js8 is not None:
             if self.s["demo"]:
                 self.toast("Tune is not available in demo mode", "warn")
+            elif self.js8 is not None:
+                self.toast("JS8 only listens for now - Tune is off while it's picked", "warn")
             return
 
         async def run():
@@ -1358,6 +1372,8 @@ class Engine:
 
     def _band_dial(self, band) -> int:
         """The band's usual dial frequency for the mode in use."""
+        if self.js8 is not None and band[0] in JS8_DIALS:
+            return JS8_DIALS[band[0]]
         return band[4] if self.m is ft4 and band[4] else band[3]
 
     async def _new_band(self, band: str):
@@ -1377,6 +1393,8 @@ class Engine:
         q.regen()
         q.next = 5
         self.known.clear()   # those stations were on the old band
+        if self.js8 is not None:
+            self.js8.new_band()
         log.info("band changed %s -> %s: transmit off, QSO cleared", old or "?", band or "?")
         if busy:
             self.toast(f"Band changed to {band or 'outside the ham bands'}: transmit off, QSO cleared", "warn")
@@ -1423,6 +1441,52 @@ class Engine:
     async def _retune(self, hz: int):
         await self.rig.set_freq(hz)
         await self.push_state()
+
+    def _latest(self, n):
+        """The newest n samples of radio audio, or None."""
+        if self.total < n:
+            return None
+        return self.ring[np.arange(self.total - n, self.total) % len(self.ring)]
+
+    async def _js8_on(self):
+        """JS8 picked (listen only): FT8/FT4 transmitting stops, decoding
+        pauses, and the radio moves to the band's JS8 frequency. On the demo
+        band nothing changes - the chat screen keeps its own pretend band."""
+        if self.js8 is not None or self.s["demo"]:
+            return
+        await self.halt()
+        busy = [t for t in (self.tx_task, self.tune_task) if t]
+        if busy:
+            await asyncio.wait(busy, timeout=3)
+        self._js8_back = self.dial
+        self.js8 = Js8Rx(self.samples, self._latest, self.band_time, lambda: self.clock_offset,
+                         lambda: (self.s["audio_in"], self.audio_error), self.broadcast)
+        self.js8.start()
+        band = next((b for b in BANDS if b[0] == band_of(self.dial)), None)
+        if band and band[0] in JS8_DIALS and self.dial != JS8_DIALS[band[0]]:
+            self.s["dial_hz"] = JS8_DIALS[band[0]]
+            if self.rig.enabled:
+                asyncio.get_event_loop().create_task(self._retune(self.s["dial_hz"]))
+        log.info("JS8 on (listen only), dial %d", self.s["dial_hz"])
+        await self.broadcast(self.js8.welcome())
+
+    async def _js8_off(self):
+        """Back to FT8/FT4: the radio returns to where it was (same band) or the
+        band's usual FT8/FT4 frequency."""
+        if self.js8 is None:
+            return
+        rx, self.js8 = self.js8, None
+        await rx.stop()
+        self.last_decoded = int(self.band_time() // self.m.PERIOD)   # don't decode a half-JS8 cycle
+        band = next((b for b in BANDS if b[0] == band_of(self.dial)), None)
+        back = self._js8_back if self._js8_back and band_of(self._js8_back) == band_of(self.dial) else (
+            self._band_dial(band) if band else None)
+        if back and back != self.dial:
+            self.s["dial_hz"] = back
+            if self.rig.enabled:
+                asyncio.get_event_loop().create_task(self._retune(back))
+        self.save()
+        log.info("JS8 off, back to %s", self.m.NAME)
 
     def _audio_range(self):
         """Where a signal (50 Hz wide in FT8, 83 in FT4) can sit inside the chosen waterfall range."""
@@ -1908,6 +1972,8 @@ class Engine:
             self.s["demo"] = bool(self.s["demo"])
             if old["demo"] != self.s["demo"]:
                 self._swap_pota()   # the demo band has its own (practice) activation
+                if self.s["demo"] and self.js8 is not None:
+                    await self._js8_off()   # the chat screen goes back to its pretend band
             if local:   # only the computer running Procyon may change remote access and logbook keys
                 self._remote_settings(m["settings"])
                 self._logbook_settings(m["settings"])
@@ -1951,6 +2017,8 @@ class Engine:
                     await self.rig.poll()
                     if self.rig.connected:
                         await self._apply_rig_mode()
+        elif t in ("cq", "reply", "tx_enable") and self.js8 is not None and (t != "tx_enable" or m.get("on")):
+            self.toast("JS8 only listens for now - pick FT8 or FT4 to transmit", "warn")
         elif t == "reply":
             d = m["decode"]
             d["p"] = ft8.parse(d["msg"], self.s["mycall"])
@@ -1993,6 +2061,17 @@ class Engine:
             self.save()
         elif t == "mode":
             await self._set_mode(str(m.get("mode", "")).upper())
+        elif t == "js8":
+            if m.get("on"):
+                if self.js8 is not None:
+                    return self.js8.welcome()   # a chat screen (re)opened: catch it up
+                await self._js8_on()
+            else:
+                await self._js8_off()
+        elif t == "js8_speed":
+            if self.js8 is not None:
+                await self.js8.set_speed(str(m.get("speed", "")))
+            return None
         elif t == "band":
             await self._new_band(band_of(int(m["hz"])))   # before retuning: never mid-transmission
             self.s["dial_hz"] = int(m["hz"])

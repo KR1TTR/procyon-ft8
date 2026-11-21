@@ -74,6 +74,7 @@ function connect() {
     }
     else if (m.type === "level") onLevel(m.db);
     else if (m.type === "toast") toast(m.text, m.kind);
+    else if (m.type === "js8") toJs8Frame(m);
     else if (m.type === "devices") { fillDevices(m); fillRadioLists(m); }
     else if (m.type === "wsjtx_import") applyImport(m);
     else if (m.type === "detect_radio") onDetected(m);
@@ -466,6 +467,16 @@ function onState(m) {
   $("#toolMissing").textContent = missing.length ? `(Missing: ${missing.join(", ")})` : "";
 
   if (first && !st.mycall) openSettings(true);
+  if (!first) {
+    if (js8Asked !== null && js8Asked === !!m.js8) js8Asked = null;   // the engine did what we asked
+    if (js8Demo !== null && js8Demo !== !!st.demo && js8On) {
+      // demo band switched on/off while on JS8: the chat screen starts over on
+      // the pretend band, or asks the engine to listen to the radio
+      const f = $("#js8Frame"); f.src = f.src;
+      if (!st.demo) askJs8(true);
+    } else if (!st.demo && js8Asked === null && !!m.js8 !== js8On) showJs8(!!m.js8, false);   // changed elsewhere
+  }
+  js8Demo = !!st.demo;
   if (first) {                   // JS8 screen open last time on this device?
     let on = false;
     try { on = localStorage.getItem("procyon.js8View") === "1"; } catch { /* not stored */ }
@@ -482,11 +493,31 @@ function renderBandMenu() {
   menu.innerHTML = S.bands.map((b) =>
     `<button data-hz="${b.hz}" class="${b.name === S.band ? "on" : ""}">${b.name}<small>${(b.hz / 1e6).toFixed(3)}</small></button>`).join("");
 }
-// JS8 (experimental): not an engine mode yet - picking it shows the chat
-// screen (a pretend band) in place of the FT8/FT4 screen. Remembered per device.
-let js8On = false;
-function showJs8(on) {
+// JS8 (experimental, listen only): picking it shows the chat screen in place of
+// the FT8/FT4 screen and asks the engine to listen for JS8 (it pauses FT8/FT4,
+// blocks transmitting and moves the radio to the JS8 frequency). On the demo
+// band the chat screen keeps its own pretend band. Remembered per device.
+let js8On = false, js8Asked = null, js8Demo = null;
+function toJs8Frame(m) {        // the engine's JS8 news -> the chat screen in the frame
+  const w = $("#js8Frame").contentWindow;
+  if (w && js8On) w.postMessage({ procyonJs8: m.m, history: m.history }, location.origin);
+}
+window.addEventListener("message", (e) => {    // the chat screen -> the engine
+  if (e.origin !== location.origin || e.source !== $("#js8Frame").contentWindow) return;
+  const c = (e.data || {}).procyonJs8Cmd;
+  if (!c || !S) return;
+  if (c.type === "ready" && js8On && !S.settings.demo) send({ type: "js8", on: true });   // catch it up
+  else if (c.type === "speed") send({ type: "js8_speed", speed: c.speed });
+  // nothing else: JS8 doesn't transmit yet
+});
+function askJs8(on) {
+  if (!S || js8Asked === on) return;
+  js8Asked = on;
+  send({ type: "js8", on });
+}
+function showJs8(on, tell = true) {
   js8On = on;
+  if (tell && S && !S.settings.demo) askJs8(on);
   document.body.classList.toggle("js8", on);
   $("#js8View").hidden = !on;
   const f = $("#js8Frame");
