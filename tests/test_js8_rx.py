@@ -99,3 +99,44 @@ def test_nothing_keys_while_js8_listens_even_if_tx_gets_switched_on():
         finally:
             await e._js8_off()
     asyncio.run(run())
+
+
+def test_each_mode_goes_to_its_own_frequency_even_with_a_slow_radio():
+    """FT8 -> JS8 -> FT4 -> JS8 -> FT8 on 40 m: each lands on its own usual
+    frequency. The pretend radio only moves when Procyon has finished asking
+    (like a real one answering slowly), so a quick JS8 -> FT4 switch sees the
+    radio still on the JS8 frequency."""
+    async def run():
+        e = _engine(dial=7_076_000)                  # tuned by hand, off the usual spot
+        e.rig.enabled = e.rig.connected = True
+        e.rig.freq = 7_076_000
+        asked = []
+
+        async def slow_set_freq(hz):
+            await asyncio.sleep(0.05)
+            asked.append(hz)
+            e.rig.freq = hz
+        e.rig.set_freq = slow_set_freq
+        e._apply_rig_mode = _noop
+
+        async def settle():
+            await asyncio.sleep(0.3)
+            return e.rig.freq
+
+        await e._js8_on()
+        assert await settle() == 7_078_000
+        await e._js8_off()                           # the page sends these two at once
+        await e._set_mode("FT4")
+        assert e.s["dial_hz"] == 7_047_500
+        assert await settle() == 7_047_500, asked
+        await e._js8_on()
+        assert await settle() == 7_078_000
+        await e._js8_off()
+        await e._set_mode("FT8")
+        assert await settle() == 7_074_000, asked
+        e.rig.freq = 7_076_500                       # tuned by hand again
+        await e._set_mode("FT4")
+        assert await settle() == 7_047_500
+        await e._set_mode("FT8")
+        assert await settle() == 7_074_000
+    asyncio.run(run())

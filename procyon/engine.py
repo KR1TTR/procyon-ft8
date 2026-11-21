@@ -186,7 +186,6 @@ class Engine:
         # JS8 (ProcyonEX, listen only): a Js8Rx while JS8 is picked, else None.
         # While it runs, FT8/FT4 decoding pauses and nothing transmits.
         self.js8 = None
-        self._js8_back = None          # the dial to return to when leaving JS8
 
     # ------------------------------------------------------------ plumbing
 
@@ -1402,15 +1401,13 @@ class Engine:
     async def _set_mode(self, mode: str):
         """Switch between FT8 and FT4. Transmitting stops, the QSO and Band
         activity start fresh (their cycle numbers belong to the old mode), and
-        if the radio sits on the old mode's usual frequency it moves to the new
-        one's on the same band, as WSJT-X does."""
+        the radio moves to the new mode's usual frequency on the same band."""
         if mode not in MODES or mode == self.s["mode"]:
             return
         await self.halt()
         busy = [t for t in (self.tx_task, self.tune_task) if t]
         if busy:
             await asyncio.wait(busy, timeout=3)
-        old_dial = self.dial
         self.s["mode"] = mode
         self.last_decoded = 0
         self.tx_periods.clear()
@@ -1424,22 +1421,33 @@ class Engine:
         self.udp.clear()
         self.demo = DemoBand(self.m)
         self.demo.mycall = self.s["mycall"].upper()
-        retune = False
-        for b in BANDS:
-            if old_dial in (b[3], b[4]) and self._band_dial(b) != old_dial:
-                self.s["dial_hz"] = self._band_dial(b)
-                retune = self.rig.enabled
-                break
         self._clean_wf_range()   # FT4 is wider: keep the TX/RX markers inside the range
+        self._to_mode_dial()
         self.save()
         log.info("mode switched to %s", mode)
-        if retune:
+
+    def _to_mode_dial(self):
+        """Move to the usual frequency of the mode now in use (FT8, FT4 or
+        JS8) on the band the radio is on. The band comes from the radio's own
+        dial (tuned by hand counts), and it's the same band whether or not the
+        radio has finished an earlier move - so a quick JS8 -> FT4 switch
+        still lands on FT4's frequency. Outside the ham bands nothing moves."""
+        band = next((b for b in BANDS if b[0] == band_of(self.dial)), None)
+        if not band:
+            return
+        hz = self._band_dial(band)
+        if hz == self.dial and hz == int(self.s["dial_hz"]):
+            return
+        self.s["dial_hz"] = hz
+        if self.rig.enabled:
             # The radio may be slow to answer (or not answering at all), so
             # the switch shows at once and the radio follows in the background.
-            asyncio.get_event_loop().create_task(self._retune(self.s["dial_hz"]))
+            asyncio.get_event_loop().create_task(self._retune())
 
-    async def _retune(self, hz: int):
-        await self.rig.set_freq(hz)
+    async def _retune(self):
+        # Always the NEWEST target: when switches come quickly one after the
+        # other, the radio ends up where the last one asked.
+        await self.rig.set_freq(int(self.s["dial_hz"]))
         await self.push_state()
 
     def _latest(self, n):
@@ -1458,33 +1466,22 @@ class Engine:
         busy = [t for t in (self.tx_task, self.tune_task) if t]
         if busy:
             await asyncio.wait(busy, timeout=3)
-        self._js8_back = self.dial
         self.js8 = Js8Rx(self.samples, self._latest, self.band_time, lambda: self.clock_offset,
                          lambda: (self.s["audio_in"], self.audio_error), self.broadcast)
         self.js8.start()
-        band = next((b for b in BANDS if b[0] == band_of(self.dial)), None)
-        if band and band[0] in JS8_DIALS and self.dial != JS8_DIALS[band[0]]:
-            self.s["dial_hz"] = JS8_DIALS[band[0]]
-            if self.rig.enabled:
-                asyncio.get_event_loop().create_task(self._retune(self.s["dial_hz"]))
+        self._to_mode_dial()
         log.info("JS8 on (listen only), dial %d", self.s["dial_hz"])
         await self.broadcast(self.js8.welcome())
 
     async def _js8_off(self):
-        """Back to FT8/FT4: the radio returns to where it was (same band) or the
-        band's usual FT8/FT4 frequency."""
+        """Back to FT8/FT4: the radio moves to that mode's usual frequency on
+        the same band."""
         if self.js8 is None:
             return
         rx, self.js8 = self.js8, None
         await rx.stop()
         self.last_decoded = int(self.band_time() // self.m.PERIOD)   # don't decode a half-JS8 cycle
-        band = next((b for b in BANDS if b[0] == band_of(self.dial)), None)
-        back = self._js8_back if self._js8_back and band_of(self._js8_back) == band_of(self.dial) else (
-            self._band_dial(band) if band else None)
-        if back and back != self.dial:
-            self.s["dial_hz"] = back
-            if self.rig.enabled:
-                asyncio.get_event_loop().create_task(self._retune(back))
+        self._to_mode_dial()
         self.save()
         log.info("JS8 off, back to %s", self.m.NAME)
 
