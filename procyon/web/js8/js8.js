@@ -45,7 +45,8 @@ const JS8 = {
     return (p.to ? 1 : 0) + Math.max(1, Math.ceil(p.body.length / JS8.CHARS_PER_FRAME));
   },
 
-  fmtSnr(s) { return (s >= 0 ? '+' : '-') + String(Math.abs(Math.round(s))).padStart(2, '0'); },
+  // a JS8 report holds only -30..+31 (JS8Call splits bigger ones into an extra frame)
+  fmtSnr(s) { s = Math.max(-30, Math.min(31, Math.round(s))); return (s >= 0 ? '+' : '-') + String(Math.abs(s)).padStart(2, '0'); },
 
   // Maidenhead grid -> [lat, lon] of the square's middle.
   gridLatLon(g) {
