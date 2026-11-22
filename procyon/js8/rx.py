@@ -149,6 +149,7 @@ class Js8Rx:
         self.quiet = False
         self.level = None
         self.tasks = []
+        self.tx = None                   # what Send transmits through (set by the engine), None = listen only
 
     # ---------------------------------------------------------------- plumbing
     def start(self):
@@ -168,7 +169,7 @@ class Js8Rx:
 
     def hello(self):
         device, error = self.status()
-        return {"type": "hello", "listen_only": True, "tx": None, "device": device or "the radio's audio",
+        return {"type": "hello", "listen_only": not self.tx, "tx": self.tx, "device": device or "the radio's audio",
                 "speed": self.speed, "error": error or None, "quiet": self.quiet, "level": self.level,
                 "since": self.since}
 

@@ -29,7 +29,8 @@ from .radio_detect import blocked_ports, detect_radios, test_rig
 from .setup_help import hamlib_rigs, import_wsjtx
 from .system import BUNDLED_CTY, NO_WINDOW, find_cty, find_tool, serial_ports, tools
 from .udp import WsjtxUdp
-from .js8.rx import JS8_DIALS, Js8Rx
+from .js8.rx import JS8_DIALS, SPEEDS as JS8_SPEEDS, Js8Rx
+from .js8 import tx as js8tx
 from .rig import Rig
 
 log = logging.getLogger("procyon")
@@ -183,9 +184,11 @@ class Engine:
         self.tune_task = None
         self._halt = asyncio.Event()
         self._warned = ""
-        # JS8 (ProcyonEX, listen only): a Js8Rx while JS8 is picked, else None.
-        # While it runs, FT8/FT4 decoding pauses and nothing transmits.
+        # JS8 (ProcyonEX): a Js8Rx while JS8 is picked, else None. While it
+        # runs, FT8/FT4 decoding pauses and FT8/FT4 can't transmit. js8tx
+        # sends what the user types (only on Send), through _play.
         self.js8 = None
+        self.js8tx = None
 
     # ------------------------------------------------------------ plumbing
 
@@ -1247,6 +1250,8 @@ class Engine:
     async def halt(self):
         self.qso.tx_enabled = False
         self._halt.set()
+        if self.js8tx is not None:
+            self.js8tx.stop()            # drop queued JS8 messages; _halt cuts the one playing
         if self.tune_task:
             self.tune_task.cancel()
 
@@ -1278,7 +1283,7 @@ class Engine:
             if self.s["demo"]:
                 self.toast("Tune is not available in demo mode", "warn")
             elif self.js8 is not None:
-                self.toast("JS8 only listens for now - Tune is off while it's picked", "warn")
+                self.toast("Tune is off while JS8 is picked - pick FT8 or FT4 to tune", "warn")
             return
 
         async def run():
@@ -1469,8 +1474,11 @@ class Engine:
         self.js8 = Js8Rx(self.samples, self._latest, self.band_time, lambda: self.clock_offset,
                          lambda: (self.s["audio_in"], self.audio_error), self.broadcast)
         self.js8.start()
+        self.js8tx = js8tx.Js8Tx(self._play, self.band_time, lambda: self.clock_offset, self._halt,
+                                 self._js8_report, self._js8_on_air)
+        self.js8.tx = self._js8_tx_note()
         self._to_mode_dial()
-        log.info("JS8 on (listen only), dial %d", self.s["dial_hz"])
+        log.info("JS8 on, dial %d", self.s["dial_hz"])
         await self.broadcast(self.js8.welcome())
 
     async def _js8_off(self):
@@ -1478,12 +1486,62 @@ class Engine:
         the same band."""
         if self.js8 is None:
             return
+        await self.halt()
+        if self.js8tx is not None and self.js8tx.task:
+            await asyncio.wait([self.js8tx.task], timeout=3)   # its _play unkeys the radio
+        self.js8tx = None
         rx, self.js8 = self.js8, None
         await rx.stop()
         self.last_decoded = int(self.band_time() // self.m.PERIOD)   # don't decode a half-JS8 cycle
         self._to_mode_dial()
         self.save()
         log.info("JS8 off, back to %s", self.m.NAME)
+
+    def _js8_tx_note(self):
+        """For the chat screen: what Send goes out through (None = can't send)."""
+        if not self.s["mycall"]:
+            return None
+        test = js8tx.test_device(self.s["audio_out"])
+        how = "VOX" if self.s["ptt"] == "vox" else "radio control (CAT)"
+        return {"to": self.s["audio_out"] or "the system's sound output", "ptt": how, "test": test}
+
+    async def _js8_report(self, obj):
+        await self.broadcast({"type": "js8", "m": obj})
+
+    async def _js8_on_air(self, info):
+        self.tx_info = info
+        await self.push_state()
+
+    async def _js8_send(self, m):
+        """Send pressed in the chat screen: queue the message."""
+        rid = m.get("id")
+
+        async def refuse(why):
+            await self._js8_report({"type": "txdone", "id": rid, "error": why})
+        if self.js8 is None or self.js8tx is None:
+            return await refuse("JS8 isn't on")
+        if self.s["demo"]:
+            return await refuse("the demo band doesn't transmit")
+        if not self.s["mycall"]:
+            return await refuse("set your callsign in Settings first")
+        speed = JS8_SPEEDS[self.js8.speed]
+        try:
+            frames = js8tx.frames_for(self.s["mycall"], self.s["mygrid"], str(m.get("text", "")), speed=speed)
+        except ValueError as e:
+            return await refuse(str(e))
+        try:
+            freq = int(float(m.get("freq", 1500)))
+        except (TypeError, ValueError):
+            freq = 1500
+        freq = max(300, min(2950, freq))
+        task = self.js8tx.submit(rid, frames, freq, speed, " ".join(str(m.get("text", "")).upper().split()))
+        if self.tx_task is not task:
+            self.tx_task = task          # shutdown / band change / no-tab guards wait for it
+
+            def done(t):
+                if self.tx_task is t:
+                    self.tx_task = None
+            task.add_done_callback(done)
 
     def _audio_range(self):
         """Where a signal (50 Hz wide in FT8, 83 in FT4) can sit inside the chosen waterfall range."""
@@ -2014,8 +2072,14 @@ class Engine:
                     await self.rig.poll()
                     if self.rig.connected:
                         await self._apply_rig_mode()
+            if self.js8 is not None:
+                if self.js8tx is not None and self.js8tx.busy and any(
+                        old[k] != self.s[k] for k in ("audio_out", "ptt", "mycall", "rig_enabled")):
+                    await self.halt()             # never keep sending through changed settings
+                self.js8.tx = self._js8_tx_note()
+                await self._js8_report(self.js8.hello())
         elif t in ("cq", "reply", "tx_enable") and self.js8 is not None and (t != "tx_enable" or m.get("on")):
-            self.toast("JS8 only listens for now - pick FT8 or FT4 to transmit", "warn")
+            self.toast("JS8 is picked - send from the JS8 chat screen, or pick FT8 or FT4", "warn")
         elif t == "reply":
             d = m["decode"]
             d["p"] = ft8.parse(d["msg"], self.s["mycall"])
@@ -2065,6 +2129,13 @@ class Engine:
                 await self._js8_on()
             else:
                 await self._js8_off()
+        elif t == "js8_tx":
+            await self._js8_send(m)
+            return None
+        elif t == "js8_txstop":
+            await self.halt()
+            await self.push_state()
+            return None
         elif t == "js8_speed":
             if self.js8 is not None:
                 await self.js8.set_speed(str(m.get("speed", "")))

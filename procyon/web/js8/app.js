@@ -62,7 +62,7 @@ let autoHB = false, hbTimer = null;
 let lastSuggest = null;
 let toVal = '';               // who the typing box sends to (a call, a @group, or '' = everyone)
 let live = null;              // the real radio (modem/js8live.py), when it serves this page
-let liveTx = null;            // where the helper plays sent messages (TEST sound device only for now), or null = listen only
+let liveTx = null;            // what Send goes out through ({to, ptt, test}, or a device name from the old helper), null = listen only
 const txMsgs = new Map();     // id -> our sent message, while the helper reports on it
 const wfLive = [];            // waterfall rows from the real radio, waiting to be drawn
 
@@ -164,17 +164,20 @@ function fmtText(from, to, body) {
   return `<span class="${from === me.call ? 'c-me' : 'c-from'}">${from}</span>: ${to ? who(to) + ' ' : ''}${b}`;
 }
 
+// Sending into a test sound device (no radio) rather than the radio?
+function txTest() { return !!liveTx && (typeof liveTx === 'string' || liveTx.test); }
+
 function txState(m) {
   const now = Date.now();
   if (m.error) return `<div class="state bad">not sent: ${esc(m.error)}</div>`;
   if (m.stopped) return '<div class="state bad">stopped</div>';
-  if (m.heardBack) return '<div class="ack">✓ sent · decoded back by our own receiver (test)</div>';
+  if (m.heardBack) return `<div class="ack">✓ sent · decoded back by our own receiver${txTest() ? ' (test)' : ''}</div>`;
   if (m.heardBy) return `<div class="ack">✓ heard by ${m.heardBy}</div>`;
   if (!m.start) return '';
   if (now < m.start) return `<div class="state">waiting for the next slot · ${m.n} frame${m.n > 1 ? 's' : ''}</div>`;
   if (now < m.end) {
     const P = (m.end - m.start) / m.n, k = Math.min(m.n, Math.floor((now - m.start) / P) + 1);
-    return `<div class="state on">${live ? 'sending (test sound device, not the radio)' : 'on the air'} · frame ${k} of ${m.n} · ${Math.ceil((m.end - now) / 1000)} s</div>`;
+    return `<div class="state on">${live && txTest() ? 'sending (test sound device, not the radio)' : 'on the air'} · frame ${k} of ${m.n} · ${Math.ceil((m.end - now) / 1000)} s</div>`;
   }
   return '<div class="state">sent</div>';
 }
@@ -265,7 +268,7 @@ function send() {
   const to = toVal, body = $('txt').value;
   if (!JS8.clean(body)) return;
   if (live) {
-    // The helper plays it into the TEST sound device (no radio); it reports back the timing.
+    // Procyon sends it (the radio, or a test sound device); it reports back the timing.
     if (!liveTx || live.readyState !== 1) return;
     if (to) openTab(to);
     const clean = JS8.clean(body), text = to ? `${to} ${clean}` : clean;
@@ -497,14 +500,17 @@ function handleLive(m, ws) {
       if (sp) { [...$('speedSeg').children].forEach(x => x.classList.toggle('on', x === sp)); link.speed = m.speed; }
       $('liveNote').textContent = m.error ? `audio problem: ${m.error}`
         : m.quiet ? `no audio coming in (${m.level} dB) - radio off or volume down?`
-        : m.tx ? `listening on ${m.device} · TEST sending into ${m.tx} (a test sound device - no radio)`
-        : `listening only on ${m.device} - nothing transmits`;
+        : !m.tx ? `listening only on ${m.device} - set your callsign in Settings to send`
+        : typeof m.tx === 'string' ? `listening on ${m.device} · TEST sending into ${m.tx} (a test sound device - no radio)`
+        : m.tx.test ? `listening on ${m.device} · TEST sending into ${m.tx.to} (a test sound device - no radio)`
+        : `listening on ${m.device} · Send transmits on your radio (PTT by ${m.tx.ptt})`;
       $('liveNote').classList.toggle('bad', !!(m.error || m.quiet));
       liveTx = m.tx || null;
       $('sendBtn').disabled = !liveTx;
-      $('sendBtn').textContent = liveTx ? 'Send (test)' : 'Listen only';
-      $('sendBtn').title = liveTx ? `Plays the message into ${liveTx}, a test sound device - the radio isn't connected to it`
-        : "Sending on the real radio isn't built yet - this screen only listens";
+      $('sendBtn').textContent = !liveTx ? 'Listen only' : txTest() ? 'Send (test)' : 'Send';
+      $('sendBtn').title = !liveTx ? 'Set your callsign in Settings to send'
+        : txTest() ? `Plays the message into ${liveTx.to || liveTx}, a test sound device - the radio isn't connected to it`
+        : 'Transmits the message on your radio, one frame per slot. Stop (or Esc, or Halt) stops it at once.';
     } else if (m.type === 'part') { if (m.from !== me.call) me.hearPart(m.text, m.from, m.snr, m.freq); }
     else if (m.type === 'msg') {
       if (m.from && m.from === me.call) {     // our own signal, heard back (test sound device loops it round)

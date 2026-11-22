@@ -348,7 +348,8 @@ function tick() {
   fill.style.width = `${pos / P * 100}%`;
   fill.classList.toggle("tx", !!(S && S.tx) || isTx);
   $("#cycleLabel").textContent = `RX ${slotName(p % 2)} ${Math.floor(P - pos)}s`;
-  $("#onAirSecs").textContent = `${Math.floor(P - pos)}s`;
+  $("#onAirSecs").textContent = S && S.tx && S.tx.js8   // JS8: its own slot length
+    ? `${Math.max(0, Math.ceil(S.tx.end - Date.now() / 1000))}s` : `${Math.floor(P - pos)}s`;
   if (S && S.tx) {
     const t = S.tx;
     const frac = Math.min(1, Math.max(0, (Date.now() / 1000 - t.start) / (t.end - t.start)));   // t: computer's clock
@@ -508,7 +509,9 @@ window.addEventListener("message", (e) => {    // the chat screen -> the engine
   if (!c || !S) return;
   if (c.type === "ready" && js8On && !S.settings.demo) send({ type: "js8", on: true });   // catch it up
   else if (c.type === "speed") send({ type: "js8_speed", speed: c.speed });
-  // nothing else: JS8 doesn't transmit yet
+  // Send / Stop in the chat screen (only ever on the user's click or Esc)
+  else if (c.type === "tx") send({ type: "js8_tx", id: c.id, text: c.text, freq: c.freq });
+  else if (c.type === "txstop") send({ type: "js8_txstop" });
 });
 function askJs8(on) {
   if (!S || js8Asked === on) return;
@@ -549,12 +552,13 @@ $("#modeMenu").addEventListener("click", (e) => {
   const want = b.dataset.mode;
   if (want === "JS8" ? js8On : (!js8On && want === T().mode)) return;
   const q = S.qso, busy = q.tx_enabled || S.tx || (q.dxcall && !q.logged);
-  if (want !== "JS8" && js8On && want === T().mode) return showJs8(false);   // back to the FT8/FT4 screen
+  if (want !== "JS8" && js8On && want === T().mode && !S.tx) return showJs8(false);   // back to the FT8/FT4 screen
   if (!busy) return pickMode(want);
   // Our own dialog, not window.confirm: the browser's pop-up can open behind a
   // full-screen page, which then looks frozen.
   $("#modeTitle").textContent = `Switch to ${want}?`;
-  $("#modeText").textContent = want === "JS8" ? "FT8/FT4 transmitting stops."
+  $("#modeText").textContent = js8On && S.tx ? "The JS8 message being sent stops."
+    : want === "JS8" ? "FT8/FT4 transmitting stops."
     : "Transmitting stops" + (q.dxcall && !q.logged ? ` and the QSO with ${q.dxcall} ends (not logged).` : ".");
   $("#modeConfirm").textContent = `Switch to ${want}`;
   $("#modeDlg").returnValue = "";   // Esc must never count as "Switch"
