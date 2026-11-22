@@ -150,6 +150,7 @@ class Js8Rx:
         self.level = None
         self.tasks = []
         self.tx = None                   # what Send transmits through (set by the engine), None = listen only
+        self.keyed = None                # keyed(a, b): did WE transmit between band times a and b? (engine)
 
     # ---------------------------------------------------------------- plumbing
     def start(self):
@@ -214,6 +215,8 @@ class Js8Rx:
         await asyncio.sleep(max(0, t1 + 0.1 - now))
         if SPEEDS[self.speed] != speed:
             return                       # speed changed during the slot
+        if self.keyed and self.keyed(t0, t1):
+            return                       # we were sending: all we'd hear is our own signal (JS8Call skips it too)
         off = self.offset()
         audio = self.samples(t0 + off, t1 + off)
         if audio is None or not np.any(audio):

@@ -102,6 +102,12 @@ class Js8Tx:
         self.queue = collections.deque()
         self.task = None
         self.busy_until = 0.0            # band time when the last planned frame ends
+        self.sent = collections.deque(maxlen=32)   # (from, to) band times we were keyed (or about to be)
+
+    def overlaps(self, a, b):
+        """Were we transmitting at any time between band times a and b? (The
+        receiver then hears only our own signal leaking through.)"""
+        return any(x < b and a < y for x, y in self.sent)
 
     @property
     def busy(self):
@@ -162,6 +168,7 @@ class Js8Tx:
                 if await self._wait_until(t - LEAD):
                     raise _Stopped
                 target = t + self.offset()           # on the computer's clock
+                self.sent.append((t - LEAD, t + sec + 0.5))   # PTT comes on ~0.5 s early, off just after
                 await self.on_air({"msg": req["text"], "freq": round(freq), "start": target, "end": target + sec,
                                    "js8": True, "frame": k + 1, "frames": len(frames)})
                 await self.play(lambda rate, fr=frame, fl=flags: js8enc.synth(

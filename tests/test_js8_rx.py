@@ -9,7 +9,10 @@ import os
 from _common import scratch_dir
 
 from procyon.engine import Engine
-from procyon.js8 import js8msg
+import numpy as np
+
+from procyon.js8 import js8msg, tx
+from procyon.js8.rx import Js8Rx
 from procyon.js8.rx import Assembler, as_message, message_text
 
 
@@ -161,3 +164,29 @@ def test_ordinary_reports_and_text_are_left_alone():
     assert shown("K1ABC HELLO 5") == "W9XYZ: K1ABC HELLO 5"           # a lone digit after other text
     long = shown("K1ABC SNR -06 THANKS FOR THE REPORT")               # more text after the report
     assert long == "W9XYZ: K1ABC SNR -06 THANKS FOR THE REPORT", long
+
+
+def test_our_own_transmission_is_not_shown_as_heard():
+    """While we transmit, the radio's receive audio still lets a little of our
+    own signal through (seen on the dummy load, 2026-11-21: "?: DE KR1TTR
+    TEST ..." in the chat). Slots we sent in aren't decoded, like JS8Call."""
+    async def run(keyed):
+        frame = js8msg.build_frames("K1ABC", "FN42", "DE K1ABC TEST", speed="turbo")[-1]
+        x = np.random.default_rng(5).normal(0, 300, 6 * 12000)
+        i = int(0.1 * 12000)
+        sig = tx.frame_audio(*frame, 1500, "turbo") * 3000
+        x[i:i + len(sig)] += sig
+        t0 = 6000.0
+        out = []
+
+        async def send(o):
+            out.append(o["m"])
+        rx = Js8Rx(lambda a, b: x.astype("<i2"), lambda n: None, lambda: t0 + 4.5,
+                   lambda: 0.0, lambda: ("radio", None), send)
+        rx.speed = "Turbo"
+        rx.keyed = keyed
+        await rx._one_slot()
+        return [m for m in out if m["type"] in ("part", "msg")]
+    heard = asyncio.run(run(None))
+    assert heard and "TEST" in heard[-1]["text"], heard       # someone else's signal: shown
+    assert asyncio.run(run(lambda a, b: True)) == [], "our own signal: not shown"

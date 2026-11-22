@@ -1477,6 +1477,7 @@ class Engine:
         self.js8tx = js8tx.Js8Tx(self._play, self.band_time, lambda: self.clock_offset, self._halt,
                                  self._js8_report, self._js8_on_air)
         self.js8.tx = self._js8_tx_note()
+        self.js8.keyed = lambda a, b: self.js8tx is not None and self.js8tx.overlaps(a, b)
         self._to_mode_dial()
         log.info("JS8 on, dial %d", self.s["dial_hz"])
         await self.broadcast(self.js8.welcome())

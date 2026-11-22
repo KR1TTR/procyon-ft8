@@ -105,6 +105,10 @@ def test_send_keys_the_radio_frame_by_frame_on_time():
         try:
             await e.command({"type": "js8_tx", "id": 7, "text": TEXT.lower(), "freq": 1400})
             await asyncio.wait_for(e.tx_task, 10)
+            # the receiver is told which slots were ours (so it doesn't show our own signal)
+            first = st.played[0][0] - START
+            assert e.js8.keyed(first, first + 4.55) and e.js8.keyed(first + PER, first + PER + 4.55)
+            assert not e.js8.keyed(first - PER, first - PER + 4.55), "the slot before we keyed is someone else's"
         finally:
             await e._js8_off()
         frames = js8msg.build_frames("K1ABC", "FN42", TEXT, speed="turbo")
