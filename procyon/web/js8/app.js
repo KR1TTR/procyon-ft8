@@ -291,6 +291,22 @@ function tidy(to, text) {
   return { text: keep.join(' '), found };
 }
 
+// How many frames a text takes. Inside Procyon the exact number comes from
+// the same packer Send uses (asked in the background, nothing is sent); until
+// it answers - or in the simulator - the page's own estimate stands in.
+const counts = new Map();                // text -> exact frames (from Procyon)
+let countAsked = new Set(), countTimer = null;
+function frameCount(text) {
+  if (counts.has(text)) return { n: counts.get(text), exact: true };
+  if (EMBEDDED && live && live.readyState === 1 && !countAsked.has(text)) {
+    countAsked.add(text);
+    clearTimeout(countTimer);
+    const ask = [...countAsked].filter(t => !counts.has(t)).slice(-4);
+    countTimer = setTimeout(() => ask.forEach(t => live.send(JSON.stringify({ type: 'count', text: t }))), 150);
+  }
+  return { n: JS8.frames(text), exact: false };
+}
+
 function tidyNote(to, body) {
   const t = tidy(to, body);
   if (!t.found.size || !JS8.clean(t.text)) return '';
@@ -298,21 +314,21 @@ function tidyNote(to, body) {
   if (t.found.has('mine') || t.found.has('de')) what.push(t.found.has('de') ? `"DE ${me.call}"` : `your call`);
   if (t.found.has('them')) what.push(`${to} (from the To box)`);
   const full = to ? `${to} ${body}` : body, short = to ? `${to} ${t.text}` : t.text;
-  const saved = JS8.frames(full) - JS8.frames(short);
+  const saved = frameCount(full).n - frameCount(short).n;
   return `<span class="tidy-note">JS8 adds ${what.join(' and ')} for you${saved > 0 ? ` - leaving it out saves ${saved} frame${saved > 1 ? 's' : ''}` : ''}.
     <button type="button" class="btn ghost small" id="tidyBtn" title="Take those words out of the message">Take it out</button></span>`;
 }
 
 function updateMeter() {
   const to = toVal, body = JS8.clean($('txt').value);
-  const n = body ? JS8.frames(to ? `${to} ${body}` : body) : 0;
+  const fc = body ? frameCount(to ? `${to} ${body}` : body) : { n: 0 }, n = fc.n;
   const speed = link.speed, sec = n * JS8.SPEEDS[speed];
   if (!n) return setHTML($('meter'), '<span>Type to see how long it takes on the air</span>');
   const dur = sec >= 60 ? `${Math.floor(sec / 60)} min${sec % 60 ? ' ' + (sec % 60) + ' s' : ''}` : `${sec} s`;
   const bars = Array.from({ length: Math.min(n, 16) }, (_, i) => `<i class="${i === 0 && to ? 'hdr' : ''}"></i>`).join('');
   $('meter').className = 'meter' + (sec > 90 ? ' long' : '');
   setHTML($('meter'), `<span class="frames">${bars}${n > 16 ? '…' : ''}</span>
-    <span>about <b>${n} frame${n > 1 ? 's' : ''}</b> · <b>${dur}</b> at ${speed}</span>
+    <span>${fc.exact ? '' : 'about '}<b>${n} frame${n > 1 ? 's' : ''}</b> · <b>${dur}</b> at ${speed}</span>
     ${sec > 90 ? '<span>long - maybe split it</span>' : ''}${tidyNote(to, body)}`);
 }
 $('meter').addEventListener('click', e => {
@@ -555,7 +571,16 @@ start();
 // page around this frame (postMessage, same origin only); the chat screen's
 // commands (the speed buttons) go back the same way.
 function handleLive(m, ws) {
+    if (m.type === 'count') {              // Procyon's exact frame count for a text
+      if (!Number.isInteger(m.n) || m.n < 1) return;   // couldn't count it: keep the estimate (and don't ask again)
+      countAsked.delete(m.text);
+      counts.set(m.text, m.n);
+      if (counts.size > 200) counts.delete(counts.keys().next().value);
+      updateMeter();
+      return;
+    }
     if (m.type === 'hello') {
+      counts.clear(); countAsked.clear();   // your call (in the first frame) may have changed
       if (!live) goLive(ws);
       liveSince = m.since || null;
       const sp = [...$('speedSeg').children].find(b => b.textContent === m.speed);

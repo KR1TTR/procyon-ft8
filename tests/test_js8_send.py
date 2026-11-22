@@ -235,3 +235,23 @@ def test_nothing_goes_out_by_itself():
             await e._js8_off()
         assert st.played == [] and st.ptt == [] and e.tx_task is None
     asyncio.run(run())
+
+
+def test_frame_count_for_the_meter_sends_nothing():
+    """The chat screen's "how long on the air" line asks for the exact frame
+    count: the same packer as Send, but nothing is keyed or played."""
+    async def run():
+        st = Station()
+        e = st.e
+        await st.js8_on()
+        try:
+            for text, n in (("W9XYZ HEARTBEAT SNR -03", 1), ("W9XYZ HW CPY?", 1), (TEXT, None)):
+                r = await e.command({"type": "js8_count", "id": 5, "text": text})
+                want = len(js8msg.build_frames("K1ABC", "FN42", text, speed="turbo")) if n is None else n
+                assert r == {"type": "js8", "m": {"type": "count", "id": 5, "text": text, "n": want}}, (text, r)
+        finally:
+            await e._js8_off()
+        assert st.played == [] and st.ptt == [] and e.tx_task is None
+        r = await e.command({"type": "js8_count", "id": 6, "text": "HELLO"})     # JS8 off: no count, no error
+        assert r["m"]["n"] is None
+    asyncio.run(run())

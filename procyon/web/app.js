@@ -487,6 +487,7 @@ window.addEventListener("message", (e) => {    // the chat screen -> the engine
   // Send / Stop in the chat screen (only ever on the user's click or Esc)
   else if (c.type === "tx") send({ type: "js8_tx", id: c.id, text: c.text, freq: c.freq });
   else if (c.type === "txstop") send({ type: "js8_txstop" });
+  else if (c.type === "count") send({ type: "js8_count", id: c.id, text: c.text });   // frames, nothing sent
 });
 function askJs8(on) {
   if (!S || js8Asked === on) return;

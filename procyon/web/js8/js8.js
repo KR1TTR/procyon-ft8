@@ -1,6 +1,6 @@
 // Procyon JS8 chat - small helpers about JS8 messages: speeds, how many frames
 // a message takes, splitting "TO TEXT" apart, grids and distances.
-// No radio here: the real JS8 modem will give exact frame counts later.
+// Inside Procyon the exact frame count comes from its packer; this is the estimate.
 'use strict';
 
 const JS8 = {
@@ -46,6 +46,7 @@ const JS8 = {
     const p = JS8.parse(text);
     if (!p.text) return 0;
     if (p.to && JS8.ONE_FRAME.includes(p.body)) return 1;   // a call + a JS8 command fits in one frame
+    if (p.to && /^(HEARTBEAT )?SNR [+-]?\d{1,2}$/.test(p.body)) return 1;   // ... and so does a report
     return (p.to ? 1 : 0) + Math.max(1, Math.ceil(p.body.length / JS8.CHARS_PER_FRAME));
   },
 

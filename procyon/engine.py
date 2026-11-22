@@ -2144,6 +2144,17 @@ class Engine:
             await self.halt()
             await self.push_state()
             return None
+        elif t == "js8_count":
+            # the chat screen's "how long on the air" line: the exact number of
+            # frames Send would make of this text (nothing is sent)
+            n = None
+            if self.js8 is not None:
+                try:
+                    n = len(js8tx.frames_for(self.s["mycall"] or "K1ABC", self.s["mygrid"], str(m.get("text", ""))[:500],
+                                             speed=JS8_SPEEDS[self.js8.speed]))
+                except Exception:  # noqa: BLE001 - the page falls back to its own estimate
+                    n = None
+            return {"type": "js8", "m": {"type": "count", "id": m.get("id"), "text": m.get("text"), "n": n}}
         elif t == "js8_speed":
             if self.js8 is not None:
                 await self.js8.set_speed(str(m.get("speed", "")))
