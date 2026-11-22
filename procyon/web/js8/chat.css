@@ -49,7 +49,9 @@ button { cursor: pointer; }
 .chip .led { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
 .chip.ok .led { background: var(--cq); box-shadow: 0 0 8px var(--cq); }
 .chip .led.hb { background: var(--rpt); }
-.card { background: linear-gradient(180deg, var(--surface), var(--bg2)); border: 1px solid var(--border);
+.card { /* panels let the page background show through a little (--panel-solid in palettes.css) */
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) var(--panel-solid), transparent),
+                                    color-mix(in srgb, var(--bg2) var(--panel-solid), transparent)); border: 1px solid var(--border);
   border-radius: var(--radius); display: flex; flex-direction: column; min-height: 0; }
 .card-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px 10px; }
 .card-head h2 { font-size: 13px; font-weight: 650; margin: 0; letter-spacing: .02em; display: flex; align-items: center; gap: 8px; }

@@ -201,7 +201,9 @@ body.js8 .hdr-progress { display: none; }   /* FT8/FT4's QSO steps mean nothing 
 .side { grid-area: qso; }
 .logbook { grid-area: log; }
 .card {
-  background: linear-gradient(180deg, var(--surface), var(--bg2));
+  /* panels let the page background show through a little (--panel-solid in palettes.css) */
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) var(--panel-solid), transparent),
+                                    color-mix(in srgb, var(--bg2) var(--panel-solid), transparent));
   border: 1px solid var(--border); border-radius: var(--radius);
   display: flex; flex-direction: column; min-height: 0;
 }

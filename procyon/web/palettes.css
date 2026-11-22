@@ -7,6 +7,7 @@
   --bg2: #0c1222;
   --surface: #111829;
   --surface2: #172036;
+  --panel-solid: 85%;   /* workspace panels: 15% see-through (user, 2026-11-22) */
   --border: #212b45;
   --border2: #2c3858;
   --text: #e7ecf6;
