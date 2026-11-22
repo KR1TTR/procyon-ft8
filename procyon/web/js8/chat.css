@@ -299,14 +299,14 @@ main.dock.flat .wf-strip { height: 67px; flex: none; }
 .tile.band .card-head .btn .pop-ico { color: var(--rx); margin-right: 2px; }
 .dock-hint[data-zone="tab"] { background: color-mix(in srgb, var(--cq) 18%, transparent); border-color: var(--cq); }
 
-/* the real radio (modem/js8live.py): listen only */
+/* the real radio (Procyon, or the prototype's modem/js8live.py) */
 .live-only { display: none; }
 body.live .live-only { display: inline; }
 body.live .sim-only { display: none; }
 body.live .sim-bar { background: color-mix(in srgb, var(--rx) 14%, var(--surface)); }
 body.live .sim-bar b { color: var(--rx); }
 #liveNote.bad { color: var(--tx); }
-body.live #sendBtn { opacity: .55; cursor: not-allowed; }
+body.live #sendBtn:disabled { opacity: .55; cursor: not-allowed; }   /* Listen only (no callsign) */
 
 /* messages replayed after a page reload: dimmed, with a line under them */
 .brow.old, .bubble.old { opacity: .5; }
