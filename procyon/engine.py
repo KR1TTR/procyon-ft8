@@ -45,7 +45,7 @@ WF_HOP = 1500             # 8 waterfall rows per second
 WF_BINS = int(4000 / (FS / FFT_N))   # 0 - 4000 Hz; the UI shows the range the user picks
 
 DEFAULTS = {
-    "mycall": "", "mygrid": "", "audio_in": "", "audio_out": "",
+    "mycall": "", "mygrid": "", "myname": "", "audio_in": "", "audio_out": "",
     "tx_level": 35, "tx_watts": "", "depth": 2, "decoder": "procyon", "demo": False, "ptt": "cat",
     "rig_enabled": False, "rig_host": "127.0.0.1", "rig_port": 4532,
     "rig_spawn": False, "rig_model": "", "rig_device": "", "rig_baud": "",
@@ -1477,6 +1477,7 @@ class Engine:
         self.js8tx = js8tx.Js8Tx(self._play, self.band_time, lambda: self.clock_offset, self._halt,
                                  self._js8_report, self._js8_on_air)
         self.js8.tx = self._js8_tx_note()
+        self.js8.me = self._js8_me()
         self.js8.keyed = lambda a, b: self.js8tx is not None and self.js8tx.overlaps(a, b)
         self._to_mode_dial()
         log.info("JS8 on, dial %d", self.s["dial_hz"])
@@ -1497,6 +1498,10 @@ class Engine:
         self._to_mode_dial()
         self.save()
         log.info("JS8 off, back to %s", self.m.NAME)
+
+    def _js8_me(self):
+        """For the chat screen: your call, grid and name (Settings → Station)."""
+        return {"call": self.s["mycall"], "grid": self.s["mygrid"][:4], "name": self.s["myname"]}
 
     def _js8_tx_note(self):
         """For the chat screen: what Send goes out through (None = can't send)."""
@@ -2036,6 +2041,7 @@ class Engine:
             self.s["mycall"] = self.s["mycall"].upper().strip()
             self.s["mygrid"] = self.s["mygrid"].strip()[:6]
             self.s["mygrid"] = self.s["mygrid"][:4].upper() + self.s["mygrid"][4:].lower()
+            self.s["myname"] = " ".join(str(self.s["myname"]).upper().split())[:20]
             if self.s["units"] not in ("auto", "km", "mi"):
                 self.s["units"] = "auto"
             if self.s["decoder"] not in ("procyon", "jt9"):
@@ -2078,6 +2084,7 @@ class Engine:
                         old[k] != self.s[k] for k in ("audio_out", "ptt", "mycall", "rig_enabled")):
                     await self.halt()             # never keep sending through changed settings
                 self.js8.tx = self._js8_tx_note()
+                self.js8.me = self._js8_me()
                 await self._js8_report(self.js8.hello())
         elif t in ("cq", "reply", "tx_enable") and self.js8 is not None and (t != "tx_enable" or m.get("on")):
             self.toast("JS8 is picked - send from the JS8 chat screen, or pick FT8 or FT4", "warn")

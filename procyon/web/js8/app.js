@@ -21,7 +21,27 @@ if (EMBEDDED) {
   if (EMBED.get('call')) $('myCall').value = EMBED.get('call');
   if (EMBED.get('grid')) $('myGrid').value = EMBED.get('grid').slice(0, 4);
   if (EMBED.get('palette')) document.documentElement.dataset.palette = EMBED.get('palette');
+  $('wf').closest('.wf-tile').querySelector('.card-head').append($('layoutReset'));
 }
+
+// Procyon's look (Settings → Themes, saved per device): palette, background
+// texture and waterfall colours. The main page and this screen share the
+// browser's storage, so read it here, and again whenever it changes there.
+let wfLut = makeLut(WF_SCHEMES.lightning);
+function applyTheme() {
+  const get = k => { try { return localStorage.getItem(k); } catch { return null; } };
+  const root = document.documentElement.dataset;
+  const pal = get('procyon.palette');
+  if (pal === 'night') delete root.palette;
+  else if (pal) root.palette = pal;
+  if (get('procyon.textures') === 'off') root.plain = ''; else delete root.plain;
+  const wf = get('procyon.wfScheme');
+  wfLut = makeLut(WF_SCHEMES[wf] || WF_SCHEMES.lightning);
+  root.wf = WF_SCHEMES[wf] ? wf : 'lightning';
+}
+applyTheme();
+addEventListener('storage', e => { if (!e.key || e.key.startsWith('procyon.')) applyTheme(); });
+const wfColor = v => { const i = Math.max(0, Math.min(255, Math.round(v * 255))) * 3; return [wfLut[i], wfLut[i + 1], wfLut[i + 2], 255]; };
 
 // Messages replayed after a page reload are dimmed, with a line under them:
 // the helper only remembers what it heard since it started (liveSince).
@@ -439,7 +459,7 @@ setInterval(render, 1000);
         v += (0.35 + ((st?.snr ?? -10) + 24) / 50) * (0.75 + Math.random() * 0.25);
       }
       v = Math.min(1, v);
-      img.data.set([20 + 235 * v * v, 30 + 220 * v, 80 + 175 * v, 255], x * 4);   // "lightning": blue -> cyan -> white
+      img.data.set(wfColor(v), x * 4);   // Procyon's waterfall colours (Settings → Themes)
     }
     g.drawImage(c, 0, 1);
     g.putImageData(img, 0, 0);
@@ -451,7 +471,7 @@ setInterval(render, 1000);
     for (let x = 0; x < w; x++) {
       const a = Math.sqrt(v[Math.min(v.length - 1, Math.floor(x / w * v.length))]) * 0.85 + Math.random() * 0.06;
       const t = Math.min(1, a);
-      img.data.set([20 + 235 * t * t, 30 + 220 * t, 80 + 175 * t, 255], x * 4);
+      img.data.set(wfColor(t), x * 4);
     }
     g.drawImage(c, 0, 1);
     g.putImageData(img, 0, 0);
@@ -512,6 +532,12 @@ function handleLive(m, ws) {
         : m.tx.test ? `listening on ${m.device} · TEST sending into ${m.tx.to} (a test sound device - no radio)`
         : `listening on ${m.device} · Send transmits on your radio (PTT by ${m.tx.ptt})`;
       $('liveNote').classList.toggle('bad', !!(m.error || m.quiet));
+      // inside Procyon the note only shows when something needs attention
+      document.body.classList.toggle('note-warn', !!(m.error || m.quiet || !m.tx || m.tx.test || typeof m.tx === 'string'));
+      if (m.me && m.me.call) {                  // Settings → Station: call, grid, name
+        $('myCall').value = m.me.call; $('myGrid').value = (m.me.grid || '').slice(0, 4); $('myName').value = m.me.name || '';
+        if (me) Object.assign(me, { call: JS8.clean(m.me.call), grid: JS8.clean(m.me.grid || '') || me.grid, name: JS8.clean(m.me.name || '') });
+      }
       liveTx = m.tx || null;
       $('sendBtn').disabled = !liveTx;
       $('sendBtn').textContent = !liveTx ? 'Listen only' : txTest() ? 'Send (test)' : 'Send';

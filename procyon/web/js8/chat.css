@@ -1,4 +1,4 @@
-/* Procyon JS8 chat screen. Colours only through theme.css variables, so every
+/* Procyon JS8 chat screen. Colours only through palettes.css variables (Procyon's, shared), so every
    palette works. The first block repeats a few of Procyon's own styles (header,
    chips, panels, buttons) so this page looks right on its own; when it moves
    into Procyon those come from style.css instead. */
@@ -318,3 +318,13 @@ body.live #sendBtn { opacity: .55; cursor: not-allowed; }
 
 /* Inside Procyon (JS8 in the mode menu): Procyon's header is above the frame */
 .embedded header.top, .embedded #palette { display: none; }
+/* ... and the bar under it shows only when something needs your attention
+   (no audio, listen only, test sound device); call/grid/name come from
+   Procyon's Settings. Reset layout moves into the waterfall's title. */
+.embedded .sim-bar { display: none; }
+.embedded.note-warn .sim-bar { display: flex; }
+.embedded .sim-bar > :not(#liveNote) { display: none; }
+.embedded #liveNote { color: var(--me); }
+.embedded #liveNote.bad { color: var(--tx); }
+.wf-tile .card-head #layoutReset { margin-left: auto; }
+

@@ -150,6 +150,7 @@ class Js8Rx:
         self.level = None
         self.tasks = []
         self.tx = None                   # what Send transmits through (set by the engine), None = listen only
+        self.me = {}                     # {"call", "grid", "name"} from Settings (set by the engine)
         self.keyed = None                # keyed(a, b): did WE transmit between band times a and b? (engine)
 
     # ---------------------------------------------------------------- plumbing
@@ -170,7 +171,7 @@ class Js8Rx:
 
     def hello(self):
         device, error = self.status()
-        return {"type": "hello", "listen_only": not self.tx, "tx": self.tx, "device": device or "the radio's audio",
+        return {"type": "hello", "listen_only": not self.tx, "tx": self.tx, "me": self.me, "device": device or "the radio's audio",
                 "speed": self.speed, "error": error or None, "quiet": self.quiet, "level": self.level,
                 "since": self.since}
 
