@@ -21,7 +21,8 @@ if (EMBEDDED) {
   if (EMBED.get('call')) $('myCall').value = EMBED.get('call');
   if (EMBED.get('grid')) $('myGrid').value = EMBED.get('grid').slice(0, 4);
   if (EMBED.get('palette')) document.documentElement.dataset.palette = EMBED.get('palette');
-  $('wf').closest('.wf-tile').querySelector('.card-head').append($('layoutReset'));
+  // the top bar is hidden here, so its speed buttons move into the waterfall's title too
+  $('wf').closest('.wf-tile').querySelector('.card-head').append($('speedSeg'), $('layoutReset'));
 }
 
 // Procyon's look (Settings → Themes, saved per device): palette, background

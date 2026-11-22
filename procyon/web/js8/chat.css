@@ -320,11 +320,12 @@ body.live #sendBtn { opacity: .55; cursor: not-allowed; }
 .embedded header.top, .embedded #palette { display: none; }
 /* ... and the bar under it shows only when something needs your attention
    (no audio, listen only, test sound device); call/grid/name come from
-   Procyon's Settings. Reset layout moves into the waterfall's title. */
+   Procyon's Settings. Speed buttons + Reset layout move into the waterfall's title. */
 .embedded .sim-bar { display: none; }
 .embedded.note-warn .sim-bar { display: flex; }
 .embedded .sim-bar > :not(#liveNote) { display: none; }
 .embedded #liveNote { color: var(--me); }
 .embedded #liveNote.bad { color: var(--tx); }
-.wf-tile .card-head #layoutReset { margin-left: auto; }
+.wf-tile .card-head #speedSeg { margin-left: auto; background: var(--surface); }
+.wf-tile .card-head #layoutReset { margin-left: 8px; }
 
