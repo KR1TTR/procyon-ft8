@@ -68,6 +68,7 @@ const wfLive = [];            // waterfall rows from the real radio, waiting to 
 
 // ---------------------------------------------------------------- setup
 function start() {
+  if (live) { goLive(live); return; }   // the real radio: never bring the pretend stations back
   link.reset();
   bots.forEach(b => b.stop());
   me = new ChatStation({
@@ -84,6 +85,7 @@ function start() {
 }
 function startBots() {
   bots.forEach(b => b.stop());
+  if (live) { bots = []; return; }      // pretend stations only on the pretend band
   bots = BOT_STATIONS.filter(b => b.call !== me.call).map(info => new Bot(link, info));
   bots.forEach(b => b.start());
 }
@@ -357,7 +359,12 @@ $('speedSeg').addEventListener('click', e => {
 $('fast').onchange = e => { link.fast = e.target.checked; startBots(); setHB(autoHB); };
 for (const k of ['loss', 'garble']) $(k).oninput = e => { link[k] = e.target.value / 100; $(k + 'V').textContent = e.target.value + '%'; };
 $('resetBtn').onclick = start;
-for (const k of ['myCall', 'myGrid', 'myName']) $(k).onchange = start;
+for (const k of ['myCall', 'myGrid']) $(k).onchange = start;
+// your name only fills in the Name button's text: changing it starts nothing over
+$('myName').onchange = () => { if (live) { me.name = JS8.clean($('myName').value); render(); } else start(); };
+if (EMBEDDED) for (const k of ['myCall', 'myGrid']) {   // inside Procyon: they come from its Settings
+  $(k).readOnly = true; $(k).title = "Set in Procyon's Settings (Station & radio)";
+}
 $('palette').onchange = e => {
   if (e.target.value) document.documentElement.dataset.palette = e.target.value;
   else delete document.documentElement.dataset.palette;
@@ -569,7 +576,8 @@ function goLive(ws) {
   link.reset();
   link.fast = false; $('fast').checked = false;
   setHB(false);
-  const myCall = me.call, grid = me.grid, name = me.name;
+  const myCall = JS8.clean($('myCall').value) || me.call, grid = JS8.clean($('myGrid').value) || me.grid;
+  const name = JS8.clean($('myName').value);
   me = new ChatStation({ call: myCall, grid, name, info: 'KX3 10W EFHW', send: () => null, onChange: () => render() });
   document.body.classList.add('live');
   $('simLabel').textContent = 'LIVE RADIO';
