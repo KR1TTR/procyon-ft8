@@ -14,6 +14,9 @@ const JS8 = {
   CHARS_PER_FRAME: 13,
 
   // Commands JS8Call understands (shown in blue; queries get an answer).
+  // what fits whole in the directed frame after the call (JS8Call's directed commands)
+  ONE_FRAME: ['SNR?', '?', 'HEARING?', 'GRID?', 'STATUS?', 'STATUS', 'HEARING', 'GRID', 'INFO?', 'INFO', 'FB',
+    'HW CPY?', 'SK', 'RR', 'QSL?', 'QSL', 'SNR', 'NO', 'YES', '73', 'NACK', 'ACK', 'AGN?', 'QUERY CALL', 'QUERY MSGS?'],
   COMMANDS: ['SNR?', 'GRID?', 'INFO?', 'HEARING?', 'HEARTBEAT', 'SNR', 'GRID', 'INFO', 'HEARING', 'ACK', 'QSL?', 'QSL'],
 
   // Upper case, and only characters JS8 can send.
@@ -42,6 +45,7 @@ const JS8 = {
   frames(text) {
     const p = JS8.parse(text);
     if (!p.text) return 0;
+    if (p.to && JS8.ONE_FRAME.includes(p.body)) return 1;   // a call + a JS8 command fits in one frame
     return (p.to ? 1 : 0) + Math.max(1, Math.ceil(p.body.length / JS8.CHARS_PER_FRAME));
   },
 

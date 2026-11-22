@@ -175,6 +175,8 @@ textarea::placeholder { text-transform: none; font-family: var(--sans); color: v
 .frames i.hdr { background: var(--info); }
 .meter b { font-family: var(--mono); color: var(--text); }
 .meter.long b { color: var(--me); }
+.tidy-note { flex-basis: 100%; color: var(--me); }
+.tidy-note .btn { margin-left: 6px; padding: 1px 8px; }
 
 /* --------------------------------------------------------------- phones */
 /* too narrow for three columns: band activity goes under the Heard list,

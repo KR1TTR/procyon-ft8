@@ -274,6 +274,35 @@ function renderSuggest() {
 }
 
 // ---------------------------------------------------------------- typing box
+// JS8 puts your call in front of every message, and the To box puts the
+// other station's call after it - typing them again (or "DE KR1TTR") only
+// makes the message longer. tidy() finds those words and leaves the rest.
+function tidy(to, text) {
+  const mine = ((me && me.call) || '').toUpperCase(), them = (to || '').toUpperCase();
+  const core = w => w.toUpperCase().replace(/[.,:;!]+$/, '');
+  const words = text.split(/\s+/).filter(Boolean), keep = [], found = new Set();
+  for (let i = 0; i < words.length; i++) {
+    const w = core(words[i]), next = core(words[i + 1] || '');
+    if (w === 'DE' && mine && next === mine) { found.add('de'); i++; continue; }
+    if (mine && w === mine) { found.add('mine'); continue; }
+    if (them && !them.startsWith('@') && w === them && !keep.length) { found.add('them'); continue; }
+    keep.push(words[i]);
+  }
+  return { text: keep.join(' '), found };
+}
+
+function tidyNote(to, body) {
+  const t = tidy(to, body);
+  if (!t.found.size || !JS8.clean(t.text)) return '';
+  const what = [];
+  if (t.found.has('mine') || t.found.has('de')) what.push(t.found.has('de') ? `"DE ${me.call}"` : `your call`);
+  if (t.found.has('them')) what.push(`${to} (from the To box)`);
+  const full = to ? `${to} ${body}` : body, short = to ? `${to} ${t.text}` : t.text;
+  const saved = JS8.frames(full) - JS8.frames(short);
+  return `<span class="tidy-note">JS8 adds ${what.join(' and ')} for you${saved > 0 ? ` - leaving it out saves ${saved} frame${saved > 1 ? 's' : ''}` : ''}.
+    <button type="button" class="btn ghost small" id="tidyBtn" title="Take those words out of the message">Take it out</button></span>`;
+}
+
 function updateMeter() {
   const to = toVal, body = JS8.clean($('txt').value);
   const n = body ? JS8.frames(to ? `${to} ${body}` : body) : 0;
@@ -284,8 +313,13 @@ function updateMeter() {
   $('meter').className = 'meter' + (sec > 90 ? ' long' : '');
   setHTML($('meter'), `<span class="frames">${bars}${n > 16 ? '…' : ''}</span>
     <span>about <b>${n} frame${n > 1 ? 's' : ''}</b> · <b>${dur}</b> at ${speed}</span>
-    ${sec > 90 ? '<span>long - maybe split it</span>' : ''}`);
+    ${sec > 90 ? '<span>long - maybe split it</span>' : ''}${tidyNote(to, body)}`);
 }
+$('meter').addEventListener('click', e => {
+  if (!e.target.closest('#tidyBtn')) return;
+  $('txt').value = tidy(toVal, JS8.clean($('txt').value)).text;
+  $('txt').focus(); renderSuggest(); updateMeter();
+});
 
 function send() {
   const to = toVal, body = $('txt').value;

@@ -35,6 +35,8 @@
   td:first-child { font-weight: 600; color: var(--text); width: 30%; }
   .sw { display: inline-block; width: .8em; height: .8em; border-radius: 3px; vertical-align: -.05em; margin-right: 4px; }
   .back { display: inline-block; margin-top: 30px; }
+  pre.qso { font: 13px/1.6 "JetBrains Mono", ui-monospace, Consolas, monospace; background: var(--surface);
+             border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; overflow-x: auto; }
   @media (max-width: 560px) { .toc ol { columns: 1; } td:first-child { width: 38%; } }
   @media print {
     :root { --bg: #fff; --surface: #f3f4f6; --border: #ccd; --text: #000; --muted: #444; --rx: #006a75; color-scheme: light; }
@@ -64,6 +66,7 @@ your radio and setting the audio levels. This guide picks up from there.</p>
   <li><a href="#auto">How a QSO runs</a></li>
   <li><a href="#logbook">Logbook</a></li>
   <li><a href="#pota">POTA activations</a></li>
+  <li><a href="#js8">JS8 keyboard chat</a></li>
   <li><a href="#settings">Settings, tab by tab</a></li>
   <li><a href="#layout">Arranging the screen</a></li>
   <li><a href="#others">Other devices and programs</a></li>
@@ -87,7 +90,7 @@ your radio and setting the audio levels. This guide picks up from there.</p>
 <tr><td>Frequency button</td><td>Shows the dial frequency and band. Click it to pick a band; Procyon tunes the radio
   (with radio control on) to that band's FT8 or FT4 frequency. Changing band, here or on the radio's dial,
   turns transmit off and clears the QSO.</td></tr>
-<tr><td>Mode (FT8 ▾)</td><td>Click it for a menu of modes and pick one. <b>FT8</b> uses 15-second cycles and is the most popular. <b>FT4</b> uses 7.5-second cycles and is popular with contesters. <b>JS8</b> (experimental) opens a keyboard-chat screen and LISTENS: Procyon moves the radio to the band's JS8 frequency (40&nbsp;m 7.078, 20&nbsp;m 14.078 ...), pauses FT8/FT4 and shows the JS8 stations it hears. It can't transmit yet - Send, CQ and Tune are off while JS8 is picked. Picking FT8 or FT4 tunes back. On the demo band the JS8 screen shows a pretend band instead.</td></tr>
+<tr><td>Mode (FT8 ▾)</td><td>Click it for a menu of modes and pick one. <b>FT8</b> uses 15-second cycles and is the most popular. <b>FT4</b> uses 7.5-second cycles and is popular with contesters. <b>JS8</b> (experimental) opens a keyboard-chat screen: Procyon moves the radio to the band's JS8 frequency (40&nbsp;m 7.078, 20&nbsp;m 14.078 ...), pauses FT8/FT4 and shows the JS8 stations it hears - see <a href="#js8">JS8 keyboard chat</a>. Picking FT8 or FT4 tunes back. On the demo band the JS8 screen shows a pretend band instead.</td></tr>
 <tr><td>UTC time</td><td>Coordinated Universal Time. The primary regulated time standard used globally.</td></tr>
 <tr><td>Clock light</td><td>Compares your clock with the stations you hear. Green is fine, amber is drifting, red means your
   clock needs setting. With <i>band sync</i> on (Settings → Advanced → Clock) it shows how much Procyon is correcting,
@@ -213,12 +216,47 @@ every Procyon tab. <b>Halt</b> or <kbd>Esc</kbd> always stops it straight away.<
 </ol>
 <p>Hunting? Stations calling <code>CQ POTA</code> get a green POTA tag in Band activity; type <code>POTA</code> in the custom filter to see only them.</p>
 
-<h2 id="settings">9. Settings, tab by tab</h2>
+<h2 id="js8">9. JS8 keyboard chat</h2>
+<p>JS8 is for typed conversations: slower than FT8, but you write whatever you like instead of a fixed exchange.
+Pick <b>JS8</b> in the mode menu. Messages are cut into <b>frames</b> of about 13 letters, one frame per time slot,
+so short messages get through best.</p>
+<table>
+<tr><th>Control</th><th>What it does</th></tr>
+<tr><td>Waterfall</td><td>Click it to choose where you transmit (the red TX mark). The buttons in its title set the
+  <b>speed</b>: Slow (30&nbsp;s per frame, best for weak signals), Normal (15&nbsp;s, what most people use), Fast (10&nbsp;s)
+  and Turbo (6&nbsp;s, strong signals only). You can only hear stations on the speed you've picked.</td></tr>
+<tr><td>Heard</td><td>Stations heard recently, with their signal strength. Click one to talk to it.</td></tr>
+<tr><td>All activity</td><td>Every message heard. Messages to you, or to a station you've opened, also get a tab of their own.</td></tr>
+<tr><td>To</td><td>Who the message is for: <b>everyone</b>, or one station. Picking a station puts its call in front of your text,
+  which is what makes it a <i>directed</i> message - it lands in that operator's own window.</td></tr>
+<tr><td>Quick buttons</td><td><b>CQ</b> calls everyone (with your grid). <b>Heartbeat</b> says "I'm here"; stations that hear it may answer
+  with your signal report. <b>SNR?</b>, <b>GRID?</b>, <b>INFO?</b> and <b>HEARING?</b> ask the To station how strong you are, its grid,
+  its station details, or who it can hear - many stations answer these by themselves. <b>Name</b>, <b>Station</b> and
+  <b>Weather</b> fill in a sentence about you (your name comes from Settings → Station &amp; radio). <b>73</b> signs off.</td></tr>
+<tr><td>Message box</td><td>Type and press <kbd>Enter</kbd> (or <b>Send</b>). The line underneath shows how many frames it takes and how long
+  that is on the air. <b>Stop</b> or <kbd>Esc</kbd> stops sending at once.</td></tr>
+</table>
+<p class="note"><b>You never type your own call.</b> JS8 puts it in front of every message (everyone sees <code>K1ABC:</code> first),
+and the To box adds the other station's call. Typing them again, or <code>DE K1ABC</code>, just makes the message longer -
+Procyon points it out and offers to take it out.</p>
+<p>A typical short QSO looks like this (each line is one message; the call before the colon is added automatically):</p>
+<pre class="qso">W7XYZ:  @ALLCALL CQ CQ CQ DM33
+K1ABC:  W7XYZ HW CPY?
+W7XYZ:  K1ABC SNR -12 TU
+K1ABC:  W7XYZ SNR -08 NAME SAM MA
+W7XYZ:  K1ABC GM SAM NAME BOB AZ QRP
+K1ABC:  W7XYZ TNX BOB 73
+W7XYZ:  K1ABC 73 SK</pre>
+<p>Common shorthand: <b>HW CPY?</b> (how do you copy me?), <b>TU</b> / <b>TNX</b> (thanks), <b>BTU</b> (back to you),
+<b>73</b> (best regards), <b>SK</b> (I'm done). No answer? Try a <b>Heartbeat</b> or <b>SNR?</b> first: if anyone replies,
+you're getting out. Procyon never sends anything by itself in JS8 - only when you press Send or a quick button.</p>
+
+<h2 id="settings">10. Settings, tab by tab</h2>
 <p>The gear icon opens Settings. Press <b>Save</b> to keep changes (a few, marked "this device", apply straight away).
 <b>Import settings from WSJT-X</b> at the top copies your station and radio setup from WSJT-X.</p>
 <table>
 <tr><th>Tab</th><th>What's there</th></tr>
-<tr><td>Station &amp; radio</td><td>Callsign and grid. Radio control: <b>Detect my radio</b>, <b>Test radio</b> (never transmits), the radio model,
+<tr><td>Station &amp; radio</td><td>Callsign and grid; your name (optional, used by JS8's Name button). Radio control: <b>Detect my radio</b>, <b>Test radio</b> (never transmits), the radio model,
   serial port, baud, the radio mode for FT8 (Data recommended) and how to key the transmitter (PTT).</td></tr>
 <tr><td>Audio</td><td>The sound card the radio's audio comes in on, and the one it goes out on. On Linux, entries marked "ALSA" use the card directly, without the sound server - for cards you've turned off there and set with alsamixer. If the chosen card isn't connected, Procyon says so and won't transmit.</td></tr>
 <tr><td>Logbook</td><td>Add signal reports to log comments. Your QRZ Logbook API key, with <b>Test key</b> and <b>Remove key</b>.</td></tr>
@@ -235,7 +273,7 @@ every Procyon tab. <b>Halt</b> or <kbd>Esc</kbd> always stops it straight away.<
 </table>
 <p class="note"><b>About Procyon</b>, at the bottom of Settings, shows the version and credits.</p>
 
-<h2 id="layout">10. Arranging the screen</h2>
+<h2 id="layout">11. Arranging the screen</h2>
 <p>Settings → Display → Layout picks how the panels sit on this device: <b>Automatic</b> (side by side on wide windows,
 stacked on narrow ones), <b>Side by side</b>, or <b>Stacked</b> (good for phones and portrait monitors).</p>
 <ul>
@@ -245,7 +283,7 @@ stacked on narrow ones), <b>Side by side</b>, or <b>Stacked</b> (good for phones
   <li>Double-click a resize handle to undo it, or press <b>Reset panel layout</b>. Each device remembers its own layout.</li>
 </ul>
 
-<h2 id="others">11. Other devices and programs</h2>
+<h2 id="others">12. Other devices and programs</h2>
 <h3>A tablet, phone or laptop</h3>
 <p>Turn on <b>Remote access</b> (Settings → Network) and choose a PIN. Settings then lists the address to open on the other device,
 on the same home network. You can operate fully from there; a few things (like the PIN, the QRZ key and Quit) can only be changed
@@ -254,7 +292,7 @@ on the computer running Procyon.</p>
 <p>Procyon talks to them the way WSJT-X does (Settings → Network → Companion apps). With <i>Let them control Procyon</i> on,
 clicking a station in GridTracker answers it in Procyon. This is paused while the demo band is on.</p>
 
-<h2 id="keys">12. Keys and mouse</h2>
+<h2 id="keys">13. Keys and mouse</h2>
 <table>
 <tr><th>Do this</th><th>To</th></tr>
 <tr><td><kbd>Esc</kbd></td><td>Stop transmitting now (when no window is open on top). In a box or menu, <kbd>Esc</kbd> just closes it.</td></tr>
