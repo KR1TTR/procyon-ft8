@@ -530,9 +530,10 @@ setInterval(render, 1000);
   setInterval(() => {
     size();
     if (!live) return row(link.nowAiring());
-    while (wfLive.length > 8) wfLive.shift();   // fell behind (hidden tab): skip ahead
+    while (wfLive.length > 16) wfLive.shift();   // fell behind (hidden tab): skip ahead
     if (wfLive.length) liveRow(wfLive.shift());
-  }, 250);
+    if (wfLive.length > 2) liveRow(wfLive.shift());   // a little behind: catch up gently
+  }, 125);   // 8 rows a second, like the FT8 waterfall
 })();
 
 // Panels: waterfall on top, Heard beside the chat below it (until you move them).

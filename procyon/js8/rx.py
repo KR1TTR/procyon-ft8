@@ -29,6 +29,7 @@ WF_BINS = 300
 WF_N = 4096
 WF_FLOOR_DB = 3                          # waterfall: dark up to this many dB above the noise
 WF_RANGE_DB = 15                         # ... white this many dB higher
+WF_ROW_SEC = 0.125                       # 8 waterfall rows a second, like FT8's
 QUIET_DB = -65                           # audio below this (dB of full scale) = nothing coming in
 QUIET_SEC = 5                            # ... for this long before the screen says so
 HISTORY = 300                            # messages kept for a page that opens (or reloads) later
@@ -247,8 +248,10 @@ class Js8Rx:
         idx = np.searchsorted(hz, np.linspace(LOW, HIGH, WF_BINS + 1))
         win = np.hanning(WF_N)
         low_since, n = None, 0
+        due = time.monotonic()
         while True:
-            await asyncio.sleep(0.25)
+            due = max(due + WF_ROW_SEC, time.monotonic())   # steady pace, no drift
+            await asyncio.sleep(due - time.monotonic())
             x = self.latest(WF_N)
             if x is None:
                 continue
@@ -259,7 +262,7 @@ class Js8Rx:
             v = np.clip((db - np.median(db) - WF_FLOOR_DB) / WF_RANGE_DB, 0, 1)
             await self._out({"type": "wf", "v": [round(float(a), 2) for a in v]})
             n += 1
-            if n % 4:
+            if n % round(1 / WF_ROW_SEC):
                 continue
             # once a second: say so when (almost) no audio comes in - a radio
             # switched off or its volume down
