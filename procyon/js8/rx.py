@@ -24,7 +24,7 @@ SPEEDS = {"Slow": "slow", "Normal": "normal", "Fast": "fast", "Turbo": "turbo"}
 DECODE_LATE = 0.5                        # s after an on-time signal ends (JS8Call's figure)
 JOIN_HZ = 10                             # frames this close in frequency = one station
 OPEN_SLOTS = 3                           # a message with no new frame for this many slots is done
-LOW, HIGH = 300, 3300                    # the chat screen's waterfall range
+LOW, HIGH = 400, 2800                    # the chat screen's waterfall range (= LOW/HIGH in web/js8/app.js)
 WF_BINS = 300
 WF_N = 4096
 WF_FLOOR_DB = 3                          # waterfall: dark up to this many dB above the noise

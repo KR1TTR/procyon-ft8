@@ -362,7 +362,7 @@ dialog#logDlg::backdrop { background: var(--backdrop); }
 .call-menu a:hover { background: var(--hover-bg); }
 
 /* band plan above the JS8 waterfall: brackets over 500-1000 and 1000-2500 Hz
-   (positions are % of the 300-3300 Hz waterfall) */
+   (app.js places them from the waterfall's range) */
 .wf-plan { position: relative; height: 18px; margin: 0 10px 3px; flex: none; }
 .wf-plan .plan { position: absolute; bottom: 0; height: 15px; box-sizing: border-box; padding: 0 4px;
   border: 1px solid currentColor; border-bottom: 0; border-radius: 4px 4px 0 0;

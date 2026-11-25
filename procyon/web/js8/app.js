@@ -68,7 +68,8 @@ function markCleared(key) {
 }
 const ago = t => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const KM_PER_MI = 1.609344;
-const LOW = 300, HIGH = 3300;   // waterfall range, Hz
+const LOW = 400, HIGH = 2800;   // waterfall range, Hz (= LOW/HIGH in procyon/js8/rx.py)
+const TX_MAX = HIGH - 100;     // the TX mark stays where you can see your whole signal
 
 // Lists re-render only when their HTML changes, so clicks don't land on replaced buttons.
 function setHTML(el, html) { if (el._html !== html) { el._html = html; el.innerHTML = html; return true; } return false; }
@@ -83,7 +84,7 @@ const TXF_KEY = 'procyon.js8TxFreq';
 let myFreq = (() => {
   let f = NaN;
   try { f = Number(localStorage.getItem(TXF_KEY)); } catch { /* private window */ }
-  return f >= 300 && f <= 2900 ? f : 1500;
+  return f >= LOW && f <= TX_MAX ? f : 1500;
 })();
 let autoHB = false, hbTimer = null;
 let lastSuggest = null;
@@ -600,11 +601,16 @@ $('hbChip').onclick = () => setHB(!autoHB);
 $('wfStrip').addEventListener('click', e => {
   const r = $('wf').getBoundingClientRect();
   myFreq = Math.round((LOW + (e.clientX - r.left) / r.width * (HIGH - LOW)) / 10) * 10;
-  myFreq = Math.max(LOW, Math.min(2900, myFreq));
+  myFreq = Math.max(LOW, Math.min(TX_MAX, myFreq));
   const st = link.stations.get('me'); if (st) st.freq = myFreq;
   try { localStorage.setItem(TXF_KEY, String(myFreq)); } catch { /* private window */ }
   placeTx();
 });
+// band plan brackets above the waterfall, placed from the same range
+for (const [sel, lo, hi] of [['.wf-plan .hb', 500, 1000], ['.wf-plan .chat', 1000, 2500]]) {
+  const el = document.querySelector(sel);
+  if (el) { el.style.left = `${(lo - LOW) / (HIGH - LOW) * 100}%`; el.style.width = `${(hi - lo) / (HIGH - LOW) * 100}%`; }
+}
 function placeTx() {
   $('wfTx').style.left = ((myFreq - LOW) / (HIGH - LOW) * 100) + '%';
   $('wfTx').style.width = (link.width / (HIGH - LOW) * 100) + '%';
