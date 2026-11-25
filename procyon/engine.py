@@ -1323,8 +1323,13 @@ class Engine:
             "qso_date": start.strftime("%Y%m%d"), "time_on": start.strftime("%H%M%S"),
             "qso_date_off": now.strftime("%Y%m%d"), "time_off": now.strftime("%H%M%S"),
             "band": band_of(dial), "freq": f"{(dial + int(self.s['tx_freq'])) / 1e6:.6f}",
-            "station_callsign": self.s["mycall"].upper(), "my_gridsquare": self._grid().upper(),
         }
+        q.log_idx = self._add_to_log(rec, self._qso_comment(q), start, now)
+
+    def _add_to_log(self, rec: dict, note: str, start, now) -> int:
+        """The parts every logged QSO shares (FT8, FT4 and JS8): our station,
+        POTA, power, the note; then the logbook, park files and companion apps."""
+        rec.update(station_callsign=self.s["mycall"].upper(), my_gridsquare=self._grid().upper())
         if self.s["pota_active"] and self.s["pota_parks"]:
             parks = ",".join(self.s["pota_parks"])
             rec.update(my_sig="POTA", my_sig_info=parks, my_pota_ref=parks)
@@ -1332,16 +1337,65 @@ class Engine:
                 rec["my_state"] = self.s["pota_state"]
         if str(self.s["tx_watts"]).strip():
             rec["tx_pwr"] = str(self.s["tx_watts"]).strip()
-        rec["comment"] = self._comment(self._qso_comment(q))
+        rec["comment"] = self._comment(note)
         self.logbook.add(rec)
-        q.log_idx = len(self.logbook.qsos) - 1
         if self.s["pota_active"]:
             self._pota_save()
         if not self.s["demo"]:   # never put simulated QSOs into companion apps' logs
             adif = (f"<adif_ver:5>3.1.4 <programid:7>Procyon <programversion:{len(__version__)}>"
                     f"{__version__} <EOH>\n" + Logbook._record(rec))
             self.udp.qso_logged(rec, start, now, adif)
-        self.toast(f"Logged QSO with {q.dxcall}", "good")
+        self.toast(f"Logged QSO with {rec['call']}", "good")
+        return len(self.logbook.qsos) - 1
+
+    JS8_CALL_RE = re.compile(r"^[A-Z0-9]{1,4}(/[A-Z0-9]{1,4})?[0-9][A-Z0-9]*(/[A-Z0-9]{1,4})?$")
+    JS8_REPORT_RE = re.compile(r"^[+-]?\d{1,2}$")
+
+    def _js8_log(self, m: dict) -> dict:
+        """Log a JS8 contact the user chose to log in the chat screen ("Log QSO").
+        JS8 has no fixed QSO sequence, so this is always by hand."""
+        call = str(m.get("call", "")).strip().upper()
+        if not self.JS8_CALL_RE.match(call) or len(call) > 13:
+            return {"type": "js8", "m": {"type": "logged", "call": call, "error": f"'{call}' doesn't look like a callsign"}}
+        grid = str(m.get("grid", "")).strip().upper()
+        if grid and not re.fullmatch(r"[A-R]{2}[0-9]{2}([A-X]{2})?", grid):
+            grid = ""
+        reps = {}
+        for k in ("rst_sent", "rst_rcvd"):
+            v = str(m.get(k, "")).strip()
+            if v and self.JS8_REPORT_RE.match(v):
+                n = int(v)
+                reps[k] = f"{n:+03d}"
+        now = utc_now()
+        start = now
+        try:
+            t = float(m.get("time_on")) / 1000.0
+            if now.timestamp() - 86400 <= t <= now.timestamp():   # within the last day
+                start = dt.datetime.fromtimestamp(t, dt.timezone.utc)
+        except (TypeError, ValueError):
+            pass
+        dial = self.dial
+        try:
+            off = max(0, min(5000, int(m.get("freq", 1500))))
+        except (TypeError, ValueError):
+            off = 1500
+        rec = {
+            "call": call, "gridsquare": grid, "mode": "MFSK", "submode": "JS8", **reps,
+            "qso_date": start.strftime("%Y%m%d"), "time_on": start.strftime("%H%M%S"),
+            "qso_date_off": now.strftime("%Y%m%d"), "time_off": now.strftime("%H%M%S"),
+            "band": band_of(dial), "freq": f"{(dial + off) / 1e6:.6f}",
+        }
+        name = re.sub(r"[^A-Z0-9 .'-]", "", str(m.get("name", "")).upper()).strip()[:30]
+        if name:
+            rec["name"] = name
+        note = str(m.get("comment", "")).replace("\n", " ").strip()[:200]
+        if self.s.get("log_reports_in_comment"):
+            note = " · ".join(x for x in (note, f"JS8 Sent: {reps.get('rst_sent', '?')} Rcvd: {reps.get('rst_rcvd', '?')}") if x)
+        if grid:
+            self.grids[call] = grid
+        self._add_to_log(rec, note, start, now)
+        asyncio.get_event_loop().create_task(self.push_state())
+        return {"type": "js8", "m": {"type": "logged", "call": call}}
 
     def _remote_settings(self, new: dict):
         pin = str(new.get("remote_pin", "")).strip()
@@ -2144,6 +2198,8 @@ class Engine:
             await self.halt()
             await self.push_state()
             return None
+        elif t == "js8_log":
+            return self._js8_log(m)
         elif t == "js8_count":
             # the chat screen's "how long on the air" line: the exact number of
             # frames Send would make of this text (nothing is sent)

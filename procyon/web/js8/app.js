@@ -133,7 +133,7 @@ function render() {
   if (popped() && current === 'all') current = tabs[tabs.length - 1] || '';
   if (!popped() && current === '') current = 'all';
   if (current && current !== 'all') me.read(current);
-  renderHeard(); renderTabs(); renderChat(); renderBand(); renderTo(); renderSuggest(); updateMeter();
+  renderHeard(); renderTabs(); renderChat(); renderBand(); renderTo(); renderSuggest(); updateMeter(); renderLogBtn();
 }
 
 const popped = () => dock.has('band');
@@ -149,9 +149,11 @@ function replying() {
   return [...me.arriving].filter(([from]) => !from.startsWith('?')).filter(([, a]) => JS8.parse(a.text).to === me.call || a.text === me.call).map(([from]) => from);
 }
 
+let useMiles = true;            // inside Procyon: follows Settings → Display → Distances
 function dist(grid) {
   const km = JS8.distanceKm(me.grid, grid);
-  return km == null ? '' : `${Math.round(km / KM_PER_MI).toLocaleString()} mi`;
+  if (km == null) return '';
+  return useMiles ? `${Math.round(km / KM_PER_MI).toLocaleString()} mi` : `${Math.round(km).toLocaleString()} km`;
 }
 
 function renderHeard() {
@@ -430,7 +432,129 @@ $('sendBtn').onclick = send;
 // Stop sending (Esc too): drops queued messages and cuts the frame that's playing.
 function stopTx() { if (live && liveTx) live.send(JSON.stringify({ type: 'txstop' })); }
 $('stopTx').onclick = stopTx;
-addEventListener('keydown', e => { if (e.key === 'Escape' && !$('stopTx').hidden) stopTx(); });
+addEventListener('keydown', e => { if (e.key === 'Escape' && !$('stopTx').hidden && !$('logDlg').open) stopTx(); });
+// Inside Procyon the button is always there as "Halt" while you can transmit
+// (like the FT8 screen's Halt); it lights up while something is going out.
+function updateStop() {
+  const busy = [...txMsgs.values()].some(x => !x.done), b = $('stopTx');
+  if (EMBEDDED && liveTx) {
+    b.hidden = false; b.textContent = 'Halt'; b.classList.toggle('idle', !busy);
+    b.title = busy ? 'Stop sending now (Esc) - drops anything still queued' : 'Nothing is going out. Halt (or Esc) stops a message at once.';
+  } else b.hidden = !busy;
+}
+
+// ---------------------------------------------------------------- Log QSO
+// JS8 has no fixed QSO sequence, so a contact is logged when you say so: the
+// button on a chat's tab fills in what the chat already knows.
+const logged = new Set();       // calls logged since this page opened
+const isStation = k => !!k && k !== 'all' && !k.startsWith('@') && !k.startsWith('?');
+function renderLogBtn() {
+  const b = $('logBtn'), on = EMBEDDED && !!live && !!liveTx && isStation(current);
+  b.hidden = !on;
+  if (!on) return;
+  b.classList.toggle('done', logged.has(current));
+  b.textContent = logged.has(current) ? 'Logged ✓' : 'Log QSO';
+}
+const SNR_IN = /\bSNR ([+-]?\d{1,2})\b/;
+function lastSnr(msgs, dir) {
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const x = msgs[i];
+    if (x.dir !== dir) continue;
+    const r = x.body.match(SNR_IN);
+    if (r) return JS8.fmtSnr(+r[1]);
+  }
+  return '';
+}
+function openLog() {
+  const call = current, c = me.convos.get(call), h = me.heard.get(call) || {};
+  const msgs = (c?.msgs || []).filter(x => !x.queued);
+  const name = msgs.filter(x => x.dir === 'rx').map(x => (x.body.match(/\b(?:NAME(?: HERE)?(?: IS)?|OP(?: HERE)?(?: IS)?)\s+([A-Z]{2,15})\b/) || [])[1]).filter(Boolean).pop();
+  const f = $('logForm');
+  f.call.value = call;
+  f.grid.value = h.grid || '';
+  f.rst_sent.value = lastSnr(msgs, 'tx') || (h.snr != null ? JS8.fmtSnr(h.snr) : '');
+  f.rst_rcvd.value = lastSnr(msgs, 'rx');
+  f.name.value = name || '';
+  f.comment.value = '';
+  const t0 = msgs.length ? msgs[0].t : Date.now();
+  f.dataset.timeOn = t0;
+  $('logInfo').textContent = `Started ${new Date(t0).toISOString().slice(11, 16)} UTC · ${link.speed} · your TX at ${myFreq} Hz. Check the reports - "Sent" is the last SNR you sent them (or how you hear them).`;
+  $('logErr').hidden = true;
+  $('logDlg').showModal();
+  f.rst_rcvd.value ? f.name.focus() : f.rst_rcvd.focus();
+}
+$('logBtn').onclick = () => { if (isStation(current)) openLog(); };
+$('logForm').addEventListener('submit', e => {
+  if (e.submitter?.value !== 'log') return;
+  const f = $('logForm');
+  e.preventDefault();
+  const rep = v => { v = v.trim(); return /^[+-]?\d{1,2}$/.test(v) ? v : ''; };
+  for (const k of ['rst_sent', 'rst_rcvd']) {
+    if (f[k].value.trim() && !rep(f[k].value)) { $('logErr').textContent = `${k === 'rst_sent' ? 'Sent' : 'Rcvd'} should be a number like -05 or +03 (or empty).`; $('logErr').hidden = false; return; }
+  }
+  live.send(JSON.stringify({ type: 'log', call: JS8.clean(f.call.value), grid: f.grid.value.trim().toUpperCase(),
+    rst_sent: rep(f.rst_sent.value), rst_rcvd: rep(f.rst_rcvd.value), name: f.name.value.trim(),
+    comment: f.comment.value.trim(), time_on: +f.dataset.timeOn, freq: myFreq }));
+  $('logOk').disabled = true;
+});
+
+// ---------------------------------------------------------------- TX drive (the FT8 screen's slider, here too)
+let driveTimer = null;
+$('driveIn').addEventListener('input', () => {
+  $('driveOut').textContent = `${$('driveIn').value}%`;
+  clearTimeout(driveTimer);
+  driveTimer = setTimeout(() => live?.send(JSON.stringify({ type: 'drive', v: +$('driveIn').value })), 120);
+});
+function pageInfo(p) {          // from the Procyon page around this frame
+  if (typeof p.miles === 'boolean' && p.miles !== useMiles) { useMiles = p.miles; if (me) renderHeard(); }
+  if (Number.isFinite(p.drive)) {
+    $('driveBox').hidden = false;
+    if (document.activeElement !== $('driveIn')) $('driveIn').value = p.drive;
+    $('driveOut').textContent = `${p.drive}%`;
+  }
+}
+
+// ---------------------------------------------------------------- look up on QRZ
+// Right-click a call (or press and hold on a touchscreen), like the FT8 screen.
+const STD_CALL = /^[A-Z0-9]{1,2}\d[A-Z]{1,3}$/;
+function baseCall(c) {
+  if (!c.includes('/')) return c;
+  const parts = c.split('/').filter(Boolean), std = parts.filter(x => STD_CALL.test(x));
+  return (std.length ? std : parts).reduce((a, b) => (b.length > a.length ? b : a), '');
+}
+function callAt(el) {
+  const t = el.closest('[data-call],[data-tab]');
+  const c = t && (t.dataset.call || t.dataset.tab);
+  return isStation(c) && c !== me?.call ? c : null;
+}
+function openCallMenu(call, x, y) {
+  const m = $('callMenu'), base = baseCall(call);
+  m.innerHTML = `<a href="https://www.qrz.com/db/${encodeURIComponent(base)}" target="_blank" rel="noopener noreferrer">Look up ${esc(base)} on QRZ ↗</a>`;
+  m.hidden = false;
+  m.style.left = `${Math.min(x, innerWidth - m.offsetWidth - 8)}px`;
+  m.style.top = `${Math.min(y, innerHeight - m.offsetHeight - 8)}px`;
+}
+const closeCallMenu = () => { $('callMenu').hidden = true; };
+document.addEventListener('contextmenu', e => {
+  if (e.target.closest('input, textarea, select')) return;
+  const c = callAt(e.target);
+  if (!c) return;
+  e.preventDefault();
+  openCallMenu(c, e.clientX, e.clientY);
+});
+let holdTimer = null, held = false;
+document.addEventListener('touchstart', e => {
+  const c = callAt(e.target), t = e.touches[0];
+  held = false;
+  if (c) holdTimer = setTimeout(() => { held = true; openCallMenu(c, t.clientX, t.clientY); }, 550);
+}, { passive: true });
+['touchend', 'touchmove', 'touchcancel'].forEach(ev => document.addEventListener(ev, () => clearTimeout(holdTimer), { passive: true }));
+document.addEventListener('click', e => {
+  if (held) { held = false; e.stopPropagation(); e.preventDefault(); return; }   // the hold opened the menu: don't open the chat too
+  if (!e.target.closest('#callMenu')) closeCallMenu();
+  else setTimeout(closeCallMenu, 0);
+}, true);
+addEventListener('keydown', e => { if (e.key === 'Escape') closeCallMenu(); }, true);
 $('clearBtn').onclick = () => { $('txt').value = ''; render(); };
 $('txt').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
 $('txt').addEventListener('input', () => { renderSuggest(); updateMeter(); });
@@ -593,6 +717,14 @@ start();
 // page around this frame (postMessage, same origin only); the chat screen's
 // commands (the speed buttons) go back the same way.
 function handleLive(m, ws) {
+    if (m.type === 'logged') {             // Procyon's answer to Log QSO
+      $('logOk').disabled = false;
+      if (m.error) { $('logErr').textContent = m.error; $('logErr').hidden = false; return; }
+      logged.add(m.call);
+      $('logDlg').close();
+      renderLogBtn();
+      return;
+    }
     if (m.type === 'count') {              // Procyon's exact frame count for a text
       if (!Number.isInteger(m.n) || m.n < 1) return;   // couldn't count it: keep the estimate (and don't ask again)
       countAsked.delete(m.text);
@@ -621,6 +753,7 @@ function handleLive(m, ws) {
         if (me) Object.assign(me, { call: JS8.clean(m.me.call), grid: JS8.clean(m.me.grid || '') || me.grid, name: JS8.clean(m.me.name || '') });
       }
       liveTx = m.tx || null;
+      updateStop();
       $('sendBtn').disabled = !liveTx;
       $('sendBtn').textContent = !liveTx ? 'Listen only' : txTest() ? 'Send (test)' : 'Send';
       $('sendBtn').title = !liveTx ? 'Set your callsign in Settings to send'
@@ -642,7 +775,7 @@ function handleLive(m, ws) {
         else { if (m.error) sent.error = m.error; if (m.stopped) sent.stopped = true; sent.done = true; }
         render();
       }
-      $('stopTx').hidden = ![...txMsgs.values()].some(x => !x.done);
+      updateStop();
     }
     else if (m.type === 'history') {          // what the helper heard before this page opened
       for (const h of m.msgs) if (h.from !== me.call) me.hear(h.text, h.from, h.snr, h.freq, h.t, true);
@@ -660,6 +793,7 @@ function handleLive(m, ws) {
     window.addEventListener('message', e => {
       if (e.origin !== location.origin || e.source !== parent) return;
       const d = e.data || {};
+      if (d.procyonJs8Page) { pageInfo(d.procyonJs8Page); return; }
       if (!d.procyonJs8) return;
       handleLive(d.procyonJs8, bridge);
       if (d.history) handleLive({ type: 'history', msgs: d.history }, bridge);

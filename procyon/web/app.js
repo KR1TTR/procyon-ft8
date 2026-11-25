@@ -462,6 +462,7 @@ function onState(m) {
   if (first || st.team_badges !== shownBadges || useMiles() !== shownMiles) renderDecodes();
   shownBadges = st.team_badges;
   shownMiles = useMiles();
+  toJs8Page();
 }
 
 function renderBandMenu() {
@@ -488,7 +489,27 @@ window.addEventListener("message", (e) => {    // the chat screen -> the engine
   else if (c.type === "tx") send({ type: "js8_tx", id: c.id, text: c.text, freq: c.freq });
   else if (c.type === "txstop") send({ type: "js8_txstop" });
   else if (c.type === "count") send({ type: "js8_count", id: c.id, text: c.text });   // frames, nothing sent
+  else if (c.type === "log") send({ type: "js8_log", call: c.call, grid: c.grid, rst_sent: c.rst_sent, rst_rcvd: c.rst_rcvd,
+                                    name: c.name, comment: c.comment, time_on: c.time_on, freq: c.freq });
+  else if (c.type === "drive") {     // the JS8 screen's drive slider = this page's TX audio drive
+    const v = Math.max(0, Math.min(100, Math.round(+c.v || 0)));
+    send({ type: "tx_level", v });
+    S.settings.tx_level = v;           // the engine doesn't send a full update for this
+    $("#txLevel").value = v; $("#txLevelOut").textContent = `${v}%`;
+    toJs8Page();
+  }
+  if (c.type === "ready") { js8PageSent = ""; toJs8Page(); }
 });
+// What the chat screen shows from this page's settings: TX drive, km or miles.
+let js8PageSent = "";
+function toJs8Page() {
+  const w = $("#js8Frame").contentWindow;
+  if (!w || !js8On || !S) return;
+  const info = { drive: S.settings.tx_level, miles: useMiles() }, k = JSON.stringify(info);
+  if (k === js8PageSent) return;
+  js8PageSent = k;
+  w.postMessage({ procyonJs8Page: info }, location.origin);
+}
 function askJs8(on) {
   if (!S || js8Asked === on) return;
   js8Asked = on;

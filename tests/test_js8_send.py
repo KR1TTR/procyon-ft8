@@ -255,3 +255,31 @@ def test_frame_count_for_the_meter_sends_nothing():
         r = await e.command({"type": "js8_count", "id": 6, "text": "HELLO"})     # JS8 off: no count, no error
         assert r["m"]["n"] is None
     asyncio.run(run())
+
+
+def test_a_js8_qso_logged_by_hand_lands_in_the_logbook():
+    """"Log QSO" in the chat screen: call, grid, both reports and the time the
+    chat began go into the same logbook as FT8, as mode MFSK / submode JS8.
+    Junk from the page is refused or cleaned; nothing is sent."""
+    async def run():
+        st = Station()
+        e = st.e
+        e.s["dial_hz"] = 7078000
+        t_on = (time.time() - 300) * 1000
+        r = await e.command({"type": "js8_log", "call": "w7xyz", "grid": "dn31", "rst_sent": "-7",
+                             "rst_rcvd": "+04", "name": "Sam", "comment": "first JS8 QSO",
+                             "time_on": t_on, "freq": 1240})
+        assert r == {"type": "js8", "m": {"type": "logged", "call": "W7XYZ"}}, r
+        q = e.logbook.qsos[-1]
+        assert (q["call"], q["gridsquare"], q["mode"], q["submode"]) == ("W7XYZ", "DN31", "MFSK", "JS8"), q
+        assert (q["rst_sent"], q["rst_rcvd"], q["name"], q["band"]) == ("-07", "+04", "SAM", "40m"), q
+        assert q["freq"] == "7.079240" and q["station_callsign"] == "K1ABC" and q["comment"] == "first JS8 QSO", q
+        assert q["time_on"] != q["time_off"], "the QSO starts when the chat began"
+        n = len(e.logbook.qsos)
+        r = await e.command({"type": "js8_log", "call": "@HB", "grid": "", "rst_sent": "", "rst_rcvd": ""})
+        assert r["m"].get("error") and len(e.logbook.qsos) == n, "a group isn't a station"
+        await e.command({"type": "js8_log", "call": "K9AAA", "grid": "nonsense", "rst_sent": "loud", "time_on": 1})
+        q = e.logbook.qsos[-1]
+        assert q["call"] == "K9AAA" and not q.get("gridsquare") and not q.get("rst_sent"), q
+        assert st.played == [] and st.ptt == []
+    asyncio.run(run())

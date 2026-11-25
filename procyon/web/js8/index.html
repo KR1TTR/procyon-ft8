@@ -6,7 +6,7 @@
 <title>Procyon JS8 chat</title>
 <link rel="icon" href="icon.svg">
 <link rel="stylesheet" href="/static/palettes.css?v=2">
-<link rel="stylesheet" href="chat.css?v=20">
+<link rel="stylesheet" href="chat.css?v=21">
 </head>
 <body>
 
@@ -76,6 +76,7 @@
 
   <section class="card tile convo" data-tile="convo" data-label="Chat">
     <div class="tabs-row"><span class="grip" title="Drag to move this panel">⠿</span><div class="tabs" id="tabs"></div>
+      <button class="btn ghost small log-btn" id="logBtn" hidden title="Put this contact in your logbook (call, grid, reports, time)">Log QSO</button>
       <button class="btn ghost small clear-view" data-clear="view" id="clearView" title="Empty this tab (band activity or this chat). The Heard list stays.">Clear</button></div>
     <div class="list chat" id="chat"></div>
 
@@ -91,6 +92,8 @@
       <div class="send-row">
         <div class="meter" id="meter"></div>
         <button class="btn ghost small" id="clearBtn">Clear</button>
+        <label class="drive" id="driveBox" hidden title="TX audio drive - the same setting as on the FT8 screen. Raise it until the radio's ALC just starts to move (watch it with Tune on the FT8 screen).">
+          Drive <input type="range" id="driveIn" min="0" max="100" step="1"><b id="driveOut"></b></label>
         <button class="btn danger" id="stopTx" hidden title="Stop sending (Esc)">Stop</button>
         <button class="btn primary" id="sendBtn">Send</button>
       </div>
@@ -98,12 +101,33 @@
   </section>
 </main>
 
+<dialog id="logDlg">
+  <form method="dialog" id="logForm">
+    <h3>Log this QSO</h3>
+    <div class="log-grid">
+      <label>Call<input name="call" required maxlength="13" autocomplete="off" spellcheck="false"></label>
+      <label>Grid<input name="grid" maxlength="6" autocomplete="off" spellcheck="false"></label>
+      <label title="The SNR report you sent them (or how you heard them)">Sent<input name="rst_sent" maxlength="3" autocomplete="off" placeholder="-05"></label>
+      <label title="The SNR report they sent you">Rcvd<input name="rst_rcvd" maxlength="3" autocomplete="off" placeholder="?"></label>
+      <label class="wide">Name<input name="name" maxlength="30" autocomplete="off"></label>
+      <label class="wide">Note<input name="comment" maxlength="200" autocomplete="off" placeholder="optional"></label>
+    </div>
+    <p class="muted tiny" id="logInfo"></p>
+    <p class="log-err" id="logErr" hidden></p>
+    <div class="log-btns">
+      <button class="btn primary small" value="log" id="logOk">Log QSO</button>
+      <button class="btn ghost small" value="cancel" formnovalidate>Cancel</button>
+    </div>
+  </form>
+</dialog>
+<div class="call-menu" id="callMenu" hidden></div>
+
 <script src="/static/wfschemes.js?v=1"></script>
 <script src="js8.js?v=25"></script>
 <script src="link.js?v=23"></script>
 <script src="station.js?v=23"></script>
 <script src="bots.js?v=23"></script>
 <script src="layout.js?v=23"></script>
-<script src="app.js?v=30"></script>
+<script src="app.js?v=31"></script>
 </body>
 </html>

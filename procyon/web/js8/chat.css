@@ -334,3 +334,29 @@ body.live #sendBtn:disabled { opacity: .55; cursor: not-allowed; }   /* Listen o
 .wf-tile .card-head #speedSeg { margin-left: auto; background: var(--surface); }
 .wf-tile .card-head #layoutReset { margin-left: 8px; }
 
+
+/* ------------------------------------------------------------- Log QSO, drive, QRZ menu */
+.tabs-row .log-btn { margin: 0 0 6px 8px; flex: none; color: var(--cq); border-color: color-mix(in srgb, var(--cq) 45%, transparent); }
+.tabs-row .log-btn.done { color: var(--muted); border-color: var(--border); }
+.tabs-row .log-btn:not([hidden]) + .clear-view { margin-left: 6px; }
+.tabs-row .clear-view { margin-left: 8px; }
+dialog#logDlg { background: var(--surface); color: var(--text); border: 1px solid var(--border2); border-radius: var(--radius);
+  padding: 18px 20px; width: min(420px, calc(100vw - 32px)); }
+dialog#logDlg::backdrop { background: var(--backdrop); }
+#logDlg h3 { margin: 0 0 12px; font-size: 15px; }
+.log-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+.log-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.log-grid label.wide { grid-column: 1 / -1; }
+.log-grid input { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; font: 600 13px var(--mono);
+  color: var(--text); text-transform: uppercase; }
+.log-grid input[name=comment] { text-transform: none; font-family: var(--sans); font-weight: 500; }
+.log-err { color: var(--tx); font-size: 12.5px; margin: 6px 0 0; }
+.log-btns { display: flex; flex-direction: row-reverse; justify-content: flex-start; gap: 8px; margin-top: 12px; }
+.drive { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.drive input { width: 90px; accent-color: var(--rx); }
+.drive b { font: 600 12px var(--mono); color: var(--text2); min-width: 34px; }
+#stopTx.idle { background: transparent; border-color: color-mix(in srgb, var(--tx) 45%, transparent); color: var(--muted); }
+.call-menu { position: fixed; z-index: 200; background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px;
+  padding: 4px; box-shadow: 0 8px 24px #0006; }
+.call-menu a { display: block; padding: 6px 10px; border-radius: 6px; color: var(--text); text-decoration: none; font-size: 13px; white-space: nowrap; }
+.call-menu a:hover { background: var(--hover-bg); }
