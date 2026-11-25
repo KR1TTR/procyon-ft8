@@ -217,7 +217,7 @@ function bandRows() {
   const rows = withSep(me.band.slice(-200).map(b => [b.old, `
     <div class="brow ${b.hb ? 'hb' : ''} ${b.mine ? 'mine' : ''} ${b.toMe ? 'to-me' : ''} ${b.old ? 'old' : ''}" ${b.mine || b.from === '?' ? '' : `data-call="${b.from}"`}>
       <span class="t">${hhmmss(b.t)}</span><span class="snr" style="--c:${b.mine ? 'var(--tx)' : snrColor(b.snr)}">${b.mine ? 'TX' : JS8.fmtSnr(b.snr)}</span>
-      <span class="hz">${b.mine ? myFreq : b.freq}</span><span class="text">${fmtText(b.from, b.to, b.body)}</span>
+      <span class="hz">${b.mine ? (b.msg?.freq ?? myFreq) : b.freq}</span><span class="text">${fmtText(b.from, b.to, b.body)}</span>
     </div>`]));
   for (const [from, a] of me.arriving) {
     const p = JS8.parse(a.text);
