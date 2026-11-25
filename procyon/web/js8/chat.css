@@ -360,3 +360,15 @@ dialog#logDlg::backdrop { background: var(--backdrop); }
   padding: 4px; box-shadow: 0 8px 24px #0006; }
 .call-menu a { display: block; padding: 6px 10px; border-radius: 6px; color: var(--text); text-decoration: none; font-size: 13px; white-space: nowrap; }
 .call-menu a:hover { background: var(--hover-bg); }
+
+/* band plan above the JS8 waterfall: brackets over 500-1000 and 1000-2500 Hz
+   (positions are % of the 300-3300 Hz waterfall) */
+.wf-plan { position: relative; height: 18px; margin: 0 10px 3px; flex: none; }
+.wf-plan .plan { position: absolute; bottom: 0; height: 15px; box-sizing: border-box; padding: 0 4px;
+  border: 1px solid currentColor; border-bottom: 0; border-radius: 4px 4px 0 0;
+  font: 600 10.5px var(--sans); line-height: 13px; text-align: center; letter-spacing: .02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wf-plan .hb { color: var(--rpt); }
+.wf-plan .chat { color: var(--cq); }
+.wf-plan .short { display: none; }
+@media (max-width: 560px) { .wf-plan .long { display: none; } .wf-plan .short { display: inline; } }

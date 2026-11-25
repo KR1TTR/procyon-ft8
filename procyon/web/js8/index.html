@@ -6,7 +6,7 @@
 <title>Procyon JS8 chat</title>
 <link rel="icon" href="icon.svg">
 <link rel="stylesheet" href="/static/palettes.css?v=2">
-<link rel="stylesheet" href="chat.css?v=21">
+<link rel="stylesheet" href="chat.css?v=22">
 </head>
 <body>
 
@@ -48,8 +48,12 @@
      to move it, drag the gaps between tiles to resize them. -->
 <main id="main" class="dock">
   <section class="card tile wf-tile" data-tile="wf" data-label="Waterfall">
-    <div class="card-head slim"><span class="grip" title="Drag to move this panel">⠿</span><h2>Waterfall</h2>
-      <span class="tiny">click it to choose where you transmit</span></div>
+    <div class="card-head slim"><span class="grip" title="Drag to move this panel">⠿</span><h2>Waterfall</h2></div>
+    <!-- JS8's usual band plan, lined up with the waterfall below -->
+    <div class="wf-plan" aria-hidden="true">
+      <span class="plan hb" style="left:6.667%;width:16.667%" title="500-1000 Hz: heartbeats go here (Procyon sends yours here too)"><span class="long">Heartbeats</span><span class="short">HB</span></span>
+      <span class="plan chat" style="left:23.333%;width:50%" title="1000-2500 Hz: calling CQ, queries (SNR?, GRID? ...) and QSOs. Click the waterfall to choose where you transmit.">CQs, queries, and QSOs</span>
+    </div>
     <div class="wf-strip" id="wfStrip" title="Click to choose where you transmit">
       <canvas id="wf"></canvas>
       <div class="wf-tx" id="wfTx"><span id="wfTxLabel"></span></div>
