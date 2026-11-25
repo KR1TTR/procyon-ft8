@@ -78,7 +78,13 @@ let me, bots = [];
 let current = 'all';          // open tab: 'all', a call, or a @group
 let tabs = [];                // open conversation tabs (besides "All activity")
 let sortBy = 'last';
-let myFreq = 1500;
+// where you transmit: remembered on this device between sessions
+const TXF_KEY = 'procyon.js8TxFreq';
+let myFreq = (() => {
+  let f = NaN;
+  try { f = Number(localStorage.getItem(TXF_KEY)); } catch { /* private window */ }
+  return f >= 300 && f <= 2900 ? f : 1500;
+})();
 let autoHB = false, hbTimer = null;
 let lastSuggest = null;
 let toVal = '';               // who the typing box sends to (a call, a @group, or '' = everyone)
@@ -458,6 +464,7 @@ $('wfStrip').addEventListener('click', e => {
   myFreq = Math.round((LOW + (e.clientX - r.left) / r.width * (HIGH - LOW)) / 10) * 10;
   myFreq = Math.max(LOW, Math.min(2900, myFreq));
   const st = link.stations.get('me'); if (st) st.freq = myFreq;
+  try { localStorage.setItem(TXF_KEY, String(myFreq)); } catch { /* private window */ }
   placeTx();
 });
 function placeTx() {
