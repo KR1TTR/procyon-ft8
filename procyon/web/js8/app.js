@@ -335,10 +335,71 @@ function tidyNote(to, body) {
 const HB_LO = 500, HB_HI = 1000;
 let hbSpot = null;
 function txFreqFor(to) {
-  if (to !== '@HB' || (myFreq >= HB_LO && myFreq <= HB_HI)) return myFreq;
-  if (hbSpot === null) hbSpot = 10 * Math.round((HB_LO + 50 + Math.random() * (HB_HI - HB_LO - 100)) / 10);
+  if (to !== '@HB' || myFreq <= HB_HI) return myFreq;      // JS8Call keeps your own spot when it's at 1000 Hz or below
+  if (hbSpot === null || !spotIsClear(hbSpot)) hbSpot = clearSpot(HB_LO, HB_HI, { random: true }).f;
   return hbSpot;
 }
+
+// ---------------------------------------------------------------- finding a clear spot
+// Like JS8Call: a spot is busy if a station was heard within about its width
+// in the last minute. Procyon also looks at the waterfall itself, so a signal
+// too weak (or too new) to decode still counts.
+const BUSY_SEC = 60;
+const recentRows = [];          // the last ~15 s of waterfall rows from the radio
+function noteRow(v) { recentRows.push(v); if (recentRows.length > 120) recentRows.shift(); }
+function busyRanges() {
+  const now = Date.now(), w = Math.max(link.width, 50), out = [];
+  for (const b of me.band) if (!b.mine && b.freq != null && now - b.t < BUSY_SEC * 1000) out.push([b.freq, b.freq + w]);
+  for (const a of me.arriving.values()) if (a.freq != null && now - a.t < BUSY_SEC * 1000) out.push([a.freq, a.freq + w]);
+  if (recentRows.length >= 24) {          // a few seconds of waterfall: bins that keep lighting up
+    const n = recentRows[0].length, hz = i => LOW + i / n * (HIGH - LOW);
+    for (let i = 0; i < n; i++) {
+      let hot = 0;
+      for (const r of recentRows) if (r[i] > 0.5) hot++;
+      if (hot >= recentRows.length * 0.15) out.push([hz(i), hz(i + 1)]);
+    }
+  }
+  return out;
+}
+const GUARD = 10;               // Hz kept clear on each side of our signal
+function spotIsClear(f, busy = busyRanges()) {
+  const w = link.width;
+  return busy.every(([a, b]) => b <= f - GUARD || a >= f + w + GUARD);
+}
+// A clear spot in lo..hi for our signal. random: any clear one (heartbeats, so
+// many stations don't pick the same one); else the clear one nearest your mark.
+// Returns {f, clear} - with nothing clear, the spot farthest from any signal.
+function clearSpot(lo, hi, { random = false } = {}) {
+  const busy = busyRanges(), w = link.width, spots = [];
+  for (let f = lo; f + w <= hi; f += 10) spots.push(f);
+  const free = spots.filter(f => spotIsClear(f, busy));
+  if (free.length) {
+    if (random) return { f: free[Math.floor(Math.random() * free.length)], clear: true };
+    return { f: free.reduce((a, b) => Math.abs(b - myFreq) < Math.abs(a - myFreq) ? b : a), clear: true };
+  }
+  const room = f => Math.min(...busy.map(([a, b]) => Math.max(a - (f + w), f - b, 0)), 1e9);
+  return { f: spots.reduce((a, b) => room(b) > room(a) ? b : a, lo), clear: false };
+}
+function setTxFreq(f) {
+  myFreq = Math.max(LOW, Math.min(TX_MAX, f));
+  const st = link.stations.get('me'); if (st) st.freq = myFreq;
+  try { localStorage.setItem(TXF_KEY, String(myFreq)); } catch { /* private window */ }
+  placeTx(); updateMeter();
+}
+let spotNoteTimer = null;
+function spotNote(text, warn) {
+  const el = $('spotNote');
+  el.textContent = text; el.classList.toggle('warn', !!warn);
+  clearTimeout(spotNoteTimer); spotNoteTimer = setTimeout(() => { el.textContent = ''; }, 8000);
+}
+$('spotBtn').onclick = () => {
+  if (live && liveSince && Date.now() - liveSince < 45000) return spotNote('Listen for a minute first, so Procyon knows who is where', true);
+  const inChat = myFreq >= 1000 && myFreq + link.width <= 2500;
+  if (inChat && spotIsClear(myFreq)) return spotNote(`${myFreq} Hz is already clear - staying there`);
+  const s = clearSpot(1000, 2500);
+  setTxFreq(s.f);
+  spotNote(s.clear ? `Moved to ${s.f} Hz - nobody heard there in the last minute` : `No fully clear spot - moved to ${s.f} Hz, the most room`, !s.clear);
+};
 
 function updateMeter() {
   const to = toVal, body = JS8.clean($('txt').value);
@@ -601,10 +662,7 @@ $('hbChip').onclick = () => setHB(!autoHB);
 $('wfStrip').addEventListener('click', e => {
   const r = $('wf').getBoundingClientRect();
   myFreq = Math.round((LOW + (e.clientX - r.left) / r.width * (HIGH - LOW)) / 10) * 10;
-  myFreq = Math.max(LOW, Math.min(TX_MAX, myFreq));
-  const st = link.stations.get('me'); if (st) st.freq = myFreq;
-  try { localStorage.setItem(TXF_KEY, String(myFreq)); } catch { /* private window */ }
-  placeTx();
+  setTxFreq(myFreq);
 });
 // band plan brackets above the waterfall, placed from the same range
 for (const [sel, lo, hi] of [['.wf-plan .hb', 500, 1000], ['.wf-plan .chat', 1000, 2500]]) {
@@ -790,7 +848,7 @@ function handleLive(m, ws) {
       for (const c of me.convos.values()) { c.msgs = c.msgs.filter(x => x.t > clearedAt(c.key)); c.unread = 0; }
       render();
     }
-    else if (m.type === 'wf') wfLive.push(m.v);
+    else if (m.type === 'wf') { wfLive.push(m.v); noteRow(m.v); }
 }
 
 (function connectLive() {
