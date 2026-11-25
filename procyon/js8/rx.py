@@ -32,6 +32,7 @@ WF_RANGE_DB = 15                         # ... white this many dB higher
 WF_ROW_SEC = 0.125                       # 8 waterfall rows a second, like FT8's
 QUIET_DB = -65                           # audio below this (dB of full scale) = nothing coming in
 QUIET_SEC = 5                            # ... for this long before the screen says so
+TX_QUIET_GRACE = 2.0                     # silence this soon after our own transmission doesn't count
 HISTORY = 300                            # messages kept for a page that opens (or reloads) later
 
 # JS8Call's usual dial frequencies (its FrequencyList.cpp); none on 60 m.
@@ -202,6 +203,14 @@ class Js8Rx:
                 log.exception("JS8 decode")
                 await asyncio.sleep(1)
 
+    def _audio_low(self, lvl):
+        """Is this audio level (dB) 'nothing coming in'? Not while we transmit,
+        nor just after: the radio mutes its receiver then - that silence is ours."""
+        bt = self.band_time()
+        if self.keyed and self.keyed(bt - TX_QUIET_GRACE, bt + 0.1):
+            return False
+        return lvl < (QUIET_DB + (5 if self.quiet else 0))      # a little hysteresis
+
     async def _one_slot(self):
         speed = SPEEDS[self.speed]
         sp = js8enc.SPEEDS[speed]
@@ -268,7 +277,7 @@ class Js8Rx:
             # switched off or its volume down
             lvl = 20 * np.log10(max(np.sqrt(np.mean(x * x)), 1e-3) / 32768)
             self.level = round(lvl)
-            low = lvl < (QUIET_DB + (5 if self.quiet else 0))      # a little hysteresis
+            low = self._audio_low(lvl)
             low_since = (low_since or time.time()) if low else None
             quiet = low_since is not None and time.time() - low_since >= QUIET_SEC
             if quiet != self.quiet:

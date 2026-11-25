@@ -325,6 +325,18 @@ function tidyNote(to, body) {
     <button type="button" class="btn ghost small" id="tidyBtn" title="Take those words out of the message">Take it out</button></span>`;
 }
 
+// Heartbeats go out in 500-1000 Hz, like JS8Call's, so they stay out of the
+// chat area. If your TX mark sits elsewhere, a heartbeat gets its own spot
+// there (picked at random, so many stations don't pile up on one frequency);
+// your chat frequency stays where it is.
+const HB_LO = 500, HB_HI = 1000;
+let hbSpot = null;
+function txFreqFor(to) {
+  if (to !== '@HB' || (myFreq >= HB_LO && myFreq <= HB_HI)) return myFreq;
+  if (hbSpot === null) hbSpot = 10 * Math.round((HB_LO + 50 + Math.random() * (HB_HI - HB_LO - 100)) / 10);
+  return hbSpot;
+}
+
 function updateMeter() {
   const to = toVal, body = JS8.clean($('txt').value);
   const fc = body ? frameCount(to ? `${to} ${body}` : body) : { n: 0 }, n = fc.n;
@@ -335,7 +347,7 @@ function updateMeter() {
   $('meter').className = 'meter' + (sec > 90 ? ' long' : '');
   setHTML($('meter'), `<span class="frames">${bars}${n > 16 ? '…' : ''}</span>
     <span>${fc.exact ? '' : 'about '}<b>${n} frame${n > 1 ? 's' : ''}</b> · <b>${dur}</b> at ${speed}</span>
-    ${sec > 90 ? '<span>long - maybe split it</span>' : ''}${tidyNote(to, body)}`);
+    ${sec > 90 ? '<span>long - maybe split it</span>' : ''}${txFreqFor(to) !== myFreq ? `<span class="hb-note">goes out at <b>${txFreqFor(to)} Hz</b> - heartbeats stay in ${HB_LO}-${HB_HI} Hz</span>` : ''}${tidyNote(to, body)}`);
 }
 $('meter').addEventListener('click', e => {
   if (!e.target.closest('#tidyBtn')) return;
@@ -353,9 +365,11 @@ function send() {
     const clean = JS8.clean(body), text = to ? `${to} ${clean}` : clean;
     const m = me.send(to, body);
     if (!m) return;
-    m.freq = myFreq;
+    const freq = txFreqFor(to);
+    hbSpot = null;                       // the next heartbeat picks a fresh spot
+    m.freq = freq;
     txMsgs.set(m.id, m);
-    live.send(JSON.stringify({ type: 'tx', id: m.id, text, call: me.call, grid: me.grid, freq: myFreq }));
+    live.send(JSON.stringify({ type: 'tx', id: m.id, text, call: me.call, grid: me.grid, freq }));
     $('txt').value = '';
     render();
     return;

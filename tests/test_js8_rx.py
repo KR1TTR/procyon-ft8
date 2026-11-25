@@ -190,3 +190,22 @@ def test_our_own_transmission_is_not_shown_as_heard():
     heard = asyncio.run(run(None))
     assert heard and "TEST" in heard[-1]["text"], heard       # someone else's signal: shown
     assert asyncio.run(run(lambda a, b: True)) == [], "our own signal: not shown"
+
+
+def test_silence_while_we_transmit_is_not_called_a_dead_radio():
+    """The radio mutes its receiver while we transmit, so the input goes
+    almost silent. That must not set off "no audio coming in" (seen on air,
+    2026-11-22); real silence with nothing sent still does."""
+    from procyon.js8 import rx as rxmod
+    now = 9000.0
+    sent = [(now - 13.0, now - 0.5)]           # a frame that ended half a second ago
+
+    def keyed(a, b):
+        return any(x < b and a < y for x, y in sent)
+    r = Js8Rx(lambda a, b: None, lambda n: None, lambda: now, lambda: 0.0, lambda: ("radio", None), None)
+    r.keyed = keyed
+    assert not r._audio_low(-90), "our own transmission's silence counted as a dead radio"
+    now += rxmod.TX_QUIET_GRACE + 1                # well after we stopped
+    assert r._audio_low(-90), "real silence must still be reported"
+    r.keyed = None
+    assert r._audio_low(-90) and not r._audio_low(-30)
