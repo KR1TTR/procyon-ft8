@@ -517,13 +517,23 @@ function renderLogBtn() {
   b.classList.toggle('done', logged.has(current));
   b.textContent = logged.has(current) ? 'Logged ✓' : 'Log QSO';
 }
-const SNR_IN = /\bSNR ([+-]?\d{1,2})\b/;
+// A report in a message: "SNR -09" (JS8Call's way), or a signed number typed
+// by hand - "GOT YOU -09.", "YOUR -08 HERE", "HERE-10". The last one counts.
+const SNR_IN = /\bSNR ([+-]?\d{1,2})\b/g;
+const REPORT_IN = /(?<![\d+-])([+-]\d{1,2})(?!\d)/g;
+function reportIn(body) {
+  for (const re of [SNR_IN, REPORT_IN]) {
+    const all = [...body.matchAll(re)].map(r => +r[1]).filter(n => n >= -30 && n <= 30);
+    if (all.length) return all[all.length - 1];
+  }
+  return null;
+}
 function lastSnr(msgs, dir) {
   for (let i = msgs.length - 1; i >= 0; i--) {
     const x = msgs[i];
     if (x.dir !== dir) continue;
-    const r = x.body.match(SNR_IN);
-    if (r) return JS8.fmtSnr(+r[1]);
+    const n = reportIn(x.body);
+    if (n !== null) return JS8.fmtSnr(n);
   }
   return '';
 }
@@ -540,7 +550,7 @@ function openLog() {
   f.comment.value = '';
   const t0 = msgs.length ? msgs[0].t : Date.now();
   f.dataset.timeOn = t0;
-  $('logInfo').textContent = `Started ${new Date(t0).toISOString().slice(11, 16)} UTC · ${link.speed} · your TX at ${myFreq} Hz. Check the reports - "Sent" is the last SNR you sent them (or how you hear them).`;
+  $('logInfo').textContent = `Started ${new Date(t0).toISOString().slice(11, 16)} UTC · ${link.speed} · your TX at ${myFreq} Hz. Check the reports - "Sent" is the last report you sent them (or how you hear them).`;
   $('logErr').hidden = true;
   $('logDlg').showModal();
   f.rst_rcvd.value ? f.name.focus() : f.rst_rcvd.focus();
