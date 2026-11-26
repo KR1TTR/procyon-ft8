@@ -471,7 +471,7 @@ body.js8 .hdr-progress { display: none; }   /* FT8/FT4's QSO steps mean nothing 
 .num input { width: 100%; background: none; border: 0; padding: 6px 0; font: 600 14px var(--mono); outline: none; }
 .num span { color: var(--faint); font-size: 11px; }
 input[type=range] { width: 100%; accent-color: var(--tx); height: 30px; }
-#tuneBtn { align-self: flex-start; }
+.tx-btns { display: flex; gap: 8px; flex-wrap: wrap; align-self: flex-start; }
 #tuneBtn.on { color: #fff; background: var(--tx); border-color: var(--tx); }
 
 /* --------------------------------------------------------------- logbook */

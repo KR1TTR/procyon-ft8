@@ -159,6 +159,7 @@ function sizeWaterfall() {
 }
 
 function wfRow(bins) {
+  noteSpotRow(bins);
   if (wf.width < 1 || wf.height < 2) return;   // not laid out yet (hidden tab)
   if (!rowImg || rowImg.width !== bins.length) {
     rowCanvas.width = bins.length; rowCanvas.height = 1;
@@ -307,6 +308,65 @@ wrap.addEventListener("click", (ev) => {
   if (held) { held = false; return; }   // that was a press-and-hold, already handled
   const hz = Math.round(hzAt(ev) / 5) * 5;
   send({ type: "freq", which: ev.shiftKey || ev.ctrlKey ? "tx" : "rx", hz });
+});
+
+// ------------------------------------------- find a clear spot to transmit
+// Busy = a station decoded there in the last 2 minutes, or the waterfall was
+// bright there in at least 15% of that slot's rows (signals too weak or too
+// crowded to decode). Each slot (:00/:30 and :15/:45 in FT8) is looked at on
+// its own: a spot must be clear in YOUR transmit slot; clear in both is better
+// (the station you work answers in the other one). Nearest to where you are.
+const SPOT_LO = 300, SPOT_HI = 2800, SPOT_SEC = 120, SPOT_GUARD = 10;
+const SPOT_HOT = 105;            // ~10 dB above the noise floor (rows: floor = 30, 7.5 per dB)
+const SPOT_LISTEN_SEC = 60;
+const spotRows = [];             // recent waterfall rows {t, par, bins}
+let spotKey = "";                // mode + dial: rows from another mode or band don't count
+function noteSpotRow(bins) {
+  const t = bandNow(), key = S ? `${T().mode}-${S.settings.dial_hz}` : "";
+  if (key !== spotKey) { spotKey = key; spotRows.length = 0; }
+  while (spotRows.length && t - spotRows[0].t > SPOT_SEC) spotRows.shift();
+  if (S && S.tx) return;         // our own signal isn't someone else's
+  spotRows.push({ t, par: Math.floor(t / period()) % 2, bins });
+}
+function spotBusy() {
+  const busy = [[], []], P = period(), now = Math.floor(bandNow() / P), w = T().width;
+  for (const b of batches) {
+    if ((now - b.period) * P > SPOT_SEC) continue;
+    for (const d of b.items) if (!d.from_me) busy[b.period % 2].push([d.freq, d.freq + w]);
+  }
+  for (const par of [0, 1]) {
+    const rows = spotRows.filter((r) => r.par === par);
+    if (rows.length < 20) continue;
+    const n = rows[0].bins.length, hot = new Uint16Array(n);
+    for (const r of rows) for (let i = 0; i < n && i < r.bins.length; i++) if (r.bins[i] > SPOT_HOT) hot[i]++;
+    for (let i = 0; i < n; i++) if (hot[i] >= rows.length * 0.15) busy[par].push([i * BIN_HZ, (i + 1) * BIN_HZ]);
+  }
+  return busy;
+}
+const spotClear = (f, list) => list.every(([a, b]) => b <= f - SPOT_GUARD || a >= f + T().width + SPOT_GUARD);
+function findSpot() {
+  const busy = spotBusy(), mine = S.qso.parity, w = T().width, cur = +S.settings.tx_freq;
+  const lo = Math.max(SPOT_LO, wfLo()), hi = Math.min(SPOT_HI, wfHi()) - w;
+  let both = null, own = null;
+  for (let f = Math.ceil(lo / 10) * 10; f <= hi; f += 10) {
+    if (!spotClear(f, busy[mine])) continue;
+    const d = Math.abs(f - cur);
+    if (!own || d < own.d) own = { f, d };
+    if (spotClear(f, busy[1 - mine]) && (!both || d < both.d)) both = { f, d };
+  }
+  return both ? { f: both.f, both: true } : own ? { f: own.f, both: false } : null;
+}
+$("#spotBtn").addEventListener("click", () => {
+  if (!S) return;
+  const heard = spotRows.length ? spotRows[spotRows.length - 1].t - spotRows[0].t : 0;
+  if (heard < SPOT_LISTEN_SEC) return toast("Listen for a minute or two first, so Procyon knows where the band is busy.", "warn");
+  const r = findSpot();
+  if (!r) return toast(`No clear spot in your ${slotName(S.qso.parity)} slot right now - the band is full.`, "warn");
+  const cur = +S.settings.tx_freq;
+  if (r.f === cur) return toast(`${cur} Hz is already clear - staying there.`, "good");
+  send({ type: "freq", which: "tx", hz: r.f });
+  toast(r.both ? `Transmit frequency moved to ${r.f} Hz - clear in both slots.`
+               : `Transmit frequency moved to ${r.f} Hz - clear in your ${slotName(S.qso.parity)} slot.`, "good");
 });
 
 // ------------------------------------------------------------------- clock
